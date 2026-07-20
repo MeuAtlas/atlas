@@ -1,4 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atlas
+
+Aplicação privada construída com Next.js App Router e Supabase Auth.
+
+## Configuração do Supabase
+
+Defina em `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+```
+
+No painel do Supabase, em **Authentication > URL Configuration**, adicione às Redirect URLs:
+
+```text
+http://localhost:3000/auth/callback
+https://SEU-DOMINIO/auth/callback
+```
+
+A aplicação deriva a URL de retorno da origem atual; não há domínio de produção fixo no código.
 
 ## Getting Started
 
