@@ -3,11 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { AtlasMark } from "@/components/atlas/atlas-mark";
 import { ArrowIcon, BackIcon, EyeIcon, EyeOffIcon, KeyIcon, LockIcon, MailIcon, ShieldIcon } from "@/components/atlas/icons";
 import { createClient } from "@/lib/supabase/client";
 
 import { FormField } from "./form-field";
+import { LoginCardHeader } from "./login-card-header";
 
 type FieldErrors = { email?: string; password?: string };
 type View = "login" | "recovery";
@@ -55,8 +55,9 @@ export function LoginCard() {
     event.preventDefault();
     if (submitting) return;
 
+    const normalizedEmail = email.trim().toLowerCase();
     const nextErrors: FieldErrors = {
-      email: validateEmail(email),
+      email: validateEmail(normalizedEmail),
       password: password ? undefined : "Informe sua senha.",
     };
     setErrors(nextErrors);
@@ -64,55 +65,66 @@ export function LoginCard() {
     if (nextErrors.email || nextErrors.password) return;
 
     setSubmitting(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
 
-    if (error) {
-      setNotice(friendlyAuthError(error.message));
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error) {
+        setNotice(friendlyAuthError(error.message));
+        setSubmitting(false);
+        return;
+      }
+
+      router.replace("/auth/continue");
+    } catch {
+      setNotice("Não foi possível entrar agora. Verifique sua conexão e tente novamente.");
       setSubmitting(false);
-      return;
     }
-
-    const requested = searchParams.get("next");
-    const destination = requested?.startsWith("/") && !requested.startsWith("//") ? requested : "/dashboard";
-    router.replace(destination);
-    router.refresh();
   }
 
   async function handleRecovery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
-    const emailError = validateEmail(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailError = validateEmail(normalizedEmail);
     setErrors({ email: emailError });
     setNotice("");
     if (emailError) return;
 
     setSubmitting(true);
-    const supabase = createClient();
-    await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
-    });
-    setSubmitting(false);
-    setNotice("Enviamos as instruções de recuperação, caso exista uma conta com esse e-mail.");
+    try {
+      const supabase = createClient();
+      await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
+      });
+      setNotice("Enviamos as instruções de recuperação, caso exista uma conta com esse e-mail.");
+    } catch {
+      setNotice("Não foi possível solicitar a recuperação agora. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const isRecovery = view === "recovery";
 
   return (
-    <section className="atlas-auth-card atlas-card-enter">
-      <div className="atlas-card-heading">
-        <div className="atlas-halo">
-          <AtlasMark className="atlas-halo-mark" decorative />
-        </div>
-        <h1 className="atlas-login-title">
+    <section className="atlas-auth-card atlas-login-card atlas-card-enter">
+      <LoginCardHeader />
+      <div className="atlas-login-card-body">
+        <div className="atlas-card-heading">
+          <h1 className="atlas-login-title">
           {isRecovery ? "Recuperar acesso" : "Entrar no Atlas"}
-        </h1>
-        <p className="atlas-login-subtitle">
+          </h1>
+          <p className="atlas-login-subtitle">
           {isRecovery ? "Receba um link seguro para redefinir sua senha." : "Seu espaço pessoal, privado e seguro."}
-        </p>
-      </div>
+          </p>
+        </div>
 
-      {isRecovery ? (
+        {isRecovery ? (
         <form onSubmit={handleRecovery} noValidate>
           <FormField id="recovery-email" type="email" label="E-mail" placeholder="Digite seu e-mail" autoComplete="email" value={email} error={errors.email} disabled={submitting} icon={<MailIcon className="size-5" />} onChange={(event) => { setEmail(event.target.value); clearFeedback("email"); }} />
           <StatusMessage message={notice} success={notice.startsWith("Enviamos")} />
@@ -121,7 +133,7 @@ export function LoginCard() {
             <BackIcon className="size-4" /> Voltar ao login
           </button>
         </form>
-      ) : (
+        ) : (
         <form onSubmit={handleLogin} noValidate>
           <FormField id="email" type="email" label="E-mail" placeholder="Digite seu e-mail" autoComplete="email" value={email} error={errors.email} disabled={submitting} icon={<MailIcon className="size-5" />} onChange={(event) => { setEmail(event.target.value); clearFeedback("email"); }} />
           <FormField id="password" type={showPassword ? "text" : "password"} label="Senha" placeholder="Digite sua senha" autoComplete="current-password" value={password} error={errors.password} disabled={submitting} icon={<LockIcon className="size-5" />} onChange={(event) => { setPassword(event.target.value); clearFeedback("password"); }} trailing={
@@ -144,11 +156,12 @@ export function LoginCard() {
             <KeyIcon className="size-[18px] text-[var(--atlas-muted)]" /> Acessar com código
           </button>
         </form>
-      )}
+        )}
 
-      <div className="atlas-security-notice">
-        <ShieldIcon className="size-4 shrink-0 text-[var(--atlas-blue)]" />
+        <div className="atlas-security-notice">
+          <ShieldIcon className="size-4 shrink-0 text-[var(--atlas-blue)]" />
         <span>Acesso restrito aos usuários autorizados</span>
+        </div>
       </div>
     </section>
   );

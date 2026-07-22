@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,22 +17,30 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Atlas",
   description: "Seu espaço pessoal, privado e seguro.",
+  formatDetection: {
+    telephone: false,
+    date: false,
+    email: false,
+    address: false,
+  },
 };
 
 const themeScript = `
   (() => {
     try {
       const storedTheme = localStorage.getItem('atlas-theme');
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const theme =
-        storedTheme === 'light' || storedTheme === 'dark'
+        storedTheme === 'dark' || storedTheme === 'light'
           ? storedTheme
-          : systemDark
+          : prefersDark
             ? 'dark'
             : 'light';
 
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.style.colorScheme = theme;
+      const root = document.documentElement;
+      root.setAttribute('data-theme', theme);
+      root.classList.toggle('dark', theme === 'dark');
+      root.style.colorScheme = theme;
     } catch {}
   })();
 `;
@@ -47,13 +56,15 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full">
-        {children}
+      <head>
         <Script
           id="atlas-theme-init"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: themeScript }}
         />
+      </head>
+      <body className="min-h-full">
+        {children}
       </body>
     </html>
   );

@@ -2,12 +2,17 @@ import { redirect } from "next/navigation";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginCard } from "@/components/auth/login-card";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedDestination, getAuthContext } from "@/lib/auth/session";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) redirect("/dashboard");
+  const { user, profile } = await getAuthContext();
+  if (user && profile) redirect(getAuthenticatedDestination(profile));
 
-  return <AuthShell><LoginCard /></AuthShell>;
+  return (
+    <AuthShell>
+      <LoginCard />
+    </AuthShell>
+  );
 }

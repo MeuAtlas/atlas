@@ -2,6 +2,7 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
+  color-scheme: light;
   --atlas-bg: #f5f6f8;
   --atlas-bg-soft: #edf3ff;
   --atlas-surface: rgba(255, 255, 255, 0.88);
@@ -21,6 +22,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --atlas-bg: #081321;
   --atlas-bg-soft: #10233c;
   --atlas-surface: rgba(15, 27, 45, 0.84);
@@ -103,8 +105,9 @@ input {
   left: max(18px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   height: 44px;
+  pointer-events: none;
 }
 
 .atlas-auth-stage {
@@ -219,32 +222,101 @@ input {
   text-align: center;
 }
 
-.atlas-halo {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: clamp(50px, 7dvh, 62px);
-  height: clamp(50px, 7dvh, 62px);
-  margin: 0 auto clamp(12px, 2dvh, 18px);
-  border: 1px solid var(--atlas-border);
-  border-radius: 999px;
-  background: var(--atlas-surface-solid);
-  color: var(--atlas-blue);
-  box-shadow: 0 3px 14px rgba(51, 92, 255, .07);
+.atlas-login-card {
+  max-width: min(500px, 100%);
+  overflow: hidden;
+  padding: 0;
 }
 
-.atlas-halo::before {
-  content: "";
+.atlas-login-card-header {
   position: absolute;
-  z-index: -1;
-  inset: -8px;
-  border-radius: inherit;
-  background: var(--atlas-blue-soft);
+  display: block;
+  z-index: 11;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-.atlas-halo-mark {
-  width: 56%;
-  height: 56%;
+.atlas-login-card-header-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 32%;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 38%,
+    rgba(0, 0, 0, .9) 52%,
+    rgba(0, 0, 0, .58) 70%,
+    rgba(0, 0, 0, .18) 88%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 38%,
+    rgba(0, 0, 0, .9) 52%,
+    rgba(0, 0, 0, .58) 70%,
+    rgba(0, 0, 0, .18) 88%,
+    transparent 100%
+  );
+  transition: opacity 360ms cubic-bezier(.22, .7, .24, 1);
+}
+
+@media (min-width: 641px) {
+  .atlas-login-card-header-image {
+    transform: translateY(-22px);
+  }
+}
+
+.atlas-login-card-header-image-light {
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .atlas-login-card-header-image-light {
+  opacity: 0;
+}
+
+:root[data-theme="dark"] .atlas-login-card-header-image-dark {
+  opacity: 1;
+}
+
+.atlas-login-card-header-blend {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, .1) 66%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .atlas-login-card-header-blend {
+  background: linear-gradient(
+    to bottom,
+    rgba(15, 27, 45, 0) 0%,
+    rgba(15, 27, 45, 0) 42%,
+    rgba(15, 27, 45, .16) 66%,
+    rgba(15, 27, 45, 0) 100%
+  );
+}
+
+.atlas-login-card-body {
+  position: relative;
+  z-index: 12;
+  padding: clamp(168px, 17dvh, 180px) clamp(44px, 3.1vw, 48px) clamp(20px, 2.7dvh, 28px);
 }
 
 .atlas-login-title {
@@ -359,6 +431,7 @@ input {
 
 .atlas-primary::after {
   content: "";
+  pointer-events: none;
   position: absolute;
   inset-block: 0;
   width: 72px;
@@ -405,11 +478,6 @@ input {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes halo-breathe {
-  0%, 100% { transform: scale(1); opacity: .68; }
-  50% { transform: scale(1.06); opacity: 1; }
-}
-
 @keyframes sheen {
   0%, 70%, 100% { transform: translateX(-140%); }
   88% { transform: translateX(140%); }
@@ -422,10 +490,6 @@ input {
 
 .atlas-card-enter {
   animation: card-enter 650ms cubic-bezier(.2,.75,.25,1) both;
-}
-
-.atlas-halo::before {
-  animation: halo-breathe 5s ease-in-out infinite;
 }
 
 .atlas-primary::after {
@@ -519,9 +583,29 @@ input {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
 }
 
-.atlas-theme-toggle > svg {
+.atlas-theme-icon {
+  display: grid;
+  grid-area: 1 / 1;
+  place-items: center;
+  pointer-events: none;
+}
+
+.atlas-theme-icon-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .atlas-theme-icon-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .atlas-theme-icon-dark {
+  display: grid;
+}
+
+.atlas-theme-toggle svg {
   pointer-events: none;
 }
 
@@ -532,6 +616,10 @@ input {
 }
 
 @media (max-width: 640px) {
+  .atlas-login-card-header-image {
+    transform: translateY(-16px);
+  }
+
   .atlas-auth-header {
     top: calc(env(safe-area-inset-top) + 16px);
     right: calc(env(safe-area-inset-right) + 16px);
@@ -548,6 +636,18 @@ input {
     border-radius: 22px;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
+  }
+
+  .atlas-login-card {
+    padding: 0;
+  }
+
+  .atlas-login-card-header {
+    height: 220px;
+  }
+
+  .atlas-login-card-body {
+    padding: clamp(142px, 18dvh, 160px) clamp(20px, 5.2vw, 24px) clamp(17px, 2.4dvh, 22px);
   }
 
   .atlas-card-heading {
@@ -584,10 +684,17 @@ input {
     padding-bottom: clamp(17px, 2.5dvh, 22px);
   }
 
-  .atlas-halo {
-    width: 50px;
-    height: 50px;
-    margin-bottom: 11px;
+  .atlas-login-card {
+    padding: 0;
+  }
+
+  .atlas-login-card-header {
+    height: 250px;
+  }
+
+  .atlas-login-card-body {
+    padding-top: 155px;
+    padding-bottom: 18px;
   }
 
   .atlas-card-heading {
@@ -609,6 +716,28 @@ input {
   }
 }
 
+@media (min-width: 641px) and (max-height: 800px) {
+  .atlas-login-card-header-image {
+    transform: translateY(-18px);
+  }
+}
+
+@media (max-height: 760px) {
+  .atlas-login-card-header {
+    height: 220px;
+  }
+
+  .atlas-login-card-body {
+    padding-top: 140px;
+  }
+}
+
+@media (min-width: 641px) and (max-height: 760px) {
+  .atlas-login-card-header-image {
+    transform: translateY(-16px);
+  }
+}
+
 @media (max-height: 700px) {
   .atlas-auth-stage {
     padding-top: max(58px, calc(env(safe-area-inset-top) + 50px));
@@ -625,10 +754,17 @@ input {
     padding-bottom: 15px;
   }
 
-  .atlas-halo {
-    width: 44px;
-    height: 44px;
-    margin-bottom: 8px;
+  .atlas-login-card {
+    padding: 0;
+  }
+
+  .atlas-login-card-header {
+    height: 190px;
+  }
+
+  .atlas-login-card-body {
+    padding-top: 108px;
+    padding-bottom: 13px;
   }
 
   .atlas-card-heading {
@@ -698,7 +834,6 @@ input {
     offset-distance: 18%;
   }
 
-  .atlas-halo::before,
   .atlas-primary::after,
   .atlas-comet {
     animation: none !important;

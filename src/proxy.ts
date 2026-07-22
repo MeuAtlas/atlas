@@ -7,5 +7,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/dashboard/:path*", "/update-password"],
+  matcher: [
+    "/((?!_next/|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:css|js|map|svg|png|jpg|jpeg|gif|webp|avif|ico|woff|woff2|ttf|otf)$).*)",
+  ],
 };

@@ -3,10 +3,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getSupabaseConfig } from "./config";
 
-function safeNextPath(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
-}
-
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const { url, publishableKey } = getSupabaseConfig();
@@ -24,23 +20,24 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: claimsData } = await supabase.auth.getClaims();
   const pathname = request.nextUrl.pathname;
+  const isPrivateRoute =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/settings");
 
-  if (!user && pathname.startsWith("/dashboard")) {
+  if (!claimsData?.claims.sub && isPrivateRoute) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
     loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-    return NextResponse.redirect(loginUrl);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    redirectResponse.headers.set("Cache-Control", "private, no-store, max-age=0");
+    return redirectResponse;
   }
 
-  if (user && pathname === "/login") {
-    const destination = safeNextPath(request.nextUrl.searchParams.get("next"));
-    return NextResponse.redirect(new URL(destination, request.url));
-  }
-
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
   return response;
 }

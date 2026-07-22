@@ -4,8 +4,9 @@ import { getAuthenticatedDestination, getAuthContext } from "@/lib/auth/session"
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function ContinueAfterAuthenticationPage() {
   const { user, profile } = await getAuthContext();
 
-  redirect(user && profile ? getAuthenticatedDestination(profile) : "/login");
+  if (!user || !profile) redirect("/login");
+  redirect(getAuthenticatedDestination(profile));
 }

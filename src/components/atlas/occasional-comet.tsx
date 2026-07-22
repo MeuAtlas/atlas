@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 
-const COMET_DEBUG = true;
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 
 type ScheduleReason = "first" | "next" | "resume";
@@ -23,7 +22,6 @@ const INTERVALS = {
   development: {
     first: { min: 2_000, max: 4_000 },
     next: { min: 6_000, max: 12_000 },
-    debug: { min: 4_000, max: 7_000 },
   },
   production: {
     first: { min: 5_000, max: 10_000 },
@@ -54,9 +52,7 @@ function getNextInterval(reason: ScheduleReason) {
     return randomBetween(range.min, range.max);
   }
 
-  const range = COMET_DEBUG
-    ? INTERVALS.development.debug
-    : INTERVALS.development.next;
+  const range = INTERVALS.development.next;
   return randomBetween(range.min, range.max);
 }
 
@@ -184,7 +180,7 @@ export function OccasionalComet() {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let disposed = false;
 
-    if (!element) return;
+    if (!element || typeof element.animate !== "function") return;
 
     const clearScheduledComet = () => {
       if (timeoutRef.current === null) return;
@@ -222,10 +218,6 @@ export function OccasionalComet() {
 
       const delay = getNextInterval(reason);
 
-      if (IS_DEVELOPMENT && COMET_DEBUG) {
-        console.info(`Próximo cometa em ${(delay / 1_000).toFixed(1)}s`);
-      }
-
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
 
@@ -239,24 +231,10 @@ export function OccasionalComet() {
         }
 
         const trajectory = createTrajectory(element);
-        const direction = trajectory.side === "left"
-          ? "esquerda → direita"
-          : "direita → esquerda";
-        const quadrant = trajectory.side === "left"
-          ? "superior esquerdo"
-          : "superior direito";
-
         element.style.left = `${trajectory.startX}px`;
         element.style.top = `${trajectory.startY}px`;
         element.dataset.quadrant = trajectory.side;
         activeRef.current = true;
-
-        if (IS_DEVELOPMENT && COMET_DEBUG) {
-          console.info(`Cometa: quadrante ${quadrant}`);
-          console.info(
-            `Duração: ${(trajectory.duration / 1_000).toFixed(2)}s | direção: ${direction}`,
-          );
-        }
 
         const animation = element.animate(
           [

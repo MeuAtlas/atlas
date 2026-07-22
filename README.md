@@ -1,56 +1,105 @@
 # Atlas
 
-Aplicação privada construída com Next.js App Router e Supabase Auth.
+Aplicação pessoal privada construída com Next.js 16 App Router e Supabase.
 
-## Configuração do Supabase
+## Variáveis de ambiente
 
-Defina em `.env.local`:
+Configure localmente em `.env.local` e, em produção, nas variáveis do projeto Vercel:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 ```
 
-No painel do Supabase, em **Authentication > URL Configuration**, adicione às Redirect URLs:
+Não use `SUPABASE_SERVICE_ROLE_KEY` no navegador nem em variáveis `NEXT_PUBLIC_*`.
+
+## Banco e migrations
+
+As migrations versionadas estão em `supabase/migrations`:
+
+1. `202607210001_create_profiles.sql`
+2. `202607210002_create_families.sql`
+3. `202607210003_family_functions_and_rls.sql`
+4. `202607210004_create_system_user_roles.sql`
+
+Com o Supabase CLI instalado e o projeto vinculado:
+
+```bash
+npx supabase link --project-ref SEU_PROJECT_REF
+npx supabase db push
+```
+
+Para um ambiente Supabase local:
+
+```bash
+npx supabase start
+npx supabase db reset
+```
+
+As migrations criam tabelas, índices, triggers, RLS e as RPCs familiares, além das funções `is_super_admin` e `get_my_system_role` para autorização global baseada exclusivamente na sessão atual.
+
+## URLs do Supabase Auth
+
+Em **Authentication > URL Configuration**, configure o domínio principal e inclua nas Redirect URLs:
 
 ```text
 http://localhost:3000/auth/callback
 https://SEU-DOMINIO/auth/callback
 ```
 
-A aplicação deriva a URL de retorno da origem atual; não há domínio de produção fixo no código.
+Em **Authentication > Providers > Email**, desative a criação pública de novos usuários. As contas autorizadas devem ser criadas somente por um administrador em **Authentication > Users**.
 
-## Getting Started
+## Contas iniciais
 
-First, run the development server:
+Não existe cadastro público e nenhuma credencial fica no repositório. Para criar as duas contas iniciais:
+
+1. Abra o projeto no Supabase.
+2. Acesse **Authentication > Users**.
+3. Crie cada conta com um e-mail real diferente.
+4. Defina uma senha temporária forte.
+5. Confirme o e-mail conforme a configuração do projeto.
+6. Entre separadamente em cada conta.
+7. Conclua o onboarding individual de cada usuário.
+
+Família não é obrigatória e não concede acesso aos dados pessoais da outra conta.
+
+## Tipos do Supabase
+
+Os tipos de domínio usados pela aplicação estão em `src/types/atlas.ts`. Depois de aplicar migrations, tipos completos podem ser regenerados com:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npx supabase gen types typescript --linked > src/types/database.generated.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Desenvolvimento
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Para testar em um celular conectado a mesma rede local, exponha o servidor em todas as interfaces:
 
-## Learn More
+```bash
+npm run dev -- -H 0.0.0.0
+```
 
-To learn more about Next.js, take a look at the following resources:
+No celular, acesse:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```text
+http://IP_DO_COMPUTADOR:3000/login
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`localhost` no celular aponta para o proprio aparelho, nao para o computador que executa o Atlas.
 
-## Deploy on Vercel
+Verificações:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Consulte [docs/architecture.md](docs/architecture.md) para as decisões de privacidade, isolamento e família e [docs/auth-test-plan.md](docs/auth-test-plan.md) para o roteiro de validação com duas contas.
+
+O bootstrap manual e as regras da administração global estão em [docs/system-administration.md](docs/system-administration.md).
