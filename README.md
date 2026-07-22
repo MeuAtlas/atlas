@@ -21,6 +21,9 @@ As migrations versionadas estão em `supabase/migrations`:
 2. `202607210002_create_families.sql`
 3. `202607210003_family_functions_and_rls.sql`
 4. `202607210004_create_system_user_roles.sql`
+5. `202607220005_create_modular_core.sql`
+6. `202607220006_create_finance.sql`
+7. `202607220007_harden_user_provisioning.sql`
 
 Com o Supabase CLI instalado e o projeto vinculado:
 
@@ -98,8 +101,15 @@ Verificações:
 npm run lint
 npm run typecheck
 npm run build
+npm test
 ```
 
 Consulte [docs/architecture.md](docs/architecture.md) para as decisões de privacidade, isolamento e família e [docs/auth-test-plan.md](docs/auth-test-plan.md) para o roteiro de validação com duas contas.
+
+## Integração Pluggy
+
+Configure `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` somente no ambiente do servidor (Vercel Preview/Production). Não use o prefixo `NEXT_PUBLIC_`. Depois de aplicar as migrations do Supabase, acesse **Financeiro → Integrações**, valide as credenciais e informe o Item ID exibido no Pluggy Dashboard.
+
+A Pluggy não oferece um endpoint para listar Items existentes por motivos de segurança. Por isso, o Atlas não tenta adivinhar nem fixa o Item ID: ele valida no backend o identificador informado e o associa ao usuário autenticado. A sincronização é manual, idempotente e os dados importados permanecem privados por padrão.
 
 O bootstrap manual e as regras da administração global estão em [docs/system-administration.md](docs/system-administration.md).

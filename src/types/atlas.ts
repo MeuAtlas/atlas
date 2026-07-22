@@ -12,9 +12,14 @@ export interface Profile {
   locale: string;
   timezone: string;
   onboarding_completed: boolean;
+  is_super_admin: boolean;
+  status: "active" | "suspended";
   created_at: string;
   updated_at: string;
 }
+
+export interface AtlasModule { id:string; slug:string; name:string; description:string|null; icon:string|null; route:string|null; category:string; is_default:boolean; is_globally_active:boolean }
+export interface Workspace { id:string; owner_id:string; name:string; slug:string; type:"personal"|"couple"|"family"|"project" }
 
 export interface Family {
   id: string;

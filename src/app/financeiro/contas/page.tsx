@@ -1,0 +1,12 @@
+import Link from "next/link";
+import { EmptyState } from "@/components/finance/empty-state";
+import { SubmitButton } from "@/components/finance/submit-button";
+import { archiveAccount,createAccount } from "@/modules/finance/actions";
+import { requireFinanceAccess } from "@/modules/finance/access";
+import { formatCurrency,formatDate } from "@/modules/finance/format";
+import { getFinanceData } from "@/modules/finance/queries";
+
+export default async function Page(){const {supabase,user}=await requireFinanceAccess();const data=await getFinanceData(supabase,user.id);return <>
+ <section className="finance-panel"><header><div><p className="eyebrow">Seu patrimônio líquido</p><h2>Contas</h2></div><Link href="/financeiro/integracoes" className="finance-text-link">Conectar instituição</Link></header>{data.accounts.length?<div className="finance-account-grid">{data.accounts.map(account=><article key={account.id} className={account.status==="archived"?"archived":""}><span className="finance-account-icon">◈</span><div><h3>{account.name}</h3><p>{account.institution_name||"Conta manual"} · {account.account_type}</p></div><strong>{formatCurrency(Number(account.current_balance))}</strong><small>{account.source==="pluggy"?"Pluggy · privado":`${account.source} · ${account.visibility}`}{account.last_sync_at?` · atualizado ${formatDate(account.last_sync_at)}`:""}</small>{account.status==="active"?<form action={archiveAccount}><input type="hidden" name="id" value={account.id}/><button>Arquivar</button></form>:<span className="status">Arquivada</span>}</article>)}</div>:<EmptyState title="Nenhuma conta cadastrada" description="Adicione contas manuais ou conecte a Pluggy para acompanhar saldos."/>}</section>
+ <section id="nova" className="finance-panel"><header><h2>Nova conta</h2></header><form action={createAccount} className="finance-form"><label>Nome<input name="name" required/></label><label>Instituição<input name="institution_name"/></label><label>Tipo<select name="account_type"><option value="checking">Conta corrente</option><option value="savings">Poupança</option><option value="digital">Conta digital</option><option value="cash">Dinheiro</option><option value="investment">Investimento</option><option value="international">Conta internacional</option><option value="other">Outros</option></select></label><label>Saldo inicial<input name="opening_balance" inputMode="decimal" defaultValue="0,00"/></label><SubmitButton>Criar conta</SubmitButton></form></section>
+ </>}

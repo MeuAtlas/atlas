@@ -24,6 +24,7 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPrivateRoute =
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/financeiro") ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/settings");

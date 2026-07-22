@@ -1,0 +1,5 @@
+export function textField(data:FormData,key:string,max=160){const value=String(data.get(key)??"").trim();if(!value)throw new Error(`Preencha ${key}.`);return value.slice(0,max)}
+export function optionalText(data:FormData,key:string,max=500){const value=String(data.get(key)??"").trim();return value?value.slice(0,max):null}
+export function amountField(data:FormData,key="amount"){const raw=String(data.get(key)??"").replace(/\./g,"").replace(",",".");const value=Number(raw);if(!Number.isFinite(value)||value<=0)throw new Error("Informe um valor maior que zero.");return Math.round(value*100)/100}
+export function enumField<T extends string>(data:FormData,key:string,allowed:readonly T[]){const value=String(data.get(key)??"") as T;if(!allowed.includes(value))throw new Error(`Valor inválido em ${key}.`);return value}
+export function dateField(data:FormData,key:string){const value=textField(data,key,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new Error("Informe uma data válida.");return value}

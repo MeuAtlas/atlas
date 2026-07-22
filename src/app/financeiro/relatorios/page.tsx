@@ -1,0 +1,1 @@
+import { PlaceholderPage } from "@/components/finance/placeholder-page";export default function Page(){return <PlaceholderPage eyebrow="Em evolução" title="Relatórios" description="Os indicadores usam dados reais. Relatórios comparativos e exportações serão adicionados sem dados demonstrativos." action={{href:"/financeiro",label:"Ver indicadores"}}/>}

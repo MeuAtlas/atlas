@@ -1,0 +1,2 @@
+import Link from "next/link";
+export function PlaceholderPage({eyebrow,title,description,action}:{eyebrow:string;title:string;description:string;action?:{href:string;label:string}}){return <section className="finance-panel finance-placeholder"><span>✦</span><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p>{description}</p>{action?<Link className="finance-button" href={action.href}>{action.label}</Link>:null}</section>}

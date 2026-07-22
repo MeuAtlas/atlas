@@ -2,8 +2,9 @@ import type { User } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types/atlas";
+import { throwSupabaseError } from "@/lib/errors";
 
-const PROFILE_COLUMNS = "id, full_name, preferred_name, avatar_url, phone, locale, timezone, onboarding_completed, created_at, updated_at";
+const PROFILE_COLUMNS = "id, full_name, preferred_name, avatar_url, phone, locale, timezone, onboarding_completed, is_super_admin, status, created_at, updated_at";
 
 function metadataText(metadata: unknown, key: string) {
   if (!metadata || typeof metadata !== "object") return null;
@@ -21,7 +22,7 @@ async function findOrCreateProfile(
     .eq("id", user.id)
     .maybeSingle();
 
-  if (error) throw new Error("Não foi possível carregar o perfil do Atlas.");
+  if (error) throwSupabaseError(error, "carregar perfil (profiles)", "Não foi possível carregar o perfil do Atlas.");
   if (data) return data as Profile;
 
   const { data: created, error: createError } = await supabase
@@ -34,9 +35,8 @@ async function findOrCreateProfile(
     .select(PROFILE_COLUMNS)
     .single();
 
-  if (createError || !created) {
-    throw new Error("Não foi possível preparar o perfil do Atlas.");
-  }
+  if (createError) throwSupabaseError(createError, "criar perfil (profiles)", "Não foi possível preparar o perfil do Atlas.");
+  if (!created) throw new Error("Não foi possível preparar o perfil do Atlas.");
 
   return created as Profile;
 }
