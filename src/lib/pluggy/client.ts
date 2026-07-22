@@ -51,6 +51,7 @@ export async function pluggyRequest<T>(path:string,options:PluggyRequestOptions=
       const apiKey=await authenticate(attempt>0&&attempt===1);
       const response=await fetch(url,{method,headers:{"X-API-KEY":apiKey,"content-type":"application/json"},body:options.body?JSON.stringify(options.body):undefined,signal:controller.signal,cache:"no-store"});
       const payload=await parse(response);
+      if(options.inspectResponse){try{options.inspectResponse(response,payload)}catch{/* Diagnostic inspection cannot interrupt a request. */}}
       if(response.ok)return payload as T;
       if(response.status===401&&attempt===0){cache.clear();continue}
       const retryable=method==="GET"&&(response.status===429||response.status>=500);
@@ -70,5 +71,13 @@ export const testPluggyConnection=()=>authenticate(true).then(()=>true);
 export const getPluggyItem=(itemId:string)=>pluggyRequest<PluggyItem>(`/items/${encodeURIComponent(itemId)}`);
 export const getPluggyAccounts=(itemId:string)=>pluggyRequest<PluggyAccount[]|PluggyPage<PluggyAccount>>("/accounts",{query:{itemId}});
 export const getPluggyInvestments=(itemId:string,page=1)=>pluggyRequest<PluggyPage<PluggyInvestment>>("/investments",{query:{itemId,page,pageSize:500}});
-export const getPluggyLoans=(itemId:string)=>pluggyRequest<PluggyLoan[]|PluggyPage<PluggyLoan>>("/loans",{query:{itemId}});
+function loanList(payload:unknown):Record<string,unknown>[] {
+ const value=Array.isArray(payload)?payload:payload&&typeof payload==="object"&&Array.isArray((payload as {results?:unknown[]}).results)?(payload as {results:unknown[]}).results:[];
+ return value.filter((row):row is Record<string,unknown>=>Boolean(row)&&typeof row==="object");
+}
+export function inspectLoanResponse(response:Response,payload:unknown){
+ const loans=loanList(payload);const sample=loans[0];const installments=sample?.installments&&typeof sample.installments==="object"?sample.installments as Record<string,unknown>:undefined;const payments=sample?.payments&&typeof sample.payments==="object"?sample.payments as Record<string,unknown>:undefined;
+ console.info("[Atlas Pluggy Loans]",{operation:"loans.fetch",status:response.status,count:loans.length,fields:sample?Object.keys(sample).sort():[],types:sample?Object.fromEntries(Object.entries(sample).map(([key,value])=>[key,Array.isArray(value)?"array":value===null?"null":typeof value])):{},hasContractAmount:typeof sample?.contractAmount==="number",hasOutstandingBalance:typeof payments?.contractOutstandingBalance==="number",hasInstallmentAmount:false,hasInstallmentCount:typeof installments?.totalNumberOfInstallments==="number",hasRate:Array.isArray(sample?.interestRates)&&sample.interestRates.length>0,hasDates:Boolean(sample?.contractDate||sample?.firstInstallmentDueDate||sample?.dueDate)});
+}
+export const getPluggyLoans=(itemId:string)=>pluggyRequest<PluggyLoan[]|PluggyPage<PluggyLoan>>("/loans",{query:{itemId},inspectResponse:inspectLoanResponse});
 export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom}});

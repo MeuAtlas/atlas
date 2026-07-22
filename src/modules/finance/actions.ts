@@ -4,12 +4,23 @@ import { revalidatePath } from "next/cache";
 import { throwSupabaseError } from "@/lib/errors";
 import { requireFinanceAccess } from "./access";
 import { amountField, dateField, enumField, optionalText, textField } from "./validation";
+import { buildLoanProjections } from "@/lib/pluggy/loan-projections";
 
 function refreshFinance() {
   revalidatePath("/financeiro");
   revalidatePath("/financeiro/movimentacoes");
   revalidatePath("/financeiro/contas");
   revalidatePath("/financeiro/cartoes");
+  revalidatePath("/financeiro/emprestimos");
+}
+
+function optionalAmount(data:FormData,key:string){const raw=String(data.get(key)??"").trim().replace(",", ".");if(!raw)return null;const value=Number(raw);if(!Number.isFinite(value)||value<0)throw new Error(`Valor inválido em ${key}.`);return value}
+function optionalInteger(data:FormData,key:string){const value=optionalAmount(data,key);if(value===null)return null;if(!Number.isInteger(value))throw new Error(`Quantidade inválida em ${key}.`);return value}
+
+export async function createLoan(data:FormData){
+ const {supabase,user}=await requireFinanceAccess();const externalId=crypto.randomUUID();const payroll=data.get("payroll_deducted")==="on";const total=optionalInteger(data,"installment_count");const paid=optionalInteger(data,"installments_paid")??0;if(total!==null&&paid>total)throw new Error("Parcelas pagas não podem superar o total.");const contracted=optionalAmount(data,"contracted_amount");const outstanding=optionalAmount(data,"outstanding_balance");const finalDue=optionalText(data,"final_due_date",10);
+ const row={owner_id:user.id,workspace_id:null,bank_connection_id:null,source:"manual",external_id:externalId,name:textField(data,"name"),institution_name:optionalText(data,"institution_name"),loan_type:textField(data,"loan_type",80),subtype:null,contracted_amount:contracted,outstanding_balance:outstanding,installment_amount:optionalAmount(data,"installment_amount"),installment_count:total,installments_paid:paid,installments_remaining:total===null?null:total-paid,interest_rate:(optionalAmount(data,"interest_rate")??0)/100||null,effective_cost_rate:null,contract_date:null,first_installment_date:optionalText(data,"first_installment_date",10),next_installment_date:null,final_due_date:finalDue,payroll_deducted:payroll,payment_source:payroll?"payroll":"other",currency:"BRL",status:"active",visibility:"private",notes:optionalText(data,"notes",1000),raw_metadata:{manual:true},provider_metadata:{manual:true},original_amount:contracted,balance_due:outstanding,installments:total,start_date:null,end_date:finalDue};
+ const inserted=await supabase.from("financial_loans").insert(row).select("id").single();if(inserted.error)throwSupabaseError(inserted.error,"criar emprestimo (financial_loans)","Não foi possível cadastrar o empréstimo.");const projections=buildLoanProjections({loanId:String(inserted.data.id),ownerId:user.id,externalId,name:row.name,installmentAmount:row.installment_amount,installmentCount:total,installmentsPaid:paid,installmentsRemaining:row.installments_remaining,firstInstallmentDate:row.first_installment_date,finalDueDate:row.final_due_date,payrollDeducted:payroll,source:"manual"});if(projections.length){const forecast=await supabase.from("financial_transactions").upsert(projections,{onConflict:"owner_id,source,external_id"});if(forecast.error)throwSupabaseError(forecast.error,"projetar parcelas (financial_transactions)","O contrato foi salvo, mas as parcelas não puderam ser projetadas.")}refreshFinance();
 }
 
 export async function createAccount(data: FormData) {

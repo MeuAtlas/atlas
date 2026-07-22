@@ -12,6 +12,14 @@ export interface PluggyTransaction extends JsonRecord {
   merchant?: { name?: string }; paymentData?: JsonRecord; creditCardMetadata?: JsonRecord;
 }
 export interface PluggyInvestment extends JsonRecord { id:string; name?:string; type?:string; balance?:number; amount?:number; value?:number; quantity?:number; unitValue?:number; currencyCode?:string; code?:string; dueDate?:string; institution?:JsonRecord }
-export interface PluggyLoan extends JsonRecord { id:string; type?:string; productName?:string; contractNumber?:string; balanceDue?:number; amount?:number; currencyCode?:string; interestRate?:number; startDate?:string; endDate?:string; dueDate?:string; installments?:number }
+export interface PluggyLoanInterestRate extends JsonRecord { taxType?:string; interestRateType?:string; taxPeriodicity?:string; preFixedRate?:number; postFixedRate?:number }
+export interface PluggyLoanInstallments extends JsonRecord { typeNumberOfInstallments?:string; totalNumberOfInstallments?:number; typeContractRemaining?:string; contractRemainingNumber?:number; paidInstallments?:number; dueInstallments?:number; pastDueInstallments?:number }
+export interface PluggyLoanPayments extends JsonRecord { contractOutstandingBalance?:number }
+export interface PluggyLoan extends JsonRecord {
+  id:string; itemId?:string; providerId?:string; contractNumber?:string; productName?:string; type?:string; date?:string;
+  contractDate?:string; settlementDate?:string; contractAmount?:number; currencyCode?:string; dueDate?:string;
+  installmentPeriodicity?:string; firstInstallmentDueDate?:string; CET?:number; amortizationScheduled?:string;
+  interestRates?:PluggyLoanInterestRate[]; installments?:PluggyLoanInstallments; payments?:PluggyLoanPayments;
+}
 
-export interface PluggyRequestOptions { method?: "GET" | "POST"; body?: JsonRecord; query?: Record<string,string|number|undefined>; timeoutMs?: number }
+export interface PluggyRequestOptions { method?: "GET" | "POST"; body?: JsonRecord; query?: Record<string,string|number|undefined>; timeoutMs?: number; inspectResponse?:(response:Response,payload:unknown)=>void }

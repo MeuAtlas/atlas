@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildLoanProjections } from "./loan-projections";
+import { isPayrollLoan,mapPluggyLoanToFinancialLoan } from "./mappers";
+
+const base={id:"loan-1",productName:"Crédito Pessoal Consignado",type:"CREDITO_PESSOAL_COM_CONSIGNACAO",currencyCode:"BRL",contractAmount:50000,contractDate:"2025-01-01",firstInstallmentDueDate:"2025-02-10",dueDate:"2027-01-10",installments:{totalNumberOfInstallments:24,paidInstallments:5,dueInstallments:19},payments:{contractOutstandingBalance:32000},interestRates:[{taxType:"EFFECTIVE",taxPeriodicity:"YEARLY",preFixedRate:.2}],CET:.24};
+
+test("consignado oficial é mapeado sem inventar parcela",()=>{const row=mapPluggyLoanToFinancialLoan(base,"owner","connection","Santander");assert.equal(row.payroll_deducted,true);assert.equal(row.outstanding_balance,32000);assert.equal(row.contracted_amount,50000);assert.equal(row.installment_amount,null);assert.equal(row.installments_remaining,19);assert.equal(row.institution_name,"Santander")});
+test("saldo ausente permanece null mesmo quando existe valor contratado",()=>{const row=mapPluggyLoanToFinancialLoan({...base,payments:undefined},"owner","connection");assert.equal(row.outstanding_balance,null);assert.equal(row.contracted_amount,50000)});
+test("parcela ausente não vira zero",()=>assert.equal(mapPluggyLoanToFinancialLoan(base,"owner","connection").installment_amount,null));
+test("identifica consignado conservadoramente",()=>{assert.equal(isPayrollLoan({type:"CREDITO_PESSOAL_COM_CONSIGNACAO"}),true);assert.equal(isPayrollLoan({type:"FINANCIAMENTO",productName:"Crédito para veículo"}),false)});
+test("lista vazia não cria contratos",()=>assert.deepEqual(([] as typeof base[]).map(row=>mapPluggyLoanToFinancialLoan(row,"owner","connection")),[]));
+test("parcelas de folha são previsões sem conta bancária e idempotentes",()=>{const input={loanId:"local",ownerId:"owner",externalId:"loan-1",name:"Consignado",installmentAmount:800,installmentCount:12,installmentsPaid:2,installmentsRemaining:10,firstInstallmentDate:"2026-01-10",finalDueDate:"2026-12-10",payrollDeducted:true,source:"pluggy" as const};const first=buildLoanProjections(input,"2026-03-01");const second=buildLoanProjections(input,"2026-03-01");assert.deepEqual(first,second);assert.equal(first[0].account_id,null);assert.equal(first[0].payment_source,"payroll");assert.equal(first[0].source,"pluggy_loan");assert.equal(new Set(first.map(row=>row.external_id)).size,first.length)});
+test("empréstimo sem parcela suficiente não gera saída",()=>assert.deepEqual(buildLoanProjections({loanId:"local",ownerId:"owner",externalId:"loan-1",name:"Consignado",installmentAmount:null,installmentCount:12,installmentsPaid:2,installmentsRemaining:10,firstInstallmentDate:"2026-01-10",finalDueDate:null,payrollDeducted:true,source:"pluggy"},"2026-03-01"),[]));
