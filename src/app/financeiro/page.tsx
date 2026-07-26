@@ -1,24 +1,133 @@
-import Link from "next/link";
-import { EmptyState } from "@/components/finance/empty-state";
-import { FinanceChart } from "@/components/finance/finance-chart";
-import { Money,ValueVisibility } from "@/components/finance/value-visibility";
+import { FinanceOverview } from "@/components/finance/finance-overview";
+import {
+  getBankAccountMonthlyMovement,
+  isTransactionalBankAccount,
+} from "@/modules/finance/account-movement";
 import { requireFinanceAccess } from "@/modules/finance/access";
-import { summarizeFinance } from "@/modules/finance/calculations";
-import { formatCurrency,formatDate } from "@/modules/finance/format";
-import { getFinanceData } from "@/modules/finance/queries";
-import type { BankConnectionSummary,FinancialLoan } from "@/modules/finance/types";
+import {
+  buildCurrentCardInvoices,
+  invoiceReferenceDateForMonth,
+} from "@/modules/finance/card-invoices";
+import { buildFinanceDashboard } from "@/modules/finance/dashboard";
+import {
+  resolveFinanceMonthPeriod,
+  shiftFinanceMonth,
+} from "@/modules/finance/monthly-result";
+import {
+  getBankAccountMonthlyTransactions,
+  getFinanceOverviewData,
+} from "@/modules/finance/queries";
 
-function LoansSummary({loans,connection}:{loans:FinancialLoan[];connection?:BankConnectionSummary}){
- if(loans.length){const withBalance=loans.filter(loan=>loan.outstanding_balance!==null);const total=withBalance.reduce((sum,loan)=>sum+Number(loan.outstanding_balance),0);return <div className="loan-dashboard"><div><span><b>Empréstimos</b><small>{loans.length} {loans.length===1?"contrato importado":"contratos importados"}</small></span><strong className="negative">{withBalance.length?`Saldo devedor total: ${formatCurrency(total)}`:"Saldo devedor não informado pelo banco"}</strong></div>{loans.slice(0,3).map(loan=><details key={loan.id}><summary>{loan.payroll_deducted?"Empréstimo consignado":loan.name}</summary><p>{loan.institution_name||loan.loan_type}</p>{loan.outstanding_balance!==null?<b>Saldo devedor: {formatCurrency(Number(loan.outstanding_balance))}</b>:loan.contracted_amount!==null?<b>Valor contratado: {formatCurrency(Number(loan.contracted_amount))}</b>:null}{loan.outstanding_balance===null?<small>Saldo devedor não informado pelo banco</small>:null}{loan.installment_amount!==null?<small>Parcela mensal: {formatCurrency(Number(loan.installment_amount))}</small>:null}{loan.installments_remaining!==null?<small>Parcelas restantes: {loan.installments_remaining}</small>:null}{loan.payroll_deducted?<small>Desconto em folha</small>:null}{loan.last_sync_at?<small>Atualizado em {formatDate(loan.last_sync_at)}</small>:null}</details>)}<Link href="/financeiro/emprestimos">Ver detalhes</Link></div>}
- const status=connection?.loans_sync_status??"pending";const title=status==="pending"?"Empréstimos ainda não sincronizados":status==="error"?"Erro temporário ao consultar empréstimos":status==="unavailable"?"Produto indisponível nesta conexão":"Nenhum contrato disponibilizado pela conexão";return <div className="loan-empty-state"><b>{title}</b><p>{connection?.loans_sync_message||"Seu banco não disponibilizou contratos de empréstimo nesta conexão."}</p><small>Você pode cadastrar o consignado manualmente para acompanhar saldo devedor e parcelas.</small><small>O desconto em folha não aparece no extrato bancário.</small><div><Link href="/financeiro/integracoes">Atualizar conexão</Link><Link href="/financeiro/emprestimos#novo">Cadastrar consignado manualmente</Link></div></div>
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export default async function FinancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    month?: string | string[];
+    account?: string | string[];
+    workspace?: string | string[];
+    details?: string | string[];
+  }>;
+}) {
+  const { supabase, user, profile } = await requireFinanceAccess();
+  const params = await searchParams;
+  const selectedMonth =
+    typeof params.month === "string" ? params.month : undefined;
+  const selectedAccountParam =
+    typeof params.account === "string" ? params.account : undefined;
+  const workspaceParam =
+    typeof params.workspace === "string" ? params.workspace : undefined;
+  const detailsParam =
+    params.details === "inflow" || params.details === "outflow"
+      ? params.details
+      : undefined;
+  const workspaceId =
+    workspaceParam && UUID.test(workspaceParam) ? workspaceParam : null;
+  const timeZone = profile.timezone || "America/Sao_Paulo";
+  const now = new Date();
+  const period = resolveFinanceMonthPeriod({
+    selectedMonth,
+    timeZone,
+  });
+  const data = await getFinanceOverviewData(supabase, user.id, {
+    period,
+    workspaceId,
+  });
+  const bankAccounts = data.accounts.filter(isTransactionalBankAccount);
+  const selectedAccount =
+    bankAccounts.find((account) => account.id === selectedAccountParam) ??
+    bankAccounts[0] ??
+    null;
+  const [movementTransactions, previousMovementTransactions] = selectedAccount
+    ? await Promise.all([
+        getBankAccountMonthlyTransactions(supabase, user.id, {
+          accountId: selectedAccount.id,
+          period,
+          workspaceId,
+        }),
+        getBankAccountMonthlyTransactions(supabase, user.id, {
+          accountId: selectedAccount.id,
+          period: shiftFinanceMonth(period, -1),
+          workspaceId,
+        }),
+      ])
+    : [[], []];
+  const selectedConnection = selectedAccount?.bank_connection_id
+    ? data.connections.find(
+        (connection) => connection.id === selectedAccount.bank_connection_id,
+      ) ?? null
+    : null;
+  const accountMovement = selectedAccount
+    ? getBankAccountMonthlyMovement({
+        account: selectedAccount,
+        transactions: movementTransactions,
+        previousTransactions: previousMovementTransactions,
+        period,
+        connection: selectedConnection,
+      })
+    : null;
+  const invoices = buildCurrentCardInvoices(
+    data.cards.filter(
+      (card) => card.status === "active" && !card.user_archived_at,
+    ),
+    data.cardPurchases,
+    invoiceReferenceDateForMonth({
+      year: period.year,
+      month: period.month,
+      now,
+      timeZone,
+    }),
+    { purchaseDataAvailable: !data.warnings.cardPurchases },
+  ).filter((invoice) =>
+    ["open", "partially_paid", "estimated"].includes(invoice.status),
+  );
+  const dashboard = buildFinanceDashboard(
+    data.accounts,
+    data.transactions,
+    data.cardPurchases,
+    invoices,
+    data.connections,
+    now,
+    {
+      selectedMonth: period.key,
+      timeZone,
+      scope: { workspaceId },
+    },
+  );
+
+  return (
+    <FinanceOverview
+      dashboard={dashboard}
+      accounts={bankAccounts}
+      accountMovement={accountMovement}
+      invoices={invoices}
+      name={profile.preferred_name || profile.full_name || "você"}
+      timeZone={timeZone}
+      workspace={workspaceParam || "personal"}
+      warnings={data.warnings}
+      initialDetails={detailsParam}
+    />
+  );
 }
-
-export default async function FinancePage(){const {supabase,user}=await requireFinanceAccess();const data=await getFinanceData(supabase,user.id);const summary=summarizeFinance(data.accounts,data.transactions);const invested=data.investments.reduce((total,item)=>total+Number(item.balance),0);const nextDue=data.transactions.filter(transaction=>transaction.due_date&&!["realized","cancelled"].includes(transaction.status)).slice(0,5);return <ValueVisibility>
- <section className="finance-hero"><div><p>Saldo disponível</p><strong><Money value={summary.available}/></strong><span>Resultado do mês: <Money value={summary.monthlyResult}/></span></div><div className="finance-projection"><small>Projeção do mês</small><b><Money value={summary.projected}/></b></div></section>
- <section className="finance-summary">{[["Receitas",summary.income,"positive"],["Despesas",summary.expenses,"negative"],["A receber",summary.receivable,""],["A pagar",summary.payable,""],["Vencido",summary.overdue,"negative"]].map(([label,value,className])=><Link href="/financeiro/movimentacoes" key={String(label)} className={`finance-stat ${className}`}><span>{label}</span><b><Money value={Number(value)}/></b></Link>)}</section>
- <div className="finance-dashboard-grid"><section className="finance-panel"><header><h2>Patrimônio conectado</h2><Link href="/financeiro/integracoes">Integrações</Link></header><div className="finance-list"><div><span><b>Investimentos</b><small>{data.investments.length} posições importadas</small></span><strong className="positive"><Money value={invested}/></strong></div><LoansSummary loans={data.loans} connection={data.connections[0]}/>{data.connections[0]?<div><span><b>Última sincronização</b><small>{data.connections[0].connector_name||"Pluggy"}</small></span><strong>{data.connections[0].last_successful_sync_at?formatDate(data.connections[0].last_successful_sync_at):"Pendente"}</strong></div>:null}</div></section>
- <section className="finance-panel finance-chart-panel"><header><div><p className="eyebrow">Fluxo financeiro</p><h2>Receitas e despesas</h2></div><span>12 meses</span></header><FinanceChart transactions={data.transactions}/></section>
- <section className="finance-panel"><header><h2>Próximos vencimentos</h2><Link href="/financeiro/movimentacoes">Ver todos</Link></header>{nextDue.length?<div className="finance-list">{nextDue.map(transaction=><div key={transaction.id}><span><b>{transaction.description}</b><small>{formatDate(transaction.due_date)}</small></span><strong className="negative"><Money value={Number(transaction.amount)}/></strong></div>)}</div>:<EmptyState title="Tudo em dia" description="Cadastre contas futuras para acompanhar vencimentos." href="/financeiro/movimentacoes#nova" label="Adicionar movimentação"/>}</section>
- <section className="finance-panel"><header><h2>Contas e saldos</h2><Link href="/financeiro/contas">Gerenciar</Link></header>{data.accounts.length?<div className="finance-list">{data.accounts.filter(account=>account.status==="active").slice(0,5).map(account=><div key={account.id}><span><b>{account.name}</b><small>{account.institution_name||"Conta manual"}</small></span><strong><Money value={Number(account.current_balance)}/></strong></div>)}</div>:<EmptyState title="Nenhuma conta" description="Crie sua primeira conta para consolidar os saldos." href="/financeiro/contas#nova" label="Criar conta"/>}</section>
- <section className="finance-panel"><header><h2>Atenção necessária</h2></header><div className="finance-list"><div><span><b>{summary.overdue?"Existem valores vencidos":"Nenhuma pendência crítica"}</b><small>{summary.overdue?"Revise as movimentações em atraso.":"Seu financeiro está organizado."}</small></span><i className={summary.overdue?"status danger":"status success"}>{summary.overdue?"Revisar":"Em dia"}</i></div></div></section></div>
- </ValueVisibility>}

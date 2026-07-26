@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { throwSupabaseError } from "@/lib/errors";
 import { getAuthContext } from "@/lib/auth/session";
-import type { Workspace } from "@/types/atlas";
+import type { AtlasModule, Workspace } from "@/types/atlas";
 
 export async function requireFinanceAccess() {
   const context = await getAuthContext();
@@ -42,4 +42,57 @@ export async function getWorkspaces() {
     throwSupabaseError(result.error, "carregar espaços pessoais (workspaces)", "Não foi possível carregar seus espaços.");
   }
   return (result.data ?? []) as Workspace[];
+}
+
+export async function getFinanceShellData(
+  access: Awaited<ReturnType<typeof requireFinanceAccess>>,
+) {
+  const [workspacesResult, modulesResult, grantsResult] = await Promise.all([
+    access.supabase
+      .from("workspaces")
+      .select("id,owner_id,name,slug,type")
+      .order("type"),
+    access.supabase
+      .from("modules")
+      .select(
+        "id,slug,name,description,icon,route,category,is_default,is_globally_active",
+      )
+      .eq("is_globally_active", true),
+    access.supabase
+      .from("user_modules")
+      .select("module_id,enabled")
+      .eq("user_id", access.user.id)
+      .eq("enabled", true),
+  ]);
+
+  if (workspacesResult.error) {
+    throwSupabaseError(
+      workspacesResult.error,
+      "carregar espaços pessoais (workspaces)",
+      "Não foi possível carregar seus espaços.",
+    );
+  }
+  if (modulesResult.error || grantsResult.error) {
+    throwSupabaseError(
+      modulesResult.error ?? grantsResult.error!,
+      "carregar módulos habilitados",
+      "Não foi possível carregar os módulos disponíveis.",
+    );
+  }
+
+  const enabledIds = new Set(
+    (grantsResult.data ?? []).map((grant) => String(grant.module_id)),
+  );
+  const modules = (modulesResult.data ?? [])
+    .filter((module) => enabledIds.has(String(module.id)))
+    .sort((left, right) => {
+      if (left.slug === "financeiro") return -1;
+      if (right.slug === "financeiro") return 1;
+      return String(left.name).localeCompare(String(right.name), "pt-BR");
+    }) as AtlasModule[];
+
+  return {
+    workspaces: (workspacesResult.data ?? []) as Workspace[],
+    modules,
+  };
 }

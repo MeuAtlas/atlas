@@ -1,0 +1,817 @@
+import { getCurrentBillingCycle, type BillingCycle } from "./billing-cycle";
+import type { CardPurchase, CreditCard } from "./types";
+
+const amount = (value: number | string | null | undefined) =>
+  Math.abs(Number(value ?? 0));
+
+export interface CurrentCardInvoice {
+  card: CreditCard;
+  cycle: BillingCycle | null;
+  purchases: CardPurchase[];
+  purchasesTotal: number;
+  creditsTotal: number;
+  adjustmentsTotal: number;
+  invoiceTotal: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  purchaseCount: number;
+  providerInvoiceTotal: number | null;
+  manualInvoiceTotal:number|null;
+  accountCreditBalance: number | null;
+  calculatedInvoiceTotal: number;
+  totalSource:"provider_bill"|"manual_bank_confirmation"|"calculated_transactions";
+  pendingTransactionsTotal:number;
+  pendingTransactionsCount:number;
+  postedTransactionsCount:number;
+  withBillIdCount:number;
+  withoutBillIdCount:number;
+  invoicePaymentsExcludedCount:number;
+  cycleEstimated:boolean;
+  reconciliationDifference: number | null;
+  reconciliationStatus:
+    | "matched"
+    | "small_difference"
+    | "divergent"
+    | "incomplete_assignment"
+    | "provider_unavailable"
+    | "incomplete_transactions";
+  committedLimit: number;
+  availableLimit: number;
+  usedPercent: number;
+  isStale: boolean;
+  instrumentTotals: Array<{instrumentId:string;lastFour:string|null;cardKind:string;displayName:string;grossTotal:number;creditsTotal:number;adjustmentsTotal:number;netTotal:number;purchaseCount:number}>;
+  instrumentsTotal:number;
+  unassignedTotal:number;
+  unassignedCount:number;
+  generalAdjustmentsTotal:number;
+  excludedItems: InvoiceExcludedItem[];
+  linkedPayments: CardPurchase[];
+  purchaseDataAvailable: boolean;
+  status:"open"|"closed"|"due"|"partially_paid"|"paid"|"overdue"|"estimated";
+}
+
+export type InvoiceExclusionReason =
+  | "outside_cycle"
+  | "cancelled"
+  | "duplicate"
+  | "invoice_payment"
+  | "invalid_date"
+  | "awaiting_review"
+  | "unsupported";
+
+export type InvoiceExcludedItem = {
+  purchase: CardPurchase;
+  reason: InvoiceExclusionReason;
+};
+
+export type EstimatedInvoiceLineKind =
+  | "purchase"
+  | "installment"
+  | "refund"
+  | "credit"
+  | "fee"
+  | "adjustment";
+
+export type EstimatedInvoiceDetails = {
+  includedPurchases: CardPurchase[];
+  excludedItems: InvoiceExcludedItem[];
+  linkedPayments: CardPurchase[];
+  purchaseTotal: number;
+  refundTotal: number;
+  creditTotal: number;
+  feeTotal: number;
+  adjustmentTotal: number;
+  calculatedTotal: number;
+  displayedTotal: number;
+  providerTotal: number | null;
+  reconciliationDifference: number | null;
+  reconciliationStatus: CurrentCardInvoice["reconciliationStatus"];
+  purchaseCount: number;
+  dataCompleteness: "complete" | "partial" | "stale";
+  warnings: string[];
+};
+
+export type CurrentBillSummary = {
+  amount: number | null;
+  amountSource: CurrentCardInvoice["totalSource"];
+  purchasesCount: number | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  closesAt: string | null;
+  dueAt: string | null;
+  statusLabel: string;
+  warningMessage: string | null;
+  isEstimated: boolean;
+  isOfficial: boolean;
+};
+
+export type CurrentInvoiceSummary = {
+  id: string;
+  cardId: string;
+  cardName: string;
+  brand: string;
+  lastFour: string;
+  status: CurrentCardInvoice["status"];
+  statusLabel: string;
+  displayAmount: number | null;
+  amountSource: CurrentCardInvoice["totalSource"];
+  amountSourceLabel: string;
+  cycleStart: string | null;
+  cycleEnd: string | null;
+  closingDate: string | null;
+  dueDate: string | null;
+  purchaseCount: number | null;
+  lastUpdatedAt: string | null;
+  dataCompleteness: "complete" | "partial" | "stale" | "unavailable";
+  warningMessage: string | null;
+  isEstimated: boolean;
+  isOfficial: boolean;
+};
+
+export function purchaseCompetenceDate(purchase: CardPurchase) {
+  return purchase.bill_forecast_date || purchase.purchase_date || purchase.competence_date || "";
+}
+
+const normalizedDescription = (purchase: CardPurchase) =>
+  (purchase.merchant || purchase.description)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+
+const purchaseTimestamp = (purchase: CardPurchase) =>
+  new Date(`${purchase.purchase_date}T12:00:00Z`).valueOf();
+
+function preferPosted(left: CardPurchase, right: CardPurchase) {
+  if (left.status === "pending" && right.status !== "pending") return right;
+  if (right.status === "pending" && left.status !== "pending") return left;
+  return purchaseTimestamp(right) >= purchaseTimestamp(left) ? right : left;
+}
+
+export function deduplicateCardPurchases(purchases: CardPurchase[]) {
+  const byExternal = new Map<string, CardPurchase>();
+  const withoutExternal: CardPurchase[] = [];
+  for (const purchase of purchases) {
+    if (!purchase.external_id) {
+      withoutExternal.push(purchase);
+      continue;
+    }
+    const previous = byExternal.get(purchase.external_id);
+    byExternal.set(
+      purchase.external_id,
+      previous ? preferPosted(previous, purchase) : purchase,
+    );
+  }
+
+  const candidates = [...byExternal.values(), ...withoutExternal].sort(
+    (left, right) =>
+      left.status === "pending" === (right.status === "pending")
+        ? purchaseTimestamp(left) - purchaseTimestamp(right)
+        : left.status === "pending"
+          ? 1
+          : -1,
+  );
+  const result: CardPurchase[] = [];
+  for (const purchase of candidates) {
+    const duplicate = result.find(
+      (existing) =>
+        existing.card_id === purchase.card_id &&
+        existing.transaction_role === purchase.transaction_role &&
+        new Set([existing.status, purchase.status]).size === 2 &&
+        [existing.status, purchase.status].every((status) =>
+          ["pending", "realized"].includes(status),
+        ) &&
+        Math.abs(
+          Number(existing.installment_amount) -
+            Number(purchase.installment_amount),
+        ) <= 0.01 &&
+        normalizedDescription(existing) === normalizedDescription(purchase) &&
+        Math.abs(purchaseTimestamp(existing) - purchaseTimestamp(purchase)) <=
+          3 * 86_400_000,
+    );
+    if (!duplicate) result.push(purchase);
+  }
+  return result;
+}
+
+function calendarDate(date: Date, timeZone = "America/Sao_Paulo") {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone,
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+export function deriveInvoiceStatus({
+  cycle,
+  invoiceTotal,
+  paidAmount,
+  referenceDate = new Date(),
+}: {
+  cycle: BillingCycle | null;
+  invoiceTotal: number;
+  paidAmount: number;
+  referenceDate?: Date;
+}): CurrentCardInvoice["status"] {
+  if (!cycle) return "estimated";
+  const reference = calendarDate(referenceDate);
+  if (paidAmount >= invoiceTotal && invoiceTotal > 0) return "paid";
+  if (paidAmount > 0) return "partially_paid";
+  if (reference <= cycle.cycleEnd) return "open";
+  if (reference === cycle.dueDate) return "due";
+  if (reference > cycle.dueDate) return "overdue";
+  return "closed";
+}
+
+export function invoiceReferenceDateForMonth({
+  year,
+  month,
+  now = new Date(),
+  timeZone = "America/Sao_Paulo",
+}: {
+  year: number;
+  month: number;
+  now?: Date;
+  timeZone?: string;
+}) {
+  const current = calendarDate(now, timeZone);
+  const selected = `${year}-${String(month).padStart(2, "0")}`;
+  if (current.startsWith(selected)) return now;
+  return new Date(Date.UTC(year, month, 0, 12));
+}
+export function filterPurchasesByInstrument(purchases:CardPurchase[],instrumentId:string|null){return instrumentId==="unassigned"?purchases.filter(purchase=>!purchase.instrument_id):instrumentId?purchases.filter(purchase=>purchase.instrument_id===instrumentId):purchases}
+export function analyzeInvoiceInclusion(card:CreditCard,purchases:CardPurchase[],referenceDate=new Date()){const invoice=buildCurrentCardInvoices([card],purchases,referenceDate)[0];const counts={outside_cycle:0,invoice_payment:0,cancelled:0,duplicate:0,invalid_target:0,missing_card_relation:0,pending_not_included:0,missing_bill_id:0,unsupported_type:0,mapping_failure:0};const includedIds=new Set(invoice.purchases.filter(purchase=>purchase.status!=="cancelled"&&purchase.transaction_role!=="invoice_payment").map(purchase=>purchase.id));const seen=new Set<string>();for(const purchase of purchases){const key=purchase.external_id??purchase.id;if(seen.has(key)){counts.duplicate++;continue}seen.add(key);if(purchase.card_id!==card.id){counts.missing_card_relation++;continue}if(purchase.status==="cancelled"){counts.cancelled++;continue}if(purchase.transaction_role==="invoice_payment"){counts.invoice_payment++;continue}if(!purchase.provider_bill_id)counts.missing_bill_id++;if(!includedIds.has(purchase.id)){counts.outside_cycle++;if(purchase.status==="pending")counts.pending_not_included++}}return {includedCount:includedIds.size,excludedCount:purchases.length-includedIds.size,exclusionCounts:counts}}
+
+export function calculateInvoiceAmounts(purchases: CardPurchase[]) {
+  let purchasesTotal = 0;
+  let creditsTotal = 0;
+  let adjustmentsTotal = 0;
+  let paidAmount = 0;
+  let purchaseCount = 0;
+
+  for (const purchase of purchases) {
+    if (
+      purchase.status === "cancelled" ||
+      (purchase.review_status === "pending" &&
+        purchase.transaction_role !== "invoice_payment")
+    )
+      continue;
+    const value = amount(purchase.installment_amount);
+    if (purchase.transaction_role === "consumption") {
+      purchasesTotal += value;
+      purchaseCount++;
+    } else if (purchase.transaction_role === "refund") {
+      creditsTotal += value;
+    } else if (purchase.transaction_role === "invoice_payment") {
+      paidAmount += value;
+    } else if (purchase.transaction_role === "adjustment") {
+      // Pluggy keeps the provider sign in original_amount. Positive card entries
+      // are credits; negative entries are charges.
+      if (Number(purchase.original_amount ?? -value) > 0) creditsTotal += value;
+      else adjustmentsTotal += value;
+    }
+  }
+  const invoiceTotal = purchasesTotal + adjustmentsTotal - creditsTotal;
+  return {
+    purchasesTotal,
+    creditsTotal,
+    adjustmentsTotal,
+    invoiceTotal,
+    paidAmount,
+    outstandingAmount: Math.max(0, invoiceTotal - paidAmount),
+    purchaseCount,
+  };
+}
+
+export function invoiceLineKind(
+  purchase: CardPurchase,
+): EstimatedInvoiceLineKind {
+  if (purchase.transaction_role === "refund") return "refund";
+  if (purchase.transaction_role === "adjustment") {
+    if (Number(purchase.original_amount ?? -purchase.installment_amount) > 0) {
+      return "credit";
+    }
+    const clue =
+      `${purchase.description} ${purchase.provider_category ?? ""}`.toLocaleLowerCase(
+        "pt-BR",
+      );
+    return /tarifa|taxa|fee|encargo|juros|multa|anuidade/.test(clue)
+      ? "fee"
+      : "adjustment";
+  }
+  return purchase.is_installment ||
+    (purchase.installment_count !== null && purchase.installment_count > 1)
+    ? "installment"
+    : "purchase";
+}
+
+export function invoiceLineContribution(purchase: CardPurchase) {
+  const value = amount(purchase.installment_amount);
+  return ["refund", "credit"].includes(invoiceLineKind(purchase))
+    ? -value
+    : value;
+}
+
+export function isInvoiceTotalLine(purchase: CardPurchase) {
+  return (
+    purchase.status !== "cancelled" &&
+    purchase.transaction_role !== "invoice_payment" &&
+    purchase.review_status !== "pending"
+  );
+}
+
+export function getCurrentBillSummary(
+  invoice: CurrentCardInvoice,
+): CurrentBillSummary {
+  const providerAmount = Number.isFinite(invoice.providerInvoiceTotal)
+    ? invoice.providerInvoiceTotal
+    : null;
+  const manualAmount = Number.isFinite(invoice.manualInvoiceTotal)
+    ? invoice.manualInvoiceTotal
+    : null;
+  const calculatedAmount =
+    invoice.purchaseDataAvailable &&
+    Number.isFinite(invoice.calculatedInvoiceTotal)
+    ? invoice.calculatedInvoiceTotal
+    : null;
+  const amountSource =
+    providerAmount !== null
+      ? "provider_bill"
+      : manualAmount !== null
+        ? "manual_bank_confirmation"
+        : "calculated_transactions";
+  const amount = providerAmount ?? manualAmount ?? calculatedAmount;
+  const purchasesCount = invoice.purchaseDataAvailable
+    ? invoice.purchases.filter(
+        (purchase) =>
+          isInvoiceTotalLine(purchase) &&
+          purchase.transaction_role === "consumption",
+      ).length
+    : null;
+  const partial =
+    invoice.card.provider_status === "degraded" ||
+    invoice.card.bank_connections?.data_completeness === "partial";
+  const statusLabel =
+    invoice.status === "open"
+      ? "Fatura aberta"
+      : invoice.status === "paid"
+        ? "Fatura paga"
+        : invoice.status === "partially_paid"
+          ? "Fatura parcialmente paga"
+          : invoice.status === "overdue"
+            ? "Fatura vencida"
+            : invoice.status === "due"
+              ? "Fatura vence hoje"
+              : invoice.status === "closed"
+                ? "Fatura fechada"
+                : "Fatura estimada";
+  const warningMessage = !invoice.purchaseDataAvailable
+    ? "As compras importadas estão temporariamente indisponíveis. Nenhum valor calculado foi substituído por zero."
+    : partial
+    ? amountSource === "calculated_transactions"
+      ? "Dados parciais da conexão. O valor calculado pelas movimentações importadas foi preservado."
+      : "Dados parciais fornecidos pela conexão. O último valor confiável foi preservado."
+    : invoice.isStale
+      ? "Os valores podem estar desatualizados."
+      : amountSource === "calculated_transactions"
+        ? "A conexão não forneceu uma fatura oficial. O valor foi calculado pelas movimentações."
+        : null;
+
+  return {
+    amount,
+    amountSource,
+    purchasesCount,
+    periodStart: invoice.cycle?.cycleStart ?? null,
+    periodEnd: invoice.cycle?.cycleEnd ?? null,
+    closesAt: invoice.cycle?.closingDate ?? null,
+    dueAt: invoice.cycle?.dueDate ?? null,
+    statusLabel,
+    warningMessage,
+    isEstimated:
+      amount !== null && amountSource === "calculated_transactions",
+    isOfficial: amountSource === "provider_bill",
+  };
+}
+
+function daysBetweenCalendarDates(left: string, right: string) {
+  const leftTime = Date.parse(`${left.slice(0, 10)}T12:00:00Z`);
+  const rightTime = Date.parse(`${right.slice(0, 10)}T12:00:00Z`);
+  return Math.round((rightTime - leftTime) / 86_400_000);
+}
+
+function getTemporalInvoiceStatusLabel(
+  invoice: CurrentCardInvoice,
+  summary: CurrentBillSummary,
+  referenceDate: Date,
+) {
+  if (["paid", "partially_paid"].includes(invoice.status)) {
+    return summary.statusLabel;
+  }
+
+  const today = calendarDate(referenceDate);
+  const daysUntilDue = summary.dueAt
+    ? daysBetweenCalendarDates(today, summary.dueAt)
+    : null;
+  if (daysUntilDue !== null && daysUntilDue < 0) return "Fatura vencida";
+  if (daysUntilDue === 0) return "Vence hoje";
+  if (daysUntilDue === 1) return "Vence amanhã";
+
+  const daysUntilClosing = summary.closesAt
+    ? daysBetweenCalendarDates(today, summary.closesAt)
+    : null;
+  if (daysUntilClosing === 0) return "Fecha hoje";
+  if (daysUntilClosing === 1) return "Fecha amanhã";
+  return summary.statusLabel;
+}
+
+export function getCurrentInvoiceSummary(
+  invoice: CurrentCardInvoice,
+  referenceDate = new Date(),
+): CurrentInvoiceSummary {
+  const bill = getCurrentBillSummary(invoice);
+  const manualDate = invoice.cycle
+    ? invoice.card.card_invoice_confirmations?.find(
+        (item) =>
+          item.reference_month.slice(0, 7) === invoice.cycle?.referenceMonth,
+      )?.informed_at ?? null
+    : null;
+  const lastUpdatedAt =
+    bill.amountSource === "provider_bill"
+      ? invoice.card.bank_connections?.last_complete_sync_at ?? null
+      : bill.amountSource === "manual_bank_confirmation"
+        ? manualDate
+        : invoice.card.last_sync_at;
+  const partial =
+    invoice.card.provider_status === "degraded" ||
+    invoice.card.bank_connections?.data_completeness === "partial";
+  const dataCompleteness = !invoice.purchaseDataAvailable
+    ? "unavailable"
+    : partial
+      ? "partial"
+      : invoice.isStale
+        ? "stale"
+        : "complete";
+
+  return {
+    id: `${invoice.card.id}:${invoice.cycle?.referenceMonth ?? "unconfigured"}`,
+    cardId: invoice.card.id,
+    cardName: invoice.card.name,
+    brand: invoice.card.brand || invoice.card.institution_name || "Cartão",
+    lastFour: invoice.card.last_four_digits || "••••",
+    status: invoice.status,
+    statusLabel: getTemporalInvoiceStatusLabel(invoice, bill, referenceDate),
+    displayAmount: bill.amount,
+    amountSource: bill.amountSource,
+    amountSourceLabel:
+      bill.amountSource === "provider_bill"
+        ? "Valor oficial"
+        : bill.amountSource === "manual_bank_confirmation"
+          ? "Valor informado"
+          : "Valor estimado",
+    cycleStart: bill.periodStart,
+    cycleEnd: bill.periodEnd,
+    closingDate: bill.closesAt,
+    dueDate: bill.dueAt,
+    purchaseCount: bill.purchasesCount,
+    lastUpdatedAt,
+    dataCompleteness,
+    warningMessage:
+      dataCompleteness === "unavailable"
+        ? "Compras temporariamente indisponíveis."
+        : dataCompleteness === "partial"
+          ? "Alguns dados podem estar incompletos."
+          : dataCompleteness === "stale"
+            ? "Atualização pendente."
+            : null,
+    isEstimated: bill.isEstimated,
+    isOfficial: bill.isOfficial,
+  };
+}
+
+export function getEstimatedInvoiceDetails(
+  invoice: CurrentCardInvoice,
+): EstimatedInvoiceDetails {
+  const includedPurchases = invoice.purchases.filter(isInvoiceTotalLine);
+  let purchaseTotal = 0;
+  let refundTotal = 0;
+  let creditTotal = 0;
+  let feeTotal = 0;
+  let adjustmentTotal = 0;
+
+  for (const purchase of includedPurchases) {
+    const value = amount(purchase.installment_amount);
+    const kind = invoiceLineKind(purchase);
+    if (kind === "refund") refundTotal += value;
+    else if (kind === "credit") creditTotal += value;
+    else if (kind === "fee") feeTotal += value;
+    else if (kind === "adjustment") adjustmentTotal += value;
+    else purchaseTotal += value;
+  }
+
+  const calculatedTotal =
+    purchaseTotal + feeTotal + adjustmentTotal - refundTotal - creditTotal;
+  const partial =
+    invoice.card.provider_status === "degraded" ||
+    invoice.card.bank_connections?.data_completeness === "partial";
+  const warnings = [
+    ...(partial ? ["Os dados desta fatura podem estar incompletos."] : []),
+    ...(invoice.isStale ? ["Os valores podem estar desatualizados."] : []),
+  ];
+
+  const summary = getCurrentBillSummary(invoice);
+
+  return {
+    includedPurchases,
+    excludedItems: invoice.excludedItems,
+    linkedPayments: invoice.linkedPayments,
+    purchaseTotal,
+    refundTotal,
+    creditTotal,
+    feeTotal,
+    adjustmentTotal,
+    calculatedTotal,
+    displayedTotal: summary.amount ?? 0,
+    providerTotal: invoice.providerInvoiceTotal ?? invoice.manualInvoiceTotal,
+    reconciliationDifference: invoice.reconciliationDifference,
+    reconciliationStatus: invoice.reconciliationStatus,
+    purchaseCount:
+      summary.purchasesCount ??
+      includedPurchases.filter(
+        (purchase) => purchase.transaction_role === "consumption",
+      ).length,
+    dataCompleteness: partial
+      ? "partial"
+      : invoice.isStale
+        ? "stale"
+        : "complete",
+    warnings,
+  };
+}
+
+export function buildCurrentCardInvoices(
+  cards: CreditCard[],
+  purchases: CardPurchase[],
+  referenceDate = new Date(),
+  options: { purchaseDataAvailable?: boolean } = {},
+): CurrentCardInvoice[] {
+  return cards.map((card) => {
+    const estimatedCycle =
+      card.closing_day && card.due_day
+        ? getCurrentBillingCycle({
+            closingDay: card.closing_day,
+            dueDay: card.due_day,
+            referenceDate,
+          })
+        : null;
+    const cycle=estimatedCycle;
+    const exactClosing=card.provider_bill_closing_date?.slice(0,10)??null;
+    const exactDue=card.provider_bill_due_date?.slice(0,10)??null;
+    const providerBillMatchesCycle=Boolean(
+      cycle &&
+        exactClosing === cycle.closingDate &&
+        exactDue === cycle.dueDate &&
+        (!card.provider_cycle_start_date ||
+          card.provider_cycle_start_date.slice(0, 10) === cycle.cycleStart),
+    );
+    const allCardPurchases = purchases.filter(
+      (purchase) => purchase.card_id === card.id,
+    );
+    const uniquePurchases = deduplicateCardPurchases(allCardPurchases);
+    const uniqueIds = new Set(uniquePurchases.map((purchase) => purchase.id));
+    const duplicateItems: InvoiceExcludedItem[] = allCardPurchases
+      .filter((purchase) => !uniqueIds.has(purchase.id))
+      .map((purchase) => ({ purchase, reason: "duplicate" }));
+    const cardPurchases = cycle
+      ? uniquePurchases.filter((purchase) => {
+          const date = purchaseCompetenceDate(purchase);
+          const matchesProviderBill =
+            providerBillMatchesCycle &&
+            Boolean(card.provider_bill_id) &&
+            (purchase.provider_bill_id === card.provider_bill_id ||
+              purchase.invoice_reference === card.provider_bill_id);
+          if (purchase.transaction_role === "invoice_payment") {
+            return (
+              matchesProviderBill ||
+              (date > cycle.cycleEnd && date <= cycle.dueDate)
+            );
+          }
+          return (
+            matchesProviderBill ||
+            (date >= cycle.cycleStart && date <= cycle.cycleEnd)
+          );
+        })
+      : [];
+    const totals = calculateInvoiceAmounts(cardPurchases);
+    const includedIds = new Set(
+      cardPurchases.filter(isInvoiceTotalLine).map((purchase) => purchase.id),
+    );
+    const linkedPayments = cardPurchases.filter(
+      (purchase) =>
+        purchase.status !== "cancelled" &&
+        purchase.transaction_role === "invoice_payment",
+    );
+    const excludedItems: InvoiceExcludedItem[] = [
+      ...duplicateItems,
+      ...uniquePurchases
+        .filter((purchase) => !includedIds.has(purchase.id))
+        .map((purchase): InvoiceExcludedItem => {
+          const date = purchaseCompetenceDate(purchase);
+          const inCycle = Boolean(
+            cycle &&
+              date &&
+              date >= cycle.cycleStart &&
+              date <= cycle.cycleEnd,
+          );
+          const reason: InvoiceExclusionReason =
+            purchase.status === "cancelled"
+              ? "cancelled"
+              : purchase.transaction_role === "invoice_payment"
+                ? "invoice_payment"
+                : !date
+                  ? "invalid_date"
+                  : !inCycle
+                    ? "outside_cycle"
+                    : purchase.review_status === "pending"
+                      ? "awaiting_review"
+                      : "unsupported";
+          return { purchase, reason };
+        }),
+    ];
+    const instrumentTotals=(card.credit_card_instruments??[]).map(instrument=>{const rows=cardPurchases.filter(purchase=>purchase.instrument_id===instrument.id);const values=calculateInvoiceAmounts(rows);return {instrumentId:instrument.id,lastFour:instrument.last_four_digits,cardKind:instrument.card_kind,displayName:instrument.display_name,grossTotal:values.purchasesTotal,creditsTotal:values.creditsTotal,adjustmentsTotal:values.adjustmentsTotal,netTotal:values.invoiceTotal,purchaseCount:values.purchaseCount}});
+    const instrumentsTotal=instrumentTotals.reduce((sum,item)=>sum+item.netTotal,0);
+    const unassigned=cardPurchases.filter(purchase=>!purchase.instrument_id);
+    const unassignedConsumption=unassigned.filter(purchase=>purchase.transaction_role==="consumption"&&purchase.status!=="cancelled");
+    const unassignedValues=calculateInvoiceAmounts(unassigned);
+    const unassignedTotal=calculateInvoiceAmounts(unassignedConsumption).invoiceTotal;
+    const generalAdjustmentsTotal=unassignedValues.invoiceTotal-unassignedTotal;
+    const providerInvoiceTotal = !providerBillMatchesCycle
+      ? null
+      :
+      card.provider_invoice_total === null ||
+      card.provider_invoice_total === undefined
+        ? null
+        : amount(card.provider_invoice_total);
+    const accountCreditBalance =
+      card.account_credit_balance === null ||
+      card.account_credit_balance === undefined
+        ? null
+        : amount(card.account_credit_balance);
+    const manualConfirmation=cycle
+      ? card.card_invoice_confirmations?.find(confirmation=>confirmation.reference_month.slice(0,7)===cycle.referenceMonth)
+      : undefined;
+    const manualInvoiceTotal=manualConfirmation?amount(manualConfirmation.official_amount):null;
+    // Account.balance can be an aggregate shared by multiple CREDIT products in
+    // some connectors. Keep it for diagnostics, but never promote it to the
+    // invoice headline unless the provider exposes an explicitly scoped Bill.
+    const totalSource=providerInvoiceTotal!==null
+      ? "provider_bill" as const
+      : manualInvoiceTotal!==null
+        ? "manual_bank_confirmation" as const
+      : "calculated_transactions" as const;
+    const officialInvoiceTotal=providerInvoiceTotal??manualInvoiceTotal??totals.invoiceTotal;
+    const difference =
+      totalSource==="calculated_transactions" ? null : officialInvoiceTotal - totals.invoiceTotal;
+    const reconciliationStatus =
+      totalSource==="calculated_transactions"
+        ? "provider_unavailable"
+        : Math.abs(difference ?? 0) <= 0.01
+          ? "matched"
+          : Math.abs(difference ?? 0) <= 1
+            ? "small_difference"
+            : "divergent";
+    const eligiblePurchases=cardPurchases.filter(purchase=>purchase.status!=="cancelled"&&purchase.transaction_role!=="invoice_payment");
+    const pendingPurchases=eligiblePurchases.filter(purchase=>purchase.status==="pending");
+    const pendingTransactionsTotal=calculateInvoiceAmounts(pendingPurchases).invoiceTotal;
+    const postedTransactionsCount=eligiblePurchases.filter(purchase=>purchase.status==="realized").length;
+    const withBillIdCount=eligiblePurchases.filter(purchase=>Boolean(purchase.provider_bill_id)).length;
+    const withoutBillIdCount=eligiblePurchases.length-withBillIdCount;
+    const invoicePaymentsExcludedCount=uniquePurchases.filter(purchase=>purchase.status!=="cancelled"&&purchase.transaction_role==="invoice_payment"&&!cardPurchases.some(item=>item.id===purchase.id)).length;
+    const providerUsed = Math.max(0, Number(card.used_limit ?? 0));
+    const futureInstallments = purchases
+      .filter(
+        (purchase) =>
+          purchase.card_id === card.id &&
+          purchase.status !== "cancelled" &&
+          purchase.transaction_role === "consumption" &&
+          purchase.is_installment === true &&
+          purchase.installment_count !== null &&
+          purchase.installment_number !== null &&
+          purchase.installment_count > purchase.installment_number,
+      )
+      .reduce(
+        (sum, purchase) =>
+          sum +
+          amount(purchase.installment_amount) *
+            (Number(purchase.installment_count) - Number(purchase.installment_number)),
+        0,
+      );
+    const committedLimit = Math.max(
+      providerUsed,
+      officialInvoiceTotal + futureInstallments,
+    );
+    const limit = Math.max(0, Number(card.credit_limit ?? 0));
+    const status = deriveInvoiceStatus({
+      cycle,
+      invoiceTotal: officialInvoiceTotal,
+      paidAmount: totals.paidAmount,
+      referenceDate,
+    });
+    return {
+      card,
+      cycle,
+      purchases: cardPurchases,
+      ...totals,
+      invoiceTotal:officialInvoiceTotal,
+      outstandingAmount:Math.max(0,officialInvoiceTotal-totals.paidAmount),
+      providerInvoiceTotal,
+      manualInvoiceTotal,
+      accountCreditBalance,
+      calculatedInvoiceTotal: totals.invoiceTotal,
+      totalSource,
+      pendingTransactionsTotal,
+      pendingTransactionsCount:pendingPurchases.length,
+      postedTransactionsCount,
+      withBillIdCount,
+      withoutBillIdCount,
+      invoicePaymentsExcludedCount,
+      cycleEstimated:card.dates_source==="estimated",
+      reconciliationDifference: difference,
+      reconciliationStatus,
+      committedLimit,
+      availableLimit: Math.max(0, limit - committedLimit),
+      usedPercent: limit ? Math.min(100, (committedLimit / limit) * 100) : 0,
+      isStale: Boolean(
+        card.last_sync_at &&
+          referenceDate.valueOf() - new Date(card.last_sync_at).valueOf() >
+            48 * 60 * 60 * 1000,
+      ),
+      instrumentTotals,
+      instrumentsTotal,
+      unassignedTotal,
+      unassignedCount:unassignedConsumption.length,
+      generalAdjustmentsTotal,
+      excludedItems,
+      linkedPayments,
+      purchaseDataAvailable: options.purchaseDataAvailable ?? true,
+      status,
+    };
+  });
+}
+
+export function comparePreviousCycleAtSameStage(
+  current: CurrentCardInvoice,
+  allPurchases: CardPurchase[],
+  referenceDate = new Date(),
+) {
+  if (!current.cycle) return null;
+  const start = new Date(`${current.cycle.cycleStart}T00:00:00Z`);
+  const elapsed = Math.max(
+    0,
+    Math.floor(
+      (Date.UTC(
+        referenceDate.getUTCFullYear(),
+        referenceDate.getUTCMonth(),
+        referenceDate.getUTCDate(),
+      ) -
+        start.valueOf()) /
+        86_400_000,
+    ),
+  );
+  const previousEnd = new Date(start.valueOf() - 86_400_000);
+  const previous = getCurrentBillingCycle({
+    closingDay: current.card.closing_day!,
+    dueDay: current.card.due_day!,
+    referenceDate: previousEnd,
+  });
+  const comparisonEnd = new Date(
+    Math.min(
+      new Date(`${previous.cycleStart}T00:00:00Z`).valueOf() +
+        elapsed * 86_400_000,
+      new Date(`${previous.cycleEnd}T00:00:00Z`).valueOf(),
+    ),
+  )
+    .toISOString()
+    .slice(0, 10);
+  const previousPurchases = allPurchases.filter((purchase) => {
+    const date = purchaseCompetenceDate(purchase);
+    return (
+      purchase.card_id === current.card.id &&
+      date >= previous.cycleStart &&
+      date <= comparisonEnd
+    );
+  });
+  const previousTotal = calculateInvoiceAmounts(previousPurchases).invoiceTotal;
+  const difference = current.calculatedInvoiceTotal - previousTotal;
+  return {
+    currentTotal: current.calculatedInvoiceTotal,
+    previousTotal,
+    difference,
+    percentage: previousTotal ? (difference / previousTotal) * 100 : null,
+    elapsedDays: elapsed + 1,
+  };
+}

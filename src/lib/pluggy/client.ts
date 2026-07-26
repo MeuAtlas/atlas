@@ -2,7 +2,7 @@ import "server-only";
 import { readPluggyConfig } from "./config-core";
 import { PluggyApiError, PluggyError, sanitizeDiagnostic } from "./errors";
 import { ApiKeyCache } from "./key-cache";
-import type { JsonRecord, PluggyAccount, PluggyInvestment, PluggyItem, PluggyLoan, PluggyPage, PluggyRequestOptions, PluggyTransaction } from "./types";
+import type { JsonRecord, PluggyAccount, PluggyBill, PluggyInvestment, PluggyItem, PluggyLoan, PluggyPage, PluggyRequestOptions, PluggyTransaction } from "./types";
 
 const API_URL="https://api.pluggy.ai";
 const cache=new ApiKeyCache();
@@ -81,3 +81,4 @@ export function inspectLoanResponse(response:Response,payload:unknown){
 }
 export const getPluggyLoans=(itemId:string)=>pluggyRequest<PluggyLoan[]|PluggyPage<PluggyLoan>>("/loans",{query:{itemId},inspectResponse:inspectLoanResponse});
 export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom}});
+export const getPluggyBills=(accountId:string)=>pluggyRequest<PluggyBill[]|PluggyPage<PluggyBill>>("/bills",{query:{accountId}});

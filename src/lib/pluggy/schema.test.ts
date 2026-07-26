@@ -6,7 +6,7 @@ import test from "node:test";
 const migration=readFileSync(join(process.cwd(),"supabase/migrations/202607220008_create_pluggy_integration.sql"),"utf8");
 const actions=readFileSync(join(process.cwd(),"src/app/financeiro/integracoes/actions.ts"),"utf8");
 const loanMigration=readFileSync(join(process.cwd(),"supabase/migrations/202607220009_complete_financial_loans.sql"),"utf8");
-const financePage=readFileSync(join(process.cwd(),"src/app/financeiro/page.tsx"),"utf8");
+const loansPage=readFileSync(join(process.cwd(),"src/app/financeiro/emprestimos/page.tsx"),"utf8");
 
 test("Item não pode pertencer a dois usuários",()=>assert.match(migration,/unique index[\s\S]*bank_connections\(provider, provider_connection_id\)/i));
 test("tabelas Pluggy novas têm RLS",()=>{assert.match(migration,/financial_investments enable row level security/i);assert.match(migration,/financial_loans enable row level security/i);assert.match(migration,/financial_sync_runs enable row level security/i)});
@@ -16,4 +16,4 @@ test("unicidade externa sustenta idempotência de todas as entidades",()=>assert
 test("desvincular usa RPC protegida sem excluir dados importados",()=>{assert.match(actions,/unlink_financial_connection/);assert.match(migration,/set status='disabled',sync_status='unlinked'/);assert.doesNotMatch(actions,/financial_(accounts|transactions|investments|loans)"\)\.delete/)});
 test("empréstimos mantêm RLS privada e unicidade externa",()=>{assert.match(migration,/loans_owner[\s\S]*owner_id=auth\.uid\(\)/i);assert.match(migration,/unique\(owner_id,source,external_id\)/i)});
 test("parcelas em folha aceitam conta nula e ficam vinculadas ao contrato",()=>{assert.match(loanMigration,/loan_id uuid references public\.financial_loans/i);assert.match(loanMigration,/payment_source text[\s\S]*payroll/i);assert.match(loanMigration,/account_id is not null or credit_card_id is not null or loan_id is not null/i)});
-test("card diferencia campo ausente em vez de mostrar zero",()=>{assert.match(financePage,/Saldo devedor não informado pelo banco/);assert.doesNotMatch(financePage,/outstanding_balance\s*\|\|\s*0/)});
+test("card diferencia campo ausente em vez de mostrar zero",()=>{assert.match(loansPage,/saldo devedor não informado pelo banco/i);assert.doesNotMatch(loansPage,/outstanding_balance\s*\|\|\s*0/)});

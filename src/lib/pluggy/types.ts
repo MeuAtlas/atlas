@@ -5,11 +5,20 @@ export interface PluggyItem extends JsonRecord { id: string; status?: string; up
 export interface PluggyAccount extends JsonRecord {
   id: string; itemId?: string; type?: string; subtype?: string; name?: string; marketingName?: string;
   balance?: number; currencyCode?: string; number?: string; creditData?: JsonRecord;
+  parentAccountId?: string; brand?: string;
 }
 export interface PluggyTransaction extends JsonRecord {
   id: string; accountId: string; description?: string; amount?: number; date?: string; type?: string;
   status?: string; category?: string; categoryId?: string; currencyCode?: string; providerId?: string;
   merchant?: { name?: string }; paymentData?: JsonRecord; creditCardMetadata?: JsonRecord;
+  operationType?: string; operationTypeAdditionalInfo?: string; balance?: number;
+  effectiveDate?: string; settlementDate?: string;
+  billId?:string; billForecastDate?:string; purchaseDate?:string; installmentNumber?:number; totalInstallments?:number; totalAmount?:number;
+}
+export interface PluggyBill extends JsonRecord {
+  id:string; accountId?:string; dueDate:string; billClosingDate?:string|null;
+  totalAmount:number; totalAmountCurrencyCode?:string;
+  minimumPaymentAmount?:number|null; status?:string; createdAt?:string; updatedAt?:string;
 }
 export interface PluggyInvestment extends JsonRecord { id:string; name?:string; type?:string; balance?:number; amount?:number; value?:number; quantity?:number; unitValue?:number; currencyCode?:string; code?:string; dueDate?:string; institution?:JsonRecord }
 export interface PluggyLoanInterestRate extends JsonRecord { taxType?:string; interestRateType?:string; taxPeriodicity?:string; preFixedRate?:number; postFixedRate?:number }

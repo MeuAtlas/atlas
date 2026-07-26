@@ -1,104 +1,75 @@
 "use server";
-
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { throwSupabaseError } from "@/lib/errors";
-import { requireFinanceAccess } from "./access";
-import { amountField, dateField, enumField, optionalText, textField } from "./validation";
 import { buildLoanProjections } from "@/lib/pluggy/loan-projections";
+import { localDateInTimeZone } from "@/lib/pluggy/provider-transaction-date";
+import { requireFinanceAccess } from "./access";
+import { amountField,dateField,enumField,optionalText,textField } from "./validation";
 
-function refreshFinance() {
-  revalidatePath("/financeiro");
-  revalidatePath("/financeiro/movimentacoes");
-  revalidatePath("/financeiro/contas");
-  revalidatePath("/financeiro/cartoes");
-  revalidatePath("/financeiro/emprestimos");
+function refreshFinance(){for(const path of ["/financeiro","/financeiro/movimentacoes","/financeiro/contas","/financeiro/cartoes","/financeiro/emprestimos"])revalidatePath(path)}
+function optionalAmount(data:FormData,key:string){const raw=String(data.get(key)??"").trim().replace(/[R$\s]/g,"");if(!raw)return null;const normalized=raw.includes(",")?raw.replace(/\./g,"").replace(",","."):raw;const value=Number(normalized);if(!Number.isFinite(value)||value<0)throw new Error(`Valor invalido em ${key}.`);return value}
+function optionalInteger(data:FormData,key:string){const value=optionalAmount(data,key);if(value===null)return null;if(!Number.isInteger(value))throw new Error(`Quantidade invalida em ${key}.`);return value}
+
+export async function createLoan(data:FormData){const {supabase,user}=await requireFinanceAccess();const externalId=crypto.randomUUID();const payroll=data.get("payroll_deducted")==="on";const total=optionalInteger(data,"installment_count");const paid=optionalInteger(data,"installments_paid")??0;if(total!==null&&paid>total)throw new Error("Parcelas pagas nao podem superar o total.");const contracted=optionalAmount(data,"contracted_amount");const outstanding=optionalAmount(data,"outstanding_balance");const finalDue=optionalText(data,"final_due_date",10);const row={owner_id:user.id,workspace_id:null,bank_connection_id:null,source:"manual",external_id:externalId,name:textField(data,"name"),institution_name:optionalText(data,"institution_name"),loan_type:textField(data,"loan_type",80),subtype:null,contracted_amount:contracted,outstanding_balance:outstanding,installment_amount:optionalAmount(data,"installment_amount"),installment_count:total,installments_paid:paid,installments_remaining:total===null?null:total-paid,interest_rate:(optionalAmount(data,"interest_rate")??0)/100||null,effective_cost_rate:null,contract_date:null,first_installment_date:optionalText(data,"first_installment_date",10),next_installment_date:null,final_due_date:finalDue,payroll_deducted:payroll,payment_source:payroll?"payroll":"other",currency:"BRL",status:"active",visibility:"private",notes:optionalText(data,"notes",1000),raw_metadata:{manual:true},provider_metadata:{manual:true},original_amount:contracted,balance_due:outstanding,installments:total,start_date:null,end_date:finalDue};const inserted=await supabase.from("financial_loans").insert(row).select("id").single();if(inserted.error)throwSupabaseError(inserted.error,"criar emprestimo","Nao foi possivel cadastrar o emprestimo.");const projections=buildLoanProjections({loanId:String(inserted.data.id),ownerId:user.id,externalId,name:row.name,installmentAmount:row.installment_amount,installmentCount:total,installmentsPaid:paid,installmentsRemaining:row.installments_remaining,firstInstallmentDate:row.first_installment_date,finalDueDate:row.final_due_date,payrollDeducted:payroll,source:"manual"});if(projections.length){const result=await supabase.from("financial_transactions").upsert(projections,{onConflict:"owner_id,source,external_id"});if(result.error)throwSupabaseError(result.error,"projetar parcelas","Contrato salvo, mas nao foi possivel projetar parcelas.")}refreshFinance()}
+export async function createAccount(data:FormData){const {supabase,user}=await requireFinanceAccess();const opening=Number(String(data.get("opening_balance")??"0").replace(",","."))||0;const result=await supabase.from("financial_accounts").insert({owner_id:user.id,name:textField(data,"name"),institution_name:optionalText(data,"institution_name"),account_type:enumField(data,"account_type",["checking","savings","digital","cash","investment","international","other"] as const),opening_balance:opening,current_balance:opening,visibility:"private",source:"manual"});if(result.error)throwSupabaseError(result.error,"criar conta","Nao foi possivel criar a conta.");refreshFinance()}
+export async function archiveAccount(data:FormData){const {supabase,user}=await requireFinanceAccess();const result=await supabase.from("financial_accounts").update({status:"archived"}).eq("id",textField(data,"id",40)).eq("owner_id",user.id);if(result.error)throwSupabaseError(result.error,"arquivar conta","Nao foi possivel arquivar a conta.");refreshFinance()}
+export async function createTransaction(data:FormData){const {supabase,user}=await requireFinanceAccess();const type=enumField(data,"transaction_type",["income","expense","transfer"] as const);const accountId=textField(data,"account_id",40);const destination=type==="transfer"?textField(data,"destination_account_id",40):null;if(type==="transfer"&&destination===accountId)throw new Error("Selecione contas diferentes.");const status=enumField(data,"status",["forecast","pending","realized"] as const);const result=await supabase.from("financial_transactions").insert({owner_id:user.id,account_id:accountId,destination_account_id:destination,category_id:optionalText(data,"category_id",40),transaction_type:type,transaction_role:type==="transfer"?"transfer":"cash_flow",financial_origin:type==="transfer"?"transfer":"bank_account",source_type:"manual",status,description:textField(data,"description"),amount:amountField(data),competence_date:dateField(data,"competence_date"),due_date:optionalText(data,"due_date",10),realized_at:status==="realized"?new Date().toISOString():null,visibility:"private",source:"manual",transfer_group_id:type==="transfer"?crypto.randomUUID():null});if(result.error)throwSupabaseError(result.error,"criar movimentacao","Nao foi possivel salvar a movimentacao.");refreshFinance()}
+export async function updateTransactionStatus(data:FormData){const {supabase,user}=await requireFinanceAccess();const status=enumField(data,"status",["realized","cancelled"] as const);const result=await supabase.from("financial_transactions").update({status,realized_at:status==="realized"?new Date().toISOString():null}).eq("id",textField(data,"id",40)).eq("owner_id",user.id);if(result.error)throwSupabaseError(result.error,"atualizar movimentacao","Nao foi possivel atualizar a movimentacao.");refreshFinance()}
+export async function updateBankTransactionClassification(data:FormData){
+ const {supabase,user}=await requireFinanceAccess();
+ const id=textField(data,"id",40);
+ const direction=enumField(data,"bank_direction",["inflow","outflow","neutral","review"] as const);
+ const role=enumField(data,"financial_role",["revenue","expense","cash_flow_only","transfer","debt_proceeds","debt_payment","investment_principal","correction","pending_review"] as const);
+ const nature=enumField(data,"financial_nature",["salary","pix_received","pix_sent","investment_income","investment_application","investment_redemption","loan_proceeds","financing_payment","debt_payment","invoice_payment","transfer_internal","transfer_external","refund","reversal","fee","interest","purchase","bill_payment","other"] as const);
+ const categoryId=optionalText(data,"category_id",40);
+ const effectiveDate=optionalText(data,"user_effective_date",10);
+ const reason=optionalText(data,"date_override_reason",240);
+ if(effectiveDate&&!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate))throw new Error("Data efetiva invalida.");
+ if(effectiveDate&&!reason)throw new Error("Informe o motivo da correção da data.");
+ const existing=await supabase.from("financial_transactions").select("id,source_type").eq("id",id).eq("owner_id",user.id).maybeSingle();
+ if(existing.error||!existing.data||existing.data.source_type!=="bank")throw new Error("Movimentação bancária não encontrada ou sem permissão.");
+ const legacy=role==="transfer"
+  ?{transaction_type:"transfer",transaction_role:"transfer",financial_origin:"transfer",cash_flow_kind:"transfer_internal"}
+  :role==="investment_principal"
+   ?{transaction_type:direction==="inflow"?"income":"expense",transaction_role:"adjustment",financial_origin:"adjustment",cash_flow_kind:nature==="investment_redemption"?"investment_redemption":"investment_contribution"}
+   :role==="correction"
+    ?{transaction_type:"refund",transaction_role:"refund",financial_origin:"adjustment",cash_flow_kind:"refund"}
+    :nature==="invoice_payment"
+     ?{transaction_type:"transfer",transaction_role:"invoice_payment",financial_origin:"invoice",cash_flow_kind:"invoice_payment"}
+     :{transaction_type:direction==="inflow"?"income":"expense",transaction_role:"cash_flow",financial_origin:"bank_account",cash_flow_kind:role==="debt_proceeds"?"loan_proceeds":role==="debt_payment"?nature:role==="revenue"?"income":role==="expense"?"expense":"cash_flow_only"};
+ const now=new Date().toISOString();
+ const result=await supabase.from("financial_transactions").update({...legacy,category_id:categoryId,bank_direction:direction,financial_nature:nature,financial_role:role,classification_source:"manual",classification_confidence:"high",classification_rule:"bank.manual_override",classification_version:"bank_classifier_v2",manually_confirmed:true,manual_override_at:now,manual_override_by:user.id,review_status:"reviewed",suspected_transfer:false,...(effectiveDate?{user_effective_at:`${effectiveDate}T12:00:00-03:00`,competence_date:effectiveDate,date_source:"user_confirmed",date_confidence:"high",date_override_reason:reason}: {})}).eq("id",id).eq("owner_id",user.id);
+ if(result.error)throwSupabaseError(result.error,"corrigir classificação bancária","Não foi possível salvar a correção.");
+ refreshFinance();
 }
-
-function optionalAmount(data:FormData,key:string){const raw=String(data.get(key)??"").trim().replace(",", ".");if(!raw)return null;const value=Number(raw);if(!Number.isFinite(value)||value<0)throw new Error(`Valor inválido em ${key}.`);return value}
-function optionalInteger(data:FormData,key:string){const value=optionalAmount(data,key);if(value===null)return null;if(!Number.isInteger(value))throw new Error(`Quantidade inválida em ${key}.`);return value}
-
-export async function createLoan(data:FormData){
- const {supabase,user}=await requireFinanceAccess();const externalId=crypto.randomUUID();const payroll=data.get("payroll_deducted")==="on";const total=optionalInteger(data,"installment_count");const paid=optionalInteger(data,"installments_paid")??0;if(total!==null&&paid>total)throw new Error("Parcelas pagas não podem superar o total.");const contracted=optionalAmount(data,"contracted_amount");const outstanding=optionalAmount(data,"outstanding_balance");const finalDue=optionalText(data,"final_due_date",10);
- const row={owner_id:user.id,workspace_id:null,bank_connection_id:null,source:"manual",external_id:externalId,name:textField(data,"name"),institution_name:optionalText(data,"institution_name"),loan_type:textField(data,"loan_type",80),subtype:null,contracted_amount:contracted,outstanding_balance:outstanding,installment_amount:optionalAmount(data,"installment_amount"),installment_count:total,installments_paid:paid,installments_remaining:total===null?null:total-paid,interest_rate:(optionalAmount(data,"interest_rate")??0)/100||null,effective_cost_rate:null,contract_date:null,first_installment_date:optionalText(data,"first_installment_date",10),next_installment_date:null,final_due_date:finalDue,payroll_deducted:payroll,payment_source:payroll?"payroll":"other",currency:"BRL",status:"active",visibility:"private",notes:optionalText(data,"notes",1000),raw_metadata:{manual:true},provider_metadata:{manual:true},original_amount:contracted,balance_due:outstanding,installments:total,start_date:null,end_date:finalDue};
- const inserted=await supabase.from("financial_loans").insert(row).select("id").single();if(inserted.error)throwSupabaseError(inserted.error,"criar emprestimo (financial_loans)","Não foi possível cadastrar o empréstimo.");const projections=buildLoanProjections({loanId:String(inserted.data.id),ownerId:user.id,externalId,name:row.name,installmentAmount:row.installment_amount,installmentCount:total,installmentsPaid:paid,installmentsRemaining:row.installments_remaining,firstInstallmentDate:row.first_installment_date,finalDueDate:row.final_due_date,payrollDeducted:payroll,source:"manual"});if(projections.length){const forecast=await supabase.from("financial_transactions").upsert(projections,{onConflict:"owner_id,source,external_id"});if(forecast.error)throwSupabaseError(forecast.error,"projetar parcelas (financial_transactions)","O contrato foi salvo, mas as parcelas não puderam ser projetadas.")}refreshFinance();
+export async function restoreProviderTransactionDate(data:FormData){
+ const {supabase,user}=await requireFinanceAccess();const id=textField(data,"id",40);
+ const existing=await supabase.from("financial_transactions").select("id,provider_posted_at,bank_posted_at,effective_at").eq("id",id).eq("owner_id",user.id).eq("source_type","bank").maybeSingle();
+ if(existing.error||!existing.data)throw new Error("Movimentação bancária não encontrada ou sem permissão.");
+ const timestamp=existing.data.effective_at??existing.data.bank_posted_at??existing.data.provider_posted_at;
+ if(!timestamp)throw new Error("A data original do provedor não está disponível neste registro legado.");
+ const result=await supabase.from("financial_transactions").update({user_effective_at:null,competence_date:localDateInTimeZone(String(timestamp)),date_source:existing.data.effective_at?"provider_effective":"provider_posted",date_confidence:existing.data.effective_at?"high":"medium",date_override_reason:null,manual_override_at:new Date().toISOString(),manual_override_by:user.id}).eq("id",id).eq("owner_id",user.id);
+ if(result.error)throwSupabaseError(result.error,"restaurar data bancária","Não foi possível restaurar a data informada pelo provedor.");
+ refreshFinance();
 }
-
-export async function createAccount(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const opening = Number(String(data.get("opening_balance") ?? "0").replace(",", ".")) || 0;
-  const result = await supabase.from("financial_accounts").insert({
-    owner_id: user.id,
-    name: textField(data, "name"),
-    institution_name: optionalText(data, "institution_name"),
-    account_type: enumField(data, "account_type", ["checking", "savings", "digital", "cash", "investment", "international", "other"] as const),
-    opening_balance: opening,
-    current_balance: opening,
-    visibility: "private",
-    source: "manual",
-  });
-  if (result.error) throwSupabaseError(result.error, "criar conta (financial_accounts)", "Não foi possível criar a conta.");
-  refreshFinance();
+export async function deleteTransaction(data:FormData){const {supabase,user}=await requireFinanceAccess();const result=await supabase.from("financial_transactions").delete().eq("id",textField(data,"id",40)).eq("owner_id",user.id);if(result.error)throwSupabaseError(result.error,"excluir movimentacao","Nao foi possivel excluir a movimentacao.");refreshFinance()}
+export async function createCard(data:FormData){const {supabase,user}=await requireFinanceAccess();const result=await supabase.from("credit_cards").insert({owner_id:user.id,name:textField(data,"name"),institution_name:optionalText(data,"institution_name"),last_four_digits:optionalText(data,"last_four_digits",4),brand:optionalText(data,"brand",30),credit_limit:amountField(data,"credit_limit"),closing_day:Number(textField(data,"closing_day",2)),due_day:Number(textField(data,"due_day",2)),dates_source:"manual",linked_account_id:optionalText(data,"linked_account_id",40),visibility:"private",source:"manual"});if(result.error)throwSupabaseError(result.error,"criar cartao","Nao foi possivel criar o cartao.");refreshFinance()}
+type CardListView="manage"|"archived";
+async function changeCardStatus(data:FormData,status:"active"|"archived"){
+ const {supabase,user}=await requireFinanceAccess();const id=textField(data,"id",40);const requestedView=String(data.get("view")??"manage");const view:CardListView=["manage","archived"].includes(requestedView)?requestedView as CardListView:"manage";
+ const result=await supabase.from("credit_cards").update({status,user_archived_at:status==="archived"?new Date().toISOString():null}).eq("id",id).eq("owner_id",user.id).select("id").maybeSingle();
+ if(result.error)throwSupabaseError(result.error,status==="active"?"desarquivar cartao":"arquivar cartao",status==="active"?"Nao foi possivel desarquivar o cartao.":"Nao foi possivel arquivar o cartao.");
+ if(!result.data)throw new Error("Cartao nao encontrado ou sem permissao.");
+ refreshFinance();redirect(`/financeiro/cartoes?view=${view}&toast=${status==="active"?"restored":"archived"}`);
 }
-
-export async function archiveAccount(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const result = await supabase.from("financial_accounts").update({ status: "archived" }).eq("id", textField(data, "id", 40)).eq("owner_id", user.id);
-  if (result.error) throwSupabaseError(result.error, "arquivar conta (financial_accounts)", "Não foi possível arquivar a conta.");
-  refreshFinance();
-}
-
-export async function createTransaction(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const type = enumField(data, "transaction_type", ["income", "expense", "transfer"] as const);
-  const accountId = textField(data, "account_id", 40);
-  const destination = type === "transfer" ? textField(data, "destination_account_id", 40) : null;
-  if (type === "transfer" && destination === accountId) throw new Error("Selecione contas diferentes.");
-  const status = enumField(data, "status", ["forecast", "pending", "realized"] as const);
-  const result = await supabase.from("financial_transactions").insert({
-    owner_id: user.id,
-    account_id: accountId,
-    destination_account_id: destination,
-    category_id: optionalText(data, "category_id", 40),
-    transaction_type: type,
-    status,
-    description: textField(data, "description"),
-    amount: amountField(data),
-    competence_date: dateField(data, "competence_date"),
-    due_date: optionalText(data, "due_date", 10),
-    realized_at: status === "realized" ? new Date().toISOString() : null,
-    visibility: "private",
-    source: "manual",
-    transfer_group_id: type === "transfer" ? crypto.randomUUID() : null,
-  });
-  if (result.error) throwSupabaseError(result.error, "criar movimentação (financial_transactions)", "Não foi possível salvar a movimentação.");
-  refreshFinance();
-}
-
-export async function updateTransactionStatus(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const status = enumField(data, "status", ["realized", "cancelled"] as const);
-  const result = await supabase.from("financial_transactions").update({ status, realized_at: status === "realized" ? new Date().toISOString() : null }).eq("id", textField(data, "id", 40)).eq("owner_id", user.id);
-  if (result.error) throwSupabaseError(result.error, "atualizar movimentação (financial_transactions)", "Não foi possível atualizar a movimentação.");
-  refreshFinance();
-}
-
-export async function deleteTransaction(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const result = await supabase.from("financial_transactions").delete().eq("id", textField(data, "id", 40)).eq("owner_id", user.id);
-  if (result.error) throwSupabaseError(result.error, "excluir movimentação (financial_transactions)", "Não foi possível excluir a movimentação.");
-  refreshFinance();
-}
-
-export async function createCard(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const result = await supabase.from("credit_cards").insert({ owner_id: user.id, name: textField(data, "name"), institution_name: optionalText(data, "institution_name"), last_four_digits: optionalText(data, "last_four_digits", 4), brand: optionalText(data, "brand", 30), credit_limit: amountField(data, "credit_limit"), closing_day: Number(textField(data, "closing_day", 2)), due_day: Number(textField(data, "due_day", 2)), linked_account_id: optionalText(data, "linked_account_id", 40), visibility: "private", source: "manual" });
-  if (result.error) throwSupabaseError(result.error, "criar cartão (credit_cards)", "Não foi possível criar o cartão.");
-  refreshFinance();
-}
-
-export async function archiveCard(data: FormData) {
-  const { supabase, user } = await requireFinanceAccess();
-  const result = await supabase.from("credit_cards").update({ status: "archived" }).eq("id", textField(data, "id", 40)).eq("owner_id", user.id);
-  if (result.error) throwSupabaseError(result.error, "arquivar cartão (credit_cards)", "Não foi possível arquivar o cartão.");
-  refreshFinance();
-}
+export async function archiveCard(data:FormData){return changeCardStatus(data,"archived")}
+export async function restoreCard(data:FormData){return changeCardStatus(data,"active")}
+async function changeCardInstrumentArchive(data:FormData,restore:boolean){const {supabase,user}=await requireFinanceAccess();const id=textField(data,"id",40);const requestedView=String(data.get("view")??"manage");const view:CardListView=["manage","archived"].includes(requestedView)?requestedView as CardListView:"manage";const result=await supabase.from("credit_card_instruments").update({user_archived_at:restore?null:new Date().toISOString()}).eq("id",id).eq("owner_id",user.id).select("id").maybeSingle();if(result.error)throwSupabaseError(result.error,restore?"desarquivar instrumento":"arquivar instrumento",restore?"Nao foi possivel desarquivar o cartao.":"Nao foi possivel arquivar o cartao.");if(!result.data)throw new Error("Instrumento nao encontrado ou sem permissao.");refreshFinance();redirect(`/financeiro/cartoes?view=${view}&toast=${restore?"restored":"archived"}`)}
+export async function archiveCardInstrument(data:FormData){return changeCardInstrumentArchive(data,false)}
+export async function restoreCardInstrument(data:FormData){return changeCardInstrumentArchive(data,true)}
+export async function updateCardInstrument(data:FormData){const {supabase,user}=await requireFinanceAccess();const id=textField(data,"id",40);const kind=enumField(data,"card_kind",["physical","virtual","online","additional","unknown"] as const);const result=await supabase.from("credit_card_instruments").update({display_name:optionalText(data,"display_name",80)??"Cartao",card_kind:kind,updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",user.id);if(result.error)throwSupabaseError(result.error,"personalizar instrumento","Nao foi possivel atualizar o cartao.");refreshFinance()}
+export async function assignPurchaseInstrument(data:FormData){const {supabase,user}=await requireFinanceAccess();const purchaseId=textField(data,"purchase_id",40);const instrumentId=textField(data,"instrument_id",40);const [purchase,instrument]=await Promise.all([supabase.from("card_purchases").select("id,card_id").eq("id",purchaseId).eq("owner_id",user.id).single(),supabase.from("credit_card_instruments").select("id,credit_card_id,last_four_digits").eq("id",instrumentId).eq("owner_id",user.id).single()]);if(purchase.error||instrument.error||purchase.data.card_id!==instrument.data.credit_card_id)throw new Error("Instrumento invalido para esta compra.");const result=await supabase.from("card_purchases").update({instrument_id:instrumentId,instrument_last_four:instrument.data.last_four_digits,assignment_status:"assigned",assignment_source:"manual",assignment_confirmed_by_user:true,assigned_at:new Date().toISOString(),instrument_review_status:"identified"}).eq("id",purchaseId).eq("owner_id",user.id);if(result.error)throwSupabaseError(result.error,"associar compra","Nao foi possivel associar a compra.");refreshFinance()}
+export async function updatePurchaseInstallment(data:FormData){const {supabase,user}=await requireFinanceAccess();const purchaseId=textField(data,"purchase_id",40);const cardId=textField(data,"card_id",40);const kind=enumField(data,"purchase_kind",["cash","installment"] as const);const installmentAmount=optionalAmount(data,"installment_amount");if(installmentAmount===null||installmentAmount<=0)throw new Error("Informe um valor de parcela valido.");let installmentNumber:number|null=null,installmentCount:number|null=null,totalPurchaseAmount:number|null=installmentAmount;if(kind==="installment"){installmentNumber=optionalInteger(data,"installment_number");installmentCount=optionalInteger(data,"installment_count");totalPurchaseAmount=optionalAmount(data,"total_purchase_amount");if(installmentNumber===null||installmentCount===null||installmentCount<2||installmentNumber<1||installmentNumber>installmentCount)throw new Error("Informe a parcela atual e o total de parcelas corretamente.");if(totalPurchaseAmount!==null&&totalPurchaseAmount<=0)throw new Error("Informe um valor total valido.")}const result=await supabase.from("card_purchases").update({is_installment:kind==="installment",installment_number:installmentNumber,installment_count:installmentCount,installment_amount:installmentAmount,total_purchase_amount:totalPurchaseAmount,total_amount:totalPurchaseAmount??installmentAmount,installment_source:"manual",installment_confidence:"manual",installment_manually_confirmed:true,review_status:"reviewed"}).eq("id",purchaseId).eq("card_id",cardId).eq("owner_id",user.id).select("id").maybeSingle();if(result.error)throwSupabaseError(result.error,"corrigir parcelamento","Nao foi possivel atualizar o parcelamento.");if(!result.data)throw new Error("Compra nao encontrada ou sem permissao.");refreshFinance();redirect(`/financeiro/cartoes/${cardId}?toast=installment-updated`)}
+export async function updateCardDates(data:FormData){const {supabase,user}=await requireFinanceAccess();const closing=Number(textField(data,"closing_day",2));const due=Number(textField(data,"due_day",2));if(!Number.isInteger(closing)||closing<1||closing>31||!Number.isInteger(due)||due<1||due>31)throw new Error("Informe dias entre 1 e 31.");const result=await supabase.from("credit_cards").update({closing_day:closing,due_day:due,dates_source:"manual"}).eq("id",textField(data,"id",40)).eq("owner_id",user.id);if(result.error)throwSupabaseError(result.error,"configurar cartao","Nao foi possivel configurar o cartao.");refreshFinance()}
+export async function confirmCurrentInvoiceAmount(data:FormData){const {supabase,user}=await requireFinanceAccess();const cardId=textField(data,"card_id",40);const referenceMonth=textField(data,"reference_month",10);if(!/^\d{4}-\d{2}-01$/.test(referenceMonth))throw new Error("Mes de referencia invalido.");const raw=String(data.get("official_amount")??"").trim().replace(/[R$\s]/g,"");const normalized=raw.includes(",")?raw.replace(/\./g,"").replace(",","."):raw;const officialAmount=Number(normalized);if(!Number.isFinite(officialAmount)||officialAmount<0)throw new Error("Informe um valor de fatura valido.");const card=await supabase.from("credit_cards").select("id").eq("id",cardId).eq("owner_id",user.id).single();if(card.error||!card.data)throw new Error("Cartao nao encontrado ou sem permissao.");const result=await supabase.from("card_invoice_confirmations").upsert({owner_id:user.id,card_id:cardId,reference_month:referenceMonth,official_amount:officialAmount,source:"manual_bank_confirmation",informed_at:new Date().toISOString(),note:optionalText(data,"note",300)},{onConflict:"owner_id,card_id,reference_month"});if(result.error)throwSupabaseError(result.error,"confirmar valor da fatura","Nao foi possivel salvar o valor informado.");const invoice=await supabase.from("card_invoices").select("id,calculated_invoice_total,paid_amount").eq("owner_id",user.id).eq("card_id",cardId).eq("reference_month",referenceMonth).maybeSingle();if(invoice.error)throwSupabaseError(invoice.error,"atualizar fatura","Valor confirmado, mas a fatura nao pode ser atualizada.");if(invoice.data){const calculated=Number(invoice.data.calculated_invoice_total??0);const difference=officialAmount-calculated;const updated=await supabase.from("card_invoices").update({total_amount:officialAmount,invoice_total:officialAmount,outstanding_amount:Math.max(0,officialAmount-Number(invoice.data.paid_amount??0)),source:"manual_bank_confirmation",total_source:"manual_bank_confirmation",reconciliation_difference:difference,reconciliation_status:Math.abs(difference)<=.01?"matched":Math.abs(difference)<=1?"small_difference":"divergent"}).eq("id",invoice.data.id).eq("owner_id",user.id);if(updated.error)throwSupabaseError(updated.error,"atualizar fatura","Valor confirmado, mas a fatura nao pode ser atualizada.")}refreshFinance();redirect(`/financeiro/cartoes/${cardId}?toast=invoice-confirmed`)}

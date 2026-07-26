@@ -15,8 +15,33 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: "Atlas",
   title: "Atlas",
   description: "Seu espaço pessoal, privado e seguro.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      {
+        url: "/icons/atlas-app-icon-light.png",
+        type: "image/png",
+        sizes: "1024x1024",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/icons/atlas-app-icon-dark.png",
+        type: "image/png",
+        sizes: "1024x1024",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+    apple: [
+      {
+        url: "/icons/atlas-app-icon-light.png",
+        type: "image/png",
+        sizes: "1024x1024",
+      },
+    ],
+  },
   formatDetection: {
     telephone: false,
     date: false,

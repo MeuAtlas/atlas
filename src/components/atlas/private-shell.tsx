@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AtlasAppBackground } from "@/components/atlas/app-background";
+import { AtlasLogo } from "@/components/atlas/atlas-logo";
 import { ThemeToggle } from "@/components/atlas/theme-toggle";
 
 export function PrivateShell({
@@ -15,7 +16,10 @@ export function PrivateShell({
     <main className="atlas-private-shell">
       <AtlasAppBackground />
       <div className="atlas-private-scroll">
-        <header className="relative z-10 flex items-center justify-end gap-4">
+        <header className="relative z-10 flex items-center justify-between gap-4">
+          <Link href="/dashboard" aria-label="Atlas — início">
+            <AtlasLogo size={42} priority />
+          </Link>
           <div className="flex items-center gap-3">
             {isSuperAdmin ? (
               <Link

@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import test from "node:test";
+const migration=readFileSync(join(process.cwd(),"supabase/migrations/202607220010_classify_financial_movements.sql"),"utf8");
+test("reclassificacao de cartoes e idempotente e nao exclui historico",()=>{assert.match(migration,/insert into public\.card_purchases/i);assert.match(migration,/on conflict\(owner_id,source,external_id\) do update/i);assert.doesNotMatch(migration,/delete from public\.financial_transactions/i)});
+test("indice de compras pode ser inferido pelo on conflict e pelo PostgREST",()=>{assert.match(migration,/create unique index card_purchases_import_unique\s+on public\.card_purchases\(owner_id,source,external_id\)/i);assert.doesNotMatch(migration,/card_purchases_import_unique[\s\S]{0,120}where external_id is not null/i)});
+test("classificacao financeira possui dominios obrigatorios",()=>{assert.match(migration,/transaction_role text/i);assert.match(migration,/source_type text/i);assert.match(migration,/financial_origin text/i)});
+test("validador e substituido antes do backfill que dispara o trigger",()=>{const validator=migration.indexOf("create or replace function public.validate_financial_transaction_accounts");const backfill=migration.indexOf("update public.financial_transactions\nset source_type");assert.ok(validator>=0);assert.ok(backfill>validator)});
+test("validador aplica alvos por natureza com mensagens especificas",()=>{assert.match(migration,/bank transaction requires account_id/);assert.match(migration,/card transaction requires credit_card_id/);assert.match(migration,/invoice payment requires account_id/);assert.match(migration,/transfer requires origin and destination accounts/);assert.match(migration,/adjustment requires a financial target/)});
+test("folha e importacao pendente nao criam conta ficticia",()=>{assert.match(migration,/payroll transaction cannot affect bank account or card/);assert.match(migration,/new\.loan_id is null and new\.recurring_rule_id is null and not is_pending_import/);assert.match(migration,/new\.review_status = 'pending'[\s\S]*new\.external_id is not null/)});
+test("validador confere propriedade de conta, cartao, fatura e emprestimo",()=>{assert.match(migration,/from public\.financial_accounts/);assert.match(migration,/from public\.credit_cards/);assert.match(migration,/from public\.card_invoices/);assert.match(migration,/from public\.financial_loans/);assert.match(migration,/resource_owner is distinct from new\.owner_id/)});
