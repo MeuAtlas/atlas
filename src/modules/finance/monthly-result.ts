@@ -1,4 +1,5 @@
 import type { CardPurchase, FinancialTransaction } from "./types";
+import { persistedCardMovementAmountBrl } from "./foreign-card-movement";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}/;
 const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -325,7 +326,10 @@ function transactionKind(
 function purchaseKind(
   purchase: CardPurchase,
 ): MonthlyResultEntry["kind"] | null {
-  if (purchase.transaction_role === "consumption") return "expense";
+  if (
+    purchase.transaction_role === "consumption" ||
+    purchase.transaction_role === "foreign_transaction_tax"
+  ) return "expense";
   if (purchase.transaction_role === "refund") return "expense_refund";
   return null;
 }
@@ -435,7 +439,10 @@ export function calculateMonthlyFinancialResult({
     if (!kind) continue;
     const entry = {
       id: purchase.id,
-      amount: entryAmount(kind, purchase.installment_amount),
+      amount: entryAmount(
+        kind,
+        persistedCardMovementAmountBrl(purchase) ?? 0,
+      ),
       kind,
       source: "card_purchase",
       category: purchase.financial_categories?.name || "Sem categoria",

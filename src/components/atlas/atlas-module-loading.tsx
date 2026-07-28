@@ -8,6 +8,7 @@ export type AtlasLoadingSkeleton =
   | "planning"
   | "reports"
   | "integrations"
+  | "invoice-review"
   | "generic";
 
 export type AtlasModuleLoadingProps = {
@@ -167,6 +168,30 @@ function IntegrationsSkeleton() {
   );
 }
 
+function InvoiceReviewSkeleton() {
+  return (
+    <div className="atlas-loading-invoice-review" data-skeleton="invoice-review">
+      <div className="atlas-loading-invoice-review-summary">
+        <i />
+        <i />
+        <i />
+      </div>
+      <div className="atlas-loading-invoice-review-reconciliation">
+        <SkeletonLine size="medium" />
+        <span><i /><i /><i /><i /></span>
+      </div>
+      <div className="atlas-loading-invoice-review-rows">
+        <SkeletonLine size="medium" />
+        <i /><i /><i />
+      </div>
+      <div className="atlas-loading-invoice-review-installments">
+        <SkeletonLine size="short" />
+        <i /><i />
+      </div>
+    </div>
+  );
+}
+
 function StructuralSkeleton({ type }: { type: AtlasLoadingSkeleton }) {
   if (type === "overview") return <OverviewSkeleton />;
   if (type === "transactions") return <TransactionRows />;
@@ -178,6 +203,7 @@ function StructuralSkeleton({ type }: { type: AtlasLoadingSkeleton }) {
     return <PlanningSkeleton type={type} />;
   }
   if (type === "integrations") return <IntegrationsSkeleton />;
+  if (type === "invoice-review") return <InvoiceReviewSkeleton />;
   return (
     <div className="atlas-loading-generic" data-skeleton="generic">
       <SkeletonLine size="medium" />

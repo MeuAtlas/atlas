@@ -45,10 +45,11 @@ test("resumo usa grade no desktop e carrossel com snap no mobile", () => {
   );
 });
 
-test("resumo compacto consome apenas o selector normalizado", () => {
+test("resumo compacto prioriza o resolvedor central e mantém o selector como fallback", () => {
   assert.match(compact, /getCurrentInvoiceSummary\(invoice\)/);
-  assert.match(compact, /summary\.displayAmount === null/);
-  assert.match(compact, /<Money value=\{summary\.displayAmount\}/);
+  assert.match(compact, /resolvedInvoice\s*\?\s*resolvedInvoice\.displayTotal\s*:\s*summary\.displayAmount/);
+  assert.match(compact, /displayAmount === null/);
+  assert.match(compact, /<Money value=\{displayAmount\}/);
   assert.match(compact, /summary\.purchaseCount === null/);
   assert.doesNotMatch(
     compact,

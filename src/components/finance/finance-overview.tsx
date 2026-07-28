@@ -11,6 +11,7 @@ import type { CurrentCardInvoice } from "@/modules/finance/card-invoices";
 import type { FinanceDashboard } from "@/modules/finance/dashboard";
 import type { BankAccountMonthlyMovement } from "@/modules/finance/account-movement";
 import type { FinancialAccount } from "@/modules/finance/types";
+import type { ResolvedOpenCardInvoice } from "@/modules/finance/open-card-invoice";
 
 const daysBetween = (date: string, today: Date) =>
   Math.ceil(
@@ -44,6 +45,7 @@ export function FinanceOverview({
   accounts,
   accountMovement,
   invoices,
+  resolvedInvoices,
   name,
   timeZone,
   workspace,
@@ -55,6 +57,7 @@ export function FinanceOverview({
   accounts: FinancialAccount[];
   accountMovement: BankAccountMonthlyMovement | null;
   invoices: CurrentCardInvoice[];
+  resolvedInvoices: Map<string, ResolvedOpenCardInvoice>;
   name: string;
   timeZone: string;
   workspace: string;
@@ -137,6 +140,7 @@ export function FinanceOverview({
                   <CurrentInvoiceCard
                     key={invoice.card.id}
                     invoice={invoice}
+                    resolvedInvoice={resolvedInvoices.get(invoice.card.id)}
                     compact
                     forcePartial={warnings.cards || warnings.cardPurchases}
                   />

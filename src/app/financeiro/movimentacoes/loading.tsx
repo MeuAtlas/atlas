@@ -4,9 +4,11 @@ export default function Loading() {
   return (
     <AtlasModuleLoading
       title="Carregando movimentações"
-      description="Sincronizando entradas e saídas."
+      description="Organizando lançamentos e totais do período."
       variant="finance"
       skeletonType="transactions"
+      compact
+      className="movements-skeleton"
     />
   );
 }

@@ -62,10 +62,14 @@ test("movimentação da conta é filtrada por conta, mês e status bancário", (
   );
   assert.match(source, /realized_at\.gte\.\$\{period\.startInstant\}/);
   assert.match(source, /competence_date\.gte\.\$\{period\.startDate\}/);
+  assert.match(
+    source,
+    /migrated_card_purchase_id\.is\.null,transaction_role\.eq\.invoice_payment,cash_flow_kind\.eq\.invoice_payment/,
+  );
   assert.match(source, /\.in\("status",\["realized","completed","posted","settled","paid","received","pending","partial"\]\)/);
   const movementQuery = source.slice(
     source.indexOf("getBankAccountMonthlyTransactions"),
-    source.indexOf("export async function getFinanceData"),
+    source.indexOf("export type MovementUnavailableSource"),
   );
   assert.doesNotMatch(movementQuery, /from\("card_purchases"\)/);
 });

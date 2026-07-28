@@ -4,6 +4,7 @@ import {
   type CreditCardPageView,
 } from "@/components/finance/credit-card-view-tabs";
 import { CurrentInvoiceCard } from "@/components/finance/current-invoice-card";
+import { ImportInvoiceButton } from "@/components/finance/import-invoice-button";
 import { EmptyState } from "@/components/finance/empty-state";
 import { InvoiceHistorySection } from "@/components/finance/invoice-history-section";
 import { SubmitButton } from "@/components/finance/submit-button";
@@ -27,7 +28,11 @@ import {
 import {
   getCreditCardInvoiceHistory,
   getFinanceData,
+  getReliableCurrentInvoiceSnapshots,
+  getResolvedCardCycleDetails,
+  resolveOpenCardInvoice,
 } from "@/modules/finance/queries";
+import { syncCurrentInvoicesAction } from "@/app/financeiro/integracoes/actions";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -51,6 +56,8 @@ export default async function Page({
     period?: string;
     cursor?: string;
     q?: string;
+    sync?: string;
+    invoice?: string;
   }>;
 }) {
   const query = await searchParams;
@@ -76,7 +83,10 @@ export default async function Page({
       })()
     : undefined;
   const { supabase, user } = await requireFinanceAccess();
-  const data = await getFinanceData(supabase, user.id);
+  const [data,storedInvoices]=await Promise.all([
+    getFinanceData(supabase,user.id),
+    getReliableCurrentInvoiceSnapshots(supabase,user.id),
+  ]);
   const activeCards = data.cards.filter((card) => card.status === "active");
   const archivedCards = data.cards.filter(
     (card) =>
@@ -89,8 +99,26 @@ export default async function Page({
   const invoices = buildCurrentCardInvoices(
     activeCards,
     data.cardPurchases,
+    new Date(),
+    {storedInvoices},
   ).filter((invoice) =>
     ["open", "partially_paid", "estimated"].includes(invoice.status),
+  );
+  const resolvedInvoices = new Map(
+    (await Promise.all(invoices.map(async invoice => {
+      const resolved = await resolveOpenCardInvoice(supabase, user.id, {
+        workspaceId,
+        cardAccountId: invoice.card.id,
+        referenceDate: new Date(),
+      });
+      if (!resolved) return null;
+      const details = await getResolvedCardCycleDetails(supabase, user.id, {
+        workspaceId,
+        cycleId: resolved.cycleId,
+        cardId: invoice.card.id,
+      });
+      return [invoice.card.id, { resolved, details }] as const;
+    }))).filter((entry): entry is NonNullable<typeof entry> => entry !== null),
   );
 
   let historyError = false;
@@ -142,11 +170,21 @@ export default async function Page({
         <p className="finance-toast success" role="status">
           Cartão arquivado com sucesso.
         </p>
+      ) : query.sync === "partial" ? (
+        <p className="finance-toast warning" role="status">
+          Sincronização concluída com dados parciais. Os valores anteriores foram preservados.
+        </p>
+      ) : query.sync === "complete" ? (
+        <p className="finance-toast success" role="status">
+          Sincronização concluída com dados completos.
+        </p>
       ) : null}
 
       <CreditCardViewTabs activeView={view} workspace={query.workspace} />
 
       {view === "history" ? (
+        <>
+        <div className="invoice-import-action-row"><ImportInvoiceButton /></div>
         <InvoiceHistorySection
           result={history}
           cards={data.cards}
@@ -164,7 +202,8 @@ export default async function Page({
               : null
           }
           error={historyError}
-        />
+          initialInvoiceId={query.invoice}
+        /></>
       ) : null}
 
       {view === "current" ? (
@@ -175,12 +214,25 @@ export default async function Page({
                 <p className="eyebrow">Crédito e faturas</p>
                 <h2>Faturas vigentes</h2>
               </div>
-              <a href="/financeiro/integracoes">Sincronizar agora</a>
+              <form action={syncCurrentInvoicesAction}>
+                <SubmitButton>Sincronizar agora</SubmitButton>
+              </form>
+              <ImportInvoiceButton compact />
             </header>
             {invoices.length ? (
               <div className="current-invoice-grid">
                 {invoices.map((invoice) => (
-                  <CurrentInvoiceCard key={invoice.card.id} invoice={invoice} />
+                  <CurrentInvoiceCard
+                    key={invoice.card.id}
+                    invoice={invoice}
+                    resolvedInvoice={
+                      resolvedInvoices.get(invoice.card.id)?.resolved
+                    }
+                    resolvedDetails={
+                      resolvedInvoices.get(invoice.card.id)?.details ?? undefined
+                    }
+                    compact
+                  />
                 ))}
               </div>
             ) : (

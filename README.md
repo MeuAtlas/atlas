@@ -76,6 +76,15 @@ npx supabase gen types typescript --linked > src/types/database.generated.ts
 
 ## Desenvolvimento
 
+O runtime oficial do Atlas é o Node.js 22 LTS, definido em `.nvmrc` e em
+`package.json`. Configure também a versão 22 no projeto da Vercel e no CI antes
+de instalar dependências:
+
+```bash
+nvm use
+node -v
+```
+
 ```bash
 npm install
 npm run dev
@@ -102,6 +111,7 @@ npm run lint
 npm run typecheck
 npm run build
 npm test
+node scripts/test-pdf-extraction.mjs
 ```
 
 Consulte [docs/architecture.md](docs/architecture.md) para as decisões de privacidade, isolamento e família e [docs/auth-test-plan.md](docs/auth-test-plan.md) para o roteiro de validação com duas contas.
@@ -109,6 +119,12 @@ Consulte [docs/architecture.md](docs/architecture.md) para as decisões de priva
 ## Integração Pluggy
 
 Configure `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` somente no ambiente do servidor (Vercel Preview/Production). Não use o prefixo `NEXT_PUBLIC_`. Depois de aplicar as migrations do Supabase, acesse **Financeiro → Integrações**, valide as credenciais e informe o Item ID exibido no Pluggy Dashboard.
+
+Para o endpoint `POST /api/pluggy/webhook`, configure também
+`PLUGGY_WEBHOOK_SECRET` e `SUPABASE_SERVICE_ROLE_KEY` somente no servidor.
+Cadastre na Pluggy o mesmo segredo no header `X-Atlas-Webhook-Secret`. O
+endpoint registra `eventId` de forma idempotente e responde antes de processar
+a sincronização.
 
 A Pluggy não oferece um endpoint para listar Items existentes por motivos de segurança. Por isso, o Atlas não tenta adivinhar nem fixa o Item ID: ele valida no backend o identificador informado e o associa ao usuário autenticado. A sincronização é manual, idempotente e os dados importados permanecem privados por padrão.
 

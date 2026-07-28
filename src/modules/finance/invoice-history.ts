@@ -31,6 +31,7 @@ export type InvoiceTotalSource =
 
 export type CreditCardInvoiceHistoryItem = {
   id: string;
+  documentId?: string | null;
   cardId: string;
   cardName: string;
   institutionName: string | null;
@@ -53,6 +54,18 @@ export type CreditCardInvoiceHistoryItem = {
   dataCompleteness: "complete" | "partial" | "unavailable";
   purchases: CardPurchase[];
   payments: FinancialTransaction[];
+  pdfEntries?: Array<{
+    id: string;
+    transactionDate: string | null;
+    description: string;
+    amount: number;
+    entryType: string;
+    cardLastFour: string | null;
+    installmentNumber: number | null;
+    installmentTotal: number | null;
+    confidence: number;
+    reconciledWithProvider: boolean;
+  }>;
 };
 
 export type CreditCardInvoiceHistoryResult = {
@@ -221,6 +234,28 @@ export function normalizeHistoricalInvoice({
         purchaseBelongsToInvoice(purchase, invoice),
     ),
   );
+  const rawPdfEntries = ((invoice as StoredCardInvoice & {
+    invoice_entries?: Array<Record<string, unknown>>;
+  }).invoice_entries ?? []);
+  const pdfEntries = rawPdfEntries.map(item => ({
+    id: String(item.id),
+    transactionDate: item.transaction_date ? String(item.transaction_date) : null,
+    description: String(item.description_raw ?? ""),
+    amount: Number(item.amount ?? 0),
+    entryType: String(item.entry_type ?? "unknown"),
+    cardLastFour: item.card_last_four ? String(item.card_last_four) : null,
+    installmentNumber: item.installment_number === null ? null : Number(item.installment_number),
+    installmentTotal: item.installment_total === null ? null : Number(item.installment_total),
+    confidence: Number(item.confidence ?? 0),
+    reconciledWithProvider: Boolean(item.provider_transaction_id),
+  }));
+  const reconciledProviderIds = new Set(
+    rawPdfEntries.map(item => item.provider_transaction_id ? String(item.provider_transaction_id) : null)
+      .filter((value): value is string => Boolean(value)),
+  );
+  const unmatchedProviderPurchases = uniquePurchases.filter(
+    purchase => !purchase.external_id || !reconciledProviderIds.has(purchase.external_id),
+  );
   const calculated = calculateInvoiceAmounts(uniquePurchases);
   const calculatedTotal =
     amountOrNull(invoice.calculated_invoice_total) ?? calculated.invoiceTotal;
@@ -273,6 +308,7 @@ export function normalizeHistoricalInvoice({
 
   return {
     id: invoice.id,
+    documentId: (invoice as StoredCardInvoice & { document_id?: string | null }).document_id ?? null,
     cardId: invoice.card_id,
     cardName: card.name,
     institutionName: card.institution_name,
@@ -300,13 +336,16 @@ export function normalizeHistoricalInvoice({
       payment?.financial_accounts?.name ??
       null,
     purchaseCount:
-      uniquePurchases.length > 0
+      pdfEntries.length > 0
+        ? pdfEntries.length
+        : uniquePurchases.length > 0
         ? calculated.purchaseCount
         : Math.max(0, Number(invoice.purchase_count ?? 0)),
     reconciliationStatus,
     dataCompleteness: resolved.total === null ? "unavailable" : partial ? "partial" : "complete",
-    purchases: uniquePurchases,
+    purchases: unmatchedProviderPurchases,
     payments: linkedPayments,
+    pdfEntries,
   };
 }
 

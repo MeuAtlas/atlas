@@ -19,7 +19,7 @@ const calculation = readFileSync(
 const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
 
 test("card mantém uma única ação que abre o drawer sem navegar", () => {
-  assert.match(card, /<InvoiceDetailsDrawer invoice=\{invoice\} \/>/);
+  assert.match(card, /<InvoiceDetailsDrawer[\s\S]*invoice=\{invoice\}/);
   assert.doesNotMatch(card, />Abrir detalhes<\/Link>|>Abrir detalhes<\/a>/);
   assert.match(drawer, />\s*Ver detalhes\s*<\/button>/);
   assert.match(drawer, /aria-haspopup="dialog"/);
@@ -44,11 +44,10 @@ test("lista oferece busca, filtros, instrumentos, ordenação e paginação", ()
     "Todos",
     "Compras",
     "Parcelas",
-    "Estornos",
     "Créditos",
-    "Tarifas",
-    "Pendentes",
-    "Sem cartão",
+    "Encargos",
+    "Baixa confiança",
+    "Não conciliados",
   ]) {
     assert.match(drawer, new RegExp(`"${label}"`));
   }
@@ -68,7 +67,8 @@ test("auditoria usa o mesmo serviço central do card", () => {
   assert.match(calculation, /export function getEstimatedInvoiceDetails/);
   assert.match(drawer, /details\.includedPurchases/);
   assert.match(drawer, /details\.calculatedTotal/);
-  assert.match(drawer, /details\.displayedTotal/);
+  assert.match(drawer, /getCurrentBillSummary\(invoice\)/);
+  assert.match(drawer, /billSummary\.amount===null/);
   assert.match(drawer, /Não foi possível comparar com uma fatura oficial/);
 });
 
@@ -110,7 +110,7 @@ test("drawer possui skeleton, erro e vazio sem derrubar a visão geral", () => {
   assert.match(drawer, /invoice-details-skeleton/);
   assert.match(drawer, /Não foi possível carregar os detalhes desta fatura/);
   assert.match(drawer, /Tentar novamente/);
-  assert.match(drawer, /Nenhuma compra foi encontrada neste ciclo/);
+  assert.match(drawer, /Nenhuma movimentação foi encontrada neste ciclo/);
   assert.match(drawer, /\[Atlas Invoice Details Error\]/);
   assert.doesNotMatch(drawer, /error\.message|error\.stack|raw_metadata/);
 });

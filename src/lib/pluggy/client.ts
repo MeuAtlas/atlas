@@ -2,7 +2,7 @@ import "server-only";
 import { readPluggyConfig } from "./config-core";
 import { PluggyApiError, PluggyError, sanitizeDiagnostic } from "./errors";
 import { ApiKeyCache } from "./key-cache";
-import type { JsonRecord, PluggyAccount, PluggyBill, PluggyInvestment, PluggyItem, PluggyLoan, PluggyPage, PluggyRequestOptions, PluggyTransaction } from "./types";
+import type { JsonRecord, PluggyAccount, PluggyBill, PluggyIdentity, PluggyInvestment, PluggyItem, PluggyLoan, PluggyPage, PluggyRequestOptions, PluggyTransaction } from "./types";
 
 const API_URL="https://api.pluggy.ai";
 const cache=new ApiKeyCache();
@@ -15,7 +15,7 @@ async function parse(response:Response):Promise<unknown>{ const text=await respo
 function responseError(payload:unknown,status:number,operation:string,retryable:boolean){
  const candidate=typeof payload==="object"&&payload!==null?payload as Record<string,unknown>:{};
  const message=sanitizeDiagnostic(typeof candidate.message==="string"?candidate.message:typeof candidate.error==="string"?candidate.error:"")??`Pluggy respondeu com HTTP ${status}.`;
- const code=typeof candidate.code==="string"?candidate.code:typeof candidate.errorCode==="string"?candidate.errorCode:undefined;
+ const code=typeof candidate.code==="string"?candidate.code:typeof candidate.errorCode==="string"?candidate.errorCode:typeof candidate.codeDescription==="string"?candidate.codeDescription:undefined;
  return new PluggyApiError(message,{status,code,operation,retryable});
 }
 function retryAfter(response:Response,attempt:number){ const seconds=Number(response.headers.get("retry-after")); return Number.isFinite(seconds)&&seconds>0?Math.min(seconds*1000,5000):350*(attempt+1); }
@@ -69,6 +69,7 @@ export async function pluggyRequest<T>(path:string,options:PluggyRequestOptions=
 
 export const testPluggyConnection=()=>authenticate(true).then(()=>true);
 export const getPluggyItem=(itemId:string)=>pluggyRequest<PluggyItem>(`/items/${encodeURIComponent(itemId)}`);
+export const updatePluggyItem=(itemId:string)=>pluggyRequest<PluggyItem>(`/items/${encodeURIComponent(itemId)}`,{method:"PATCH",body:{}});
 export const getPluggyAccounts=(itemId:string)=>pluggyRequest<PluggyAccount[]|PluggyPage<PluggyAccount>>("/accounts",{query:{itemId}});
 export const getPluggyInvestments=(itemId:string,page=1)=>pluggyRequest<PluggyPage<PluggyInvestment>>("/investments",{query:{itemId,page,pageSize:500}});
 function loanList(payload:unknown):Record<string,unknown>[] {
@@ -79,6 +80,35 @@ export function inspectLoanResponse(response:Response,payload:unknown){
  const loans=loanList(payload);const sample=loans[0];const installments=sample?.installments&&typeof sample.installments==="object"?sample.installments as Record<string,unknown>:undefined;const payments=sample?.payments&&typeof sample.payments==="object"?sample.payments as Record<string,unknown>:undefined;
  console.info("[Atlas Pluggy Loans]",{operation:"loans.fetch",status:response.status,count:loans.length,fields:sample?Object.keys(sample).sort():[],types:sample?Object.fromEntries(Object.entries(sample).map(([key,value])=>[key,Array.isArray(value)?"array":value===null?"null":typeof value])):{},hasContractAmount:typeof sample?.contractAmount==="number",hasOutstandingBalance:typeof payments?.contractOutstandingBalance==="number",hasInstallmentAmount:false,hasInstallmentCount:typeof installments?.totalNumberOfInstallments==="number",hasRate:Array.isArray(sample?.interestRates)&&sample.interestRates.length>0,hasDates:Boolean(sample?.contractDate||sample?.firstInstallmentDueDate||sample?.dueDate)});
 }
-export const getPluggyLoans=(itemId:string)=>pluggyRequest<PluggyLoan[]|PluggyPage<PluggyLoan>>("/loans",{query:{itemId},inspectResponse:inspectLoanResponse});
+export async function listPluggyLoans(itemId:string){
+ const rows:PluggyLoan[]=[];
+ for(let pageNumber=1;pageNumber<=100;pageNumber++){
+  const page=await pluggyRequest<PluggyLoan[]|PluggyPage<PluggyLoan>>("/loans",{query:{itemId,page:pageNumber,pageSize:500},inspectResponse:inspectLoanResponse});
+  if(Array.isArray(page))return [...rows,...page];
+  rows.push(...page.results);
+  if(page.totalPages&&pageNumber<page.totalPages)continue;
+  if(page.next)continue;
+  if(page.totalResults!==undefined&&rows.length<page.totalResults)throw new PluggyError("Loan pagination ended before all results","pluggy_pagination_incomplete",undefined,true);
+  return rows;
+ }
+ throw new PluggyError("Loan pagination exceeded the safety limit","pluggy_pagination_limit",undefined,true);
+}
+export const getPluggyLoans=listPluggyLoans;
 export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom}});
-export const getPluggyBills=(accountId:string)=>pluggyRequest<PluggyBill[]|PluggyPage<PluggyBill>>("/bills",{query:{accountId}});
+export async function listPluggyBills(accountId:string){
+ const rows:PluggyBill[]=[];
+ for(let pageNumber=1;pageNumber<=100;pageNumber++){
+  const page=await pluggyRequest<PluggyBill[]|PluggyPage<PluggyBill>>("/bills",{query:{accountId,page:pageNumber,pageSize:500}});
+  if(Array.isArray(page))return [...rows,...page];
+  rows.push(...page.results);
+  if(page.totalPages&&pageNumber<page.totalPages)continue;
+  if(page.next)continue;
+  if(page.totalResults!==undefined&&rows.length<page.totalResults)throw new PluggyError("Bill pagination ended before all results","pluggy_pagination_incomplete",undefined,true);
+  return rows;
+ }
+ throw new PluggyError("Bill pagination exceeded the safety limit","pluggy_pagination_limit",undefined,true);
+}
+export const getPluggyBills=listPluggyBills;
+export const retrievePluggyBill=(billId:string)=>pluggyRequest<PluggyBill>(`/bills/${encodeURIComponent(billId)}`);
+export const findPluggyIdentityByItem=(itemId:string)=>pluggyRequest<PluggyIdentity>("/identity",{query:{itemId}});
+export const retrievePluggyIdentity=(identityId:string)=>pluggyRequest<PluggyIdentity>(`/identity/${encodeURIComponent(identityId)}`);

@@ -6,7 +6,7 @@ import { chunkForUrlFilter,shouldRecoverFullHistory,SUPABASE_FILTER_BATCH_SIZE }
 import { readPluggyConfig } from "./config-core";
 import { IntegrationSyncError,PluggyApiError,PluggyError,normalizeIntegrationError,publicPluggyMessage,sanitizeDiagnostic } from "./errors";
 import { ApiKeyCache } from "./key-cache";
-import { classifyTransaction, cursorFromNext, findSuspectedTransferIds, mapAccount, mapCard, mapTransaction, safeMetadata } from "./mappers";
+import { classifyTransaction, cursorFromNext, findSuspectedTransferIds, mapAccount, mapCard, mapCardPurchase, mapTransaction, safeMetadata } from "./mappers";
 import { classifyBankTransaction } from "./bank-classifier";
 
 test("credenciais ausentes mantêm a integração desconfigurada",()=>assert.equal(readPluggyConfig({}).configured,false));
@@ -26,6 +26,67 @@ test("tarifa bancária e encargo de cartão são despesas",()=>{const bank=class
 test("empréstimo recebido e principal de investimento têm natureza não operacional",()=>{const loan=classifyTransaction({id:"loan",accountId:"a",amount:20000,description:"Crédito empréstimo"});const investment=classifyTransaction({id:"investment",accountId:"a",amount:-5000,description:"Aplicação investimento"});assert.equal(loan.cash_flow_kind,"loan_proceeds");assert.equal(investment.cash_flow_kind,"investment_contribution")});
 test("detecção conservadora exige valor, sentidos, contas, data e descrição compatíveis",()=>{const ids=findSuspectedTransferIds([{id:"a",accountId:"1",amount:50,direction:"out",date:"2026-01-10",description:"PIX"},{id:"b",accountId:"2",amount:50,direction:"in",date:"2026-01-11",description:"Transferência recebida"},{id:"c",accountId:"2",amount:60,direction:"in",date:"2026-01-11",description:"PIX"}]);assert.deepEqual([...ids].sort(),["a","b"])});
 test("mapper mantém valores internos positivos e sinal original",()=>{const row=mapTransaction({id:"tx",accountId:"a",amount:-42,date:"2026-01-01",type:"DEBIT"},"user","connection",{accountId:"local",isCreditCard:false});assert.equal(row.amount,42);assert.equal(row.original_amount,-42);assert.equal(row.external_id,"tx")});
+test("compra internacional Pluggy preserva USD e usa o valor convertido em BRL",()=>{
+  const row=mapCardPurchase({
+    id:"foreign-card",
+    accountId:"provider-card",
+    description:"GITHUB",
+    amount:12.2,
+    amountInAccountCurrency:65.62,
+    currencyCode:"USD",
+    date:"2026-06-15",
+  },"user","connection","card");
+  assert.equal(row.installment_amount,65.62);
+  assert.equal(row.amount_brl,65.62);
+  assert.equal(row.original_amount,12.2);
+  assert.equal(row.original_currency_code,"USD");
+  assert.equal(row.provider_signed_amount,12.2);
+  assert.equal(row.conversion_source,"pluggy");
+  assert.equal(row.provider_metadata.amountInAccountCurrency,65.62);
+});
+test("Pluggy sem valor convertido nÃ£o promove USD para amount_brl",()=>{
+  const row=mapCardPurchase({
+    id:"foreign-without-conversion",
+    accountId:"provider-card",
+    description:"GITHUB",
+    amount:12.2,
+    currencyCode:"USD",
+    date:"2026-07-15",
+  },"user","connection","card");
+  assert.equal(row.amount_brl,null);
+  assert.equal(row.installment_amount,12.2);
+  assert.equal(row.original_amount,12.2);
+  assert.equal(row.conversion_source,"unknown");
+});
+test("IOF no exterior Ã© persistido como taxa separada",()=>{
+  const row=mapCardPurchase({
+    id:"foreign-iof",
+    accountId:"provider-card",
+    description:"IOF DESPESA NO EXTERIOR",
+    amount:2.3,
+    currencyCode:"BRL",
+    date:"2026-07-15",
+  },"user","connection","card");
+  assert.equal(row.amount_brl,2.3);
+  assert.equal(row.original_amount,null);
+  assert.equal(row.original_currency_code,null);
+  assert.equal(row.entry_type,"tax");
+  assert.equal(row.transaction_role,"foreign_transaction_tax");
+});
+test("estorno internacional conserva o sinal do provedor sem tornar o total negativo",()=>{
+  const row=mapCardPurchase({
+    id:"foreign-refund",
+    accountId:"provider-card",
+    description:"ESTORNO GITHUB",
+    amount:-12.2,
+    amountInAccountCurrency:-65.62,
+    currencyCode:"USD",
+    date:"2026-06-16",
+  },"user","connection","card");
+  assert.equal(row.amount_brl,65.62);
+  assert.equal(row.original_amount,12.2);
+  assert.equal(row.provider_signed_amount,-12.2);
+});
 test("erro público nunca inclui mensagem ou segredo do provedor",()=>{const error=new PluggyError("clientSecret=private","pluggy_auth_failed",401);const message=publicPluggyMessage(error);assert.equal(message.includes("private"),false);assert.match(message,/autenticar/i)});
 test("sanitização descarta payload bancário bruto",()=>assert.deepEqual(safeMetadata({status:"UPDATED",balance:999,description:"private",providerId:"safe-id"}),{status:"UPDATED",providerId:"safe-id"}));
 test("normalização preserva stage, operação, status, código e causa",()=>{const cause=new PluggyApiError("Parâmetro inválido",{code:"INVALID_PARAMETER",status:422,operation:"GET /v2/transactions"});const error=new IntegrationSyncError("Falha ao importar movimentações.",{stage:"transactions_fetch",cause,code:cause.code,status:cause.status,operation:cause.operation});assert.deepEqual(normalizeIntegrationError(error),{name:"IntegrationSyncError",message:"Falha ao importar movimentações.",code:"INVALID_PARAMETER",status:422,operation:"GET /v2/transactions",stage:"transactions_fetch",causeMessage:"Parâmetro inválido",stack:undefined})});

@@ -1,69 +1,170 @@
-import Link from "next/link";
-import { EmptyState } from "@/components/finance/empty-state";
-import { SubmitButton } from "@/components/finance/submit-button";
-import { createTransaction,deleteTransaction,restoreProviderTransactionDate,updateBankTransactionClassification,updateTransactionStatus } from "@/modules/finance/actions";
+import { redirect } from "next/navigation";
+import { MovementsBrowser } from "@/components/finance/movements-browser";
 import { requireFinanceAccess } from "@/modules/finance/access";
-import { formatCurrency,formatDate } from "@/modules/finance/format";
-import { getFinanceData } from "@/modules/finance/queries";
-import { matchesCardPurchase,matchesTransaction,type MovementFilters } from "@/modules/finance/movement-filters";
-import { installmentLabel, isInstallmentPurchase } from "@/modules/finance/installments";
-import type { CardPurchase,FinancialTransaction } from "@/modules/finance/types";
-type Tab="all"|"bank"|"cards"|"transfers"|"adjustments";type Filters=MovementFilters&{tab?:string};
-const tabs:[Tab,string][]=[["all","Todas"],["bank","Conta banc\u00e1ria"],["cards","Cart\u00f5es"],["transfers","Transfer\u00eancias"],["adjustments","Ajustes"]];const roleLabels:Record<string,string>={consumption:"Consumo",cash_flow:"Fluxo de caixa",invoice_payment:"Pagamento de fatura",transfer:"Transfer\u00eancia",refund:"Estorno",adjustment:"Ajuste"};
-const directionLabels:Record<string,string>={inflow:"Entrada",outflow:"Saída",neutral:"Neutra",review:"Revisar"};
-const financialRoleLabels:Record<string,string>={revenue:"Receita",expense:"Despesa",cash_flow_only:"Somente caixa",transfer:"Transferência",debt_proceeds:"Crédito de dívida",debt_payment:"Pagamento de dívida",investment_principal:"Principal de investimento",correction:"Correção",pending_review:"Revisão pendente"};
-const natureLabels:Record<string,string>={salary:"Salário",pix_received:"Pix recebido",pix_sent:"Pix enviado",investment_income:"Rendimento de aplicação",investment_application:"Aplicação financeira",investment_redemption:"Resgate de principal",loan_proceeds:"Empréstimo recebido",financing_payment:"Prestação de financiamento",debt_payment:"Pagamento de dívida",invoice_payment:"Pagamento de fatura",transfer_internal:"Transferência própria",transfer_external:"Transferência externa",refund:"Estorno",reversal:"Reversão",fee:"Tarifa",interest:"Juros",purchase:"Compra",bill_payment:"Pagamento de conta",other:"Outro"};
-function groupBy<T>(items:T[],key:(item:T)=>string){return items.reduce((groups,item)=>{(groups[key(item)]??=[]).push(item);return groups},{} as Record<string,T[]>)}
-const filterTx=matchesTransaction;
-const filterCard=matchesCardPurchase;
-function Tx({item,categories}:{item:FinancialTransaction;categories:{id:string;name:string}[]}){
- const place=item.financial_accounts?.name||item.credit_cards?.name||"Sem conta";
- const direction=item.bank_direction|| (item.transaction_type==="income"?"inflow":item.transaction_type==="expense"?"outflow":"neutral");
- const providerDate=item.provider_posted_at||item.bank_posted_at||item.realized_at;
- return <article className="movement-card">
-  <div><b>{item.description}</b><small>{place}{item.financial_accounts?.institution_name?` \u00b7 ${item.financial_accounts.institution_name}`:""} &middot; {formatDate(item.competence_date)}</small><span className="movement-badges"><i>{directionLabels[direction]||direction}</i><i>{natureLabels[item.financial_nature||""]||item.financial_nature||roleLabels[item.transaction_role]}</i><i>{item.financial_categories?.name||"Sem categoria"}</i>{item.source==="pluggy"?<i>Pluggy</i>:null}{item.review_status==="pending"?<i className="warning">Revis&atilde;o pendente</i>:null}</span></div>
-  <strong className={direction==="outflow"?"negative":"positive"}>{direction==="outflow"?"\u2212":"+"} {formatCurrency(Number(item.amount))}</strong>
-  <details><summary>Abrir detalhes</summary>
-   <dl>
-    <div><dt>Entrada ou saída</dt><dd>{directionLabels[direction]||direction}</dd></div>
-    <div><dt>Natureza</dt><dd>{natureLabels[item.financial_nature||""]||item.financial_nature||"Legado"}</dd></div>
-    <div><dt>Papel financeiro</dt><dd>{financialRoleLabels[item.financial_role||""]||item.financial_role||roleLabels[item.transaction_role]}</dd></div>
-    <div><dt>Conta</dt><dd>{place}</dd></div>
-    <div><dt>Categoria</dt><dd>{item.financial_categories?.name||"Sem categoria"}</dd></div>
-    <div><dt>Data de postagem</dt><dd>{formatDate(providerDate)}</dd></div>
-    <div><dt>Data efetiva</dt><dd>{formatDate(item.user_effective_at||item.effective_at||null)}</dd></div>
-    <div><dt>Competência</dt><dd>{formatDate(item.competence_date)}</dd></div>
-    <div><dt>Valor</dt><dd>{formatCurrency(Number(item.amount))}</dd></div>
-    <div><dt>Fonte da classificação</dt><dd>{item.classification_source||"legacy"}</dd></div>
-    <div><dt>Confiança</dt><dd>{item.classification_confidence||"não informada"}</dd></div>
-    <div><dt>Regra</dt><dd>{item.classification_rule||"legado"}</dd></div>
-    <div><dt>Status</dt><dd>{item.status}</dd></div>
-    <div><dt>Revisão</dt><dd>{item.review_status||"reviewed"}</dd></div>
-   </dl>
-   <p className="movement-date-help">Data de postagem é a data informada pelo banco à integração. A data em que o saldo ficou disponível pode ser diferente.</p>
-   {item.source_type==="bank"?<form action={updateBankTransactionClassification} className="movement-correction-form">
-    <input type="hidden" name="id" value={item.id}/>
-    <label>Direção<select name="bank_direction" defaultValue={direction}>{Object.entries(directionLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
-    <label>Papel<select name="financial_role" defaultValue={item.financial_role||"pending_review"}>{Object.entries(financialRoleLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
-    <label>Natureza<select name="financial_nature" defaultValue={item.financial_nature||"other"}>{Object.entries(natureLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
-    <label>Categoria<select name="category_id" defaultValue={item.category_id||""}><option value="">Sem categoria</option>{categories.map(category=><option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
-    <label>Data efetiva<input type="date" name="user_effective_date" defaultValue={item.user_effective_at?.slice(0,10)||""}/></label>
-    <label>Motivo da data<input name="date_override_reason" maxLength={240} defaultValue={item.date_override_reason||""}/></label>
-    <SubmitButton>Salvar correção</SubmitButton>
-   </form>:null}
-   <div className="finance-row-actions">
-    {item.user_effective_at?<form action={restoreProviderTransactionDate}><input type="hidden" name="id" value={item.id}/><button>Restaurar data do provedor</button></form>:null}
-    {item.status!=="realized"&&item.status!=="cancelled"?<form action={updateTransactionStatus}><input type="hidden" name="id" value={item.id}/><input type="hidden" name="status" value="realized"/><button>Realizar</button></form>:null}
-    <form action={deleteTransaction}><input type="hidden" name="id" value={item.id}/><button className="danger">Excluir</button></form>
-   </div>
-  </details>
- </article>
+import {
+  calculateMovementPeriodSummary,
+  calculateMovementSummaryByFilter,
+  buildMovementQueryKey,
+  buildMovementFiltersUrl,
+  canonicalizeMovementPath,
+  currentMovementFiltersPath,
+  deduplicateMovements,
+  matchesMovement,
+  normalizeMovementFilterState,
+  normalizeMovementListItem,
+  resolveMovementPeriod,
+  type MovementFilters,
+} from "@/modules/finance/movement-filters";
+import {
+  getAvailableCardCycles,
+  getMovementsData,
+  resolveOpenCardInvoice,
+} from "@/modules/finance/queries";
+
+const PAGE_SIZE = 40;
+
+export default async function MovementsPage({
+  searchParams,
+}: {
+  searchParams: Promise<MovementFilters>;
+}) {
+  const rawFilters = await searchParams;
+  const { supabase, user } = await requireFinanceAccess();
+  const cardCycles = await getAvailableCardCycles(supabase, user.id);
+  const filters = normalizeMovementFilterState(rawFilters, cardCycles);
+  const selectedCycle = filters.type === "card"
+    ? cardCycles.find(cycle => cycle.cycleId === filters.cycle) ?? null
+    : null;
+  const hasIncompatibleCardParams =
+    filters.type === "card" &&
+    Boolean(rawFilters.period || rawFilters.from || rawFilters.to || rawFilters.account);
+  const hasIncompatibleBankParams =
+    filters.type !== "card" &&
+    Boolean(rawFilters.bill || rawFilters.cycle);
+  const currentPath = currentMovementFiltersPath(rawFilters);
+  const canonicalPath = buildMovementFiltersUrl(filters, {}, {
+    preservePage: true,
+  });
+  const needsCanonicalRedirect =
+    hasIncompatibleCardParams ||
+    hasIncompatibleBankParams ||
+    canonicalizeMovementPath(currentPath) !==
+      canonicalizeMovementPath(canonicalPath);
+  if (needsCanonicalRedirect) {
+    redirect(canonicalPath);
+  }
+  const period = selectedCycle
+    ? {
+        from: selectedCycle.cycleStartDate,
+        to: selectedCycle.cycleEndDate,
+      }
+    : resolveMovementPeriod(filters);
+  const data = await getMovementsData(
+    supabase,
+    user.id,
+    {
+      ...period,
+      type: filters.type,
+      cycleId: selectedCycle?.cycleId,
+    },
+  );
+  const resolvedOpenInvoice = selectedCycle?.status === "open"
+    ? await resolveOpenCardInvoice(supabase, user.id, {
+        cycleId: selectedCycle.cycleId,
+        referenceDate: new Date(),
+      })
+    : null;
+  const normalized = deduplicateMovements([
+    ...data.transactions.map(transaction =>
+      normalizeMovementListItem(transaction, data.accounts)),
+    ...data.cardPurchases.map(purchase => normalizeMovementListItem(purchase)),
+  ]).sort((left, right) =>
+    right.date.localeCompare(left.date) ||
+    (right.createdAt ?? "").localeCompare(left.createdAt ?? ""),
+  );
+  const filtered = normalized.filter(item =>
+    matchesMovement(item, filters, selectedCycle));
+  const summary = calculateMovementPeriodSummary(filtered);
+  const displaySummary = calculateMovementSummaryByFilter(
+    filtered,
+    filters.type,
+    selectedCycle,
+  );
+  const openCycleBreakdown = resolvedOpenInvoice
+    ? {
+        newPurchasesTotal: resolvedOpenInvoice.newPurchasesTotal,
+        postedInstallmentsTotal: resolvedOpenInvoice.postedInstallmentsTotal,
+        projectedUnpostedInstallmentsTotal:
+          resolvedOpenInvoice.projectedInstallmentsTotal,
+        feesAndTaxesTotal: resolvedOpenInvoice.feesAndTaxesTotal,
+        creditsAndRefundsTotal:
+          resolvedOpenInvoice.creditsAndRefundsTotal,
+        detailedTotal: resolvedOpenInvoice.detailedTotal,
+        confirmedOpenTotal: resolvedOpenInvoice.confirmedOpenTotal,
+        reconciliationDifference:
+          resolvedOpenInvoice.reconciliationDifference,
+        installmentsDataStatus: data.installmentsDataStatus,
+      }
+    : null;
+  const requestedPage = Number(filters.page || "1");
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const offset = (page - 1) * PAGE_SIZE;
+  const items = filtered.slice(offset, offset + PAGE_SIZE);
+  const activeAccounts = data.accounts
+    .filter(account => account.status === "active")
+    .map(account => ({
+      id: account.id,
+      name: account.institution_name && account.institution_name !== account.name
+        ? `${account.institution_name} · ${account.name}`
+        : account.name,
+    }));
+  const activeCards = data.cards
+    .filter(card => card.status === "active" && !card.user_archived_at)
+    .flatMap(card => {
+      const instruments = (card.credit_card_instruments ?? [])
+        .filter(instrument => !instrument.user_archived_at)
+        .map(instrument => ({
+          id: instrument.id,
+          parentId: card.id,
+          name: `${instrument.display_name}${
+            instrument.last_four_digits
+              ? ` · final ${instrument.last_four_digits}`
+              : ""
+          }`,
+        }));
+      return instruments.length
+        ? instruments
+        : [{
+          id: card.id,
+          parentId: card.id,
+          name: `${card.name}${
+            card.last_four_digits ? ` · final ${card.last_four_digits}` : ""
+          }`,
+        }];
+    });
+  return (
+    <MovementsBrowser
+      key={buildMovementQueryKey(filters)}
+      filters={filters}
+      items={items}
+      summary={summary}
+      displaySummary={displaySummary}
+      openCycleBreakdown={openCycleBreakdown}
+      resolvedOpenInvoice={resolvedOpenInvoice}
+      accounts={activeAccounts}
+      cards={activeCards}
+      cardCycles={cardCycles}
+      selectedCycle={selectedCycle}
+      categories={data.categories.map(category => ({
+        id: String(category.id),
+        name: String(category.name),
+      }))}
+      totalCount={filtered.length}
+      page={page}
+      pageSize={PAGE_SIZE}
+      hasConnectedAccount={data.connections.length > 0}
+      completeness={data.completeness}
+      warnings={data.warnings}
+    />
+  );
 }
-function Purchase({item}:{item:CardPurchase}){const card=item.credit_cards;const installment=installmentLabel(item);return <article className="movement-card card-purchase"><div><b>{item.description}</b><small>{card?.name||"Cart\u00e3o"}{card?.last_four_digits?` \u00b7 final ${card.last_four_digits}`:""} &middot; {formatDate(item.purchase_date)}</small>{installment?<small>{installment}</small>:null}<span className="movement-badges"><i>{roleLabels[item.transaction_role]}</i><i>{item.financial_categories?.name||"Sem categoria"}</i>{item.source==="pluggy"?<i>Pluggy</i>:null}{item.review_status==="pending"?<i className="warning">Revis&atilde;o pendente</i>:null}</span></div><strong className={item.transaction_role==="refund"?"positive":"negative"}>{formatCurrency(Number(item.installment_amount))}</strong><details><summary>Abrir detalhes</summary><dl><div><dt>Origem</dt><dd>Cart&atilde;o de cr&eacute;dito</dd></div><div><dt>Cart&atilde;o</dt><dd>{card?.name||"Cart\u00e3o"}</dd></div><div><dt>Categoria</dt><dd>{item.financial_categories?.name||"Sem categoria"}</dd></div><div><dt>Data da compra</dt><dd>{formatDate(item.purchase_date)}</dd></div><div><dt>Valor da parcela</dt><dd>{formatCurrency(Number(item.installment_amount))}</dd></div>{isInstallmentPurchase(item)&&item.total_purchase_amount!==null&&item.total_purchase_amount!==undefined?<div><dt>Valor total da compra</dt><dd>{formatCurrency(Number(item.total_purchase_amount))}</dd></div>:null}{installment?<div><dt>Parcelamento</dt><dd>{installment}</dd></div>:null}<div><dt>Fatura</dt><dd>{item.invoice_reference||item.bill_forecast_date||"N\u00e3o informada"}</dd></div><div><dt>Status</dt><dd>{item.status}</dd></div><div><dt>Papel</dt><dd>{roleLabels[item.transaction_role]}</dd></div><div><dt>Fonte</dt><dd>{item.source}</dd></div><div><dt>Revis&atilde;o</dt><dd>{item.review_status}</dd></div><div><dt>Compartilhamento</dt><dd>{item.visibility}</dd></div></dl></details></article>}
-function BankGroups({rows,categories}:{rows:FinancialTransaction[];categories:{id:string;name:string}[]}){const groups=groupBy(rows,item=>item.competence_date);return rows.length?<div className="movement-groups">{Object.entries(groups).map(([date,items])=><section key={date}><h3>{formatDate(date)}</h3><div className="movement-list">{items.map(item=><Tx item={item} categories={categories} key={item.id}/>)}</div></section>)}</div>:<EmptyState title="Nenhuma movimenta\u00e7\u00e3o banc\u00e1ria" description="Os filtros atuais n\u00e3o retornaram itens do extrato."/>}
-function CardGroups({rows}:{rows:CardPurchase[]}){const groups=groupBy(rows,item=>`${item.card_id}|${item.invoice_reference||item.bill_forecast_date||item.purchase_date.slice(0,7)}`);return rows.length?<div className="movement-groups">{Object.entries(groups).map(([key,items])=>{const first=items[0];return <section key={key}><h3>{first.credit_cards?.name||"Cart\u00e3o"}<small>Fatura {first.invoice_reference||first.bill_forecast_date||first.purchase_date.slice(0,7)}</small></h3><div className="movement-list">{items.map(item=><Purchase item={item} key={item.id}/>)}</div></section>})}</div>:<EmptyState title="Nenhuma compra de cart\u00e3o" description="Os filtros atuais n\u00e3o retornaram compras ou estornos."/>}
-export default async function Page({searchParams}:{searchParams:Promise<Filters>}){const f=await searchParams;const tab=tabs.some(([key])=>key===f.tab)?f.tab as Tab:"all";const {supabase,user}=await requireFinanceAccess();const data=await getFinanceData(supabase,user.id);const transactions=data.transactions.filter(item=>filterTx(item,f));const purchases=data.cardPurchases.filter(item=>filterCard(item,f));const bank=transactions.filter(item=>item.account_id&&!["transfer","refund","adjustment"].includes(item.transaction_role));const transfers=transactions.filter(item=>item.transaction_role==="transfer");const adjustments=transactions.filter(item=>["refund","adjustment"].includes(item.transaction_role));const cardAdjustments=purchases.filter(item=>["refund","adjustment"].includes(item.transaction_role));const invoicePayments=transactions.filter(item=>item.transaction_role==="invoice_payment");const categoryOptions=data.categories.map(item=>({id:String(item.id),name:String(item.name)}));const today=new Date().toISOString().slice(0,10);return <>
- <section className="finance-panel movements-panel"><header><div><p className="eyebrow">Hist&oacute;rico por origem</p><h2>Movimenta&ccedil;&otilde;es</h2></div></header><nav className="movement-tabs" aria-label="Origem das movimentacoes">{tabs.map(([key,label])=><Link key={key} href={`/financeiro/movimentacoes?tab=${key}`} className={tab===key?"active":""}>{label}</Link>)}</nav><form className="movement-filters"><input type="hidden" name="tab" value={tab}/><input name="q" placeholder="Buscar descricao" defaultValue={f.q}/><label>De<input name="from" type="date" defaultValue={f.from}/></label><label>At&eacute;<input name="to" type="date" defaultValue={f.to}/></label>{tab!=="cards"?<select name="account" defaultValue={f.account||""}><option value="">Todas as contas</option>{data.accounts.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>:null}{tab!=="bank"?<select name="card" defaultValue={f.card||""}><option value="">Todos os cart&otilde;es</option>{data.cards.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>:null}<select name="category" defaultValue={f.category||""}><option value="">Todas as categorias</option>{data.categories.map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.name)}</option>)}</select><select name="status" defaultValue={f.status||""}><option value="">Todos os status</option><option value="realized">Realizado</option><option value="pending">Pendente</option><option value="forecast">Previsto</option></select><select name="origin" defaultValue={f.origin||""}><option value="">Todas as origens</option><option value="pluggy">Pluggy</option><option value="manual">Manual</option><option value="payroll">Folha</option></select><select name="type" defaultValue={f.type||""}><option value="">Todos os tipos</option>{Object.entries(roleLabels).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select><label className="movement-review"><input type="checkbox" name="review" value="pending" defaultChecked={f.review==="pending"}/> Revis&atilde;o pendente</label><button className="finance-button">Filtrar</button></form>
- {tab==="all"?<div className="movement-sections"><section><h2>Conta banc&aacute;ria</h2><BankGroups rows={bank} categories={categoryOptions}/></section><section><h2>Cart&otilde;es</h2><CardGroups rows={purchases}/></section><section><h2>Transfer&ecirc;ncias</h2><BankGroups rows={transfers} categories={categoryOptions}/></section><section><h2>Ajustes</h2><BankGroups rows={adjustments} categories={categoryOptions}/></section></div>:null}{tab==="bank"?<BankGroups rows={transactions.filter(item=>Boolean(item.account_id))} categories={categoryOptions}/>:null}{tab==="cards"?<div className="movement-sections"><section><h2>Compras, parcelas e ajustes</h2><CardGroups rows={purchases.filter(item=>item.transaction_role!=="invoice_payment")}/></section><section><h2>Pagamentos de fatura</h2><p className="movement-section-help">Eventos de caixa separados; n&atilde;o entram novamente como consumo.</p><BankGroups rows={invoicePayments} categories={categoryOptions}/></section></div>:null}{tab==="transfers"?<BankGroups rows={transfers} categories={categoryOptions}/>:null}{tab==="adjustments"?<div className="movement-sections"><section><h2>Ajustes banc&aacute;rios</h2><BankGroups rows={adjustments} categories={categoryOptions}/></section><section><h2>Estornos e ajustes de cart&atilde;o</h2><CardGroups rows={cardAdjustments}/></section></div>:null}
- </section><section id="nova" className="finance-panel"><header><div><p className="eyebrow">A&ccedil;&atilde;o r&aacute;pida</p><h2>Nova movimenta&ccedil;&atilde;o</h2></div></header>{data.accounts.length?<form action={createTransaction} className="finance-form"><label>Tipo<select name="transaction_type" required><option value="expense">Despesa</option><option value="income">Receita</option><option value="transfer">Transfer&ecirc;ncia</option></select></label><label>Descri&ccedil;&atilde;o<input name="description" required maxLength={160}/></label><label>Valor em reais<input name="amount" inputMode="decimal" required/></label><label>Conta<select name="account_id" required>{data.accounts.filter(item=>item.status==="active").map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Destino<select name="destination_account_id"><option value="">Selecione</option>{data.accounts.filter(item=>item.status==="active").map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Categoria<select name="category_id"><option value="">Sem categoria</option>{data.categories.map(item=><option value={String(item.id)} key={String(item.id)}>{String(item.name)}</option>)}</select></label><label>Compet&ecirc;ncia<input name="competence_date" type="date" defaultValue={today} required/></label><label>Vencimento<input name="due_date" type="date"/></label><label>Status<select name="status"><option value="pending">Pendente</option><option value="forecast">Previsto</option><option value="realized">Realizado</option></select></label><SubmitButton>Salvar movimenta&ccedil;&atilde;o</SubmitButton></form>:<EmptyState title="Crie uma conta primeiro" description="Toda movimentacao manual precisa estar vinculada a uma conta." href="/financeiro/contas#nova" label="Criar conta"/>}</section>
- </>}

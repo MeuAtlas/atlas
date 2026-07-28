@@ -6,6 +6,8 @@ import {
 } from "@/modules/finance/card-invoices";
 import { InvoiceDetailsDrawer } from "./invoice-details-drawer";
 import { Money } from "./value-visibility";
+import type { ResolvedOpenCardInvoice } from "@/modules/finance/open-card-invoice";
+import type { ResolvedCardCycleDetails } from "@/modules/finance/resolved-card-cycle-details";
 
 function InvoiceStatusBadge({
   summary,
@@ -35,14 +37,27 @@ function InvoiceStatusBadge({
 export function CurrentInvoiceCompactCard({
   invoice,
   forcePartial = false,
+  resolvedInvoice,
+  resolvedDetails,
 }: {
   invoice: CurrentCardInvoice;
   forcePartial?: boolean;
+  resolvedInvoice?: ResolvedOpenCardInvoice;
+  resolvedDetails?: ResolvedCardCycleDetails;
 }) {
   const summary = getCurrentInvoiceSummary(invoice);
-  const partialMessage = forcePartial
-    ? "Alguns dados podem estar incompletos."
-    : summary.warningMessage;
+  const detailsPartial =
+    resolvedInvoice?.detailsCompleteness === "partial" ||
+    resolvedInvoice?.detailsCompleteness === "unavailable";
+  const partialMessage = detailsPartial
+    ? "Compras ainda em conciliação. O total confirmado permanece disponível."
+    : forcePartial
+      ? "Alguns dados podem estar incompletos."
+      : summary.warningMessage;
+  const displayAmount = resolvedInvoice
+    ? resolvedInvoice.displayTotal
+    : summary.displayAmount;
+  const lastUpdatedAt = resolvedInvoice?.updatedAt ?? summary.lastUpdatedAt;
 
   return (
     <article className="current-invoice-card current-invoice-summary-card">
@@ -57,27 +72,41 @@ export function CurrentInvoiceCompactCard({
 
       {invoice.cycle ? (
         <>
-          <InvoiceStatusBadge summary={summary} forcePartial={forcePartial} />
+          <InvoiceStatusBadge
+            summary={summary}
+            forcePartial={forcePartial || detailsPartial}
+          />
 
           <strong className="invoice-summary-amount">
-            {summary.displayAmount === null ? (
+            {displayAmount === null ? (
               "Valor indisponível"
             ) : (
-              <Money value={summary.displayAmount} />
+              <Money value={displayAmount} />
             )}
           </strong>
 
           <div className="invoice-summary-metadata">
             <span>
-              {formatDate(summary.cycleStart)} a {formatDate(summary.cycleEnd)}
+              {formatDate(resolvedInvoice?.cycleStartDate ?? summary.cycleStart)} a{" "}
+              {formatDate(resolvedInvoice?.cycleEndDate ?? summary.cycleEnd)}
             </span>
             <span>
-              Fecha em {formatDate(summary.closingDate)} · vence em{" "}
-              {formatDate(summary.dueDate)}
+              Fecha em {formatDate(resolvedInvoice?.closingDate ?? summary.closingDate)} · vence em{" "}
+              {formatDate(resolvedInvoice?.dueDate ?? summary.dueDate)}
             </span>
+            {resolvedInvoice ? (
+              <span>
+                {resolvedInvoice.sourceLabel}
+                {resolvedInvoice.confirmedAt
+                  ? ` em ${formatDate(resolvedInvoice.confirmedAt)}`
+                  : ""}
+              </span>
+            ) : null}
             <span>
               {summary.purchaseCount === null
-                ? "Compras indisponíveis"
+                ? resolvedInvoice?.displayTotal !== null
+                  ? "Detalhamento parcial"
+                  : "Compras temporariamente indisponíveis"
                 : `${summary.purchaseCount} ${
                     summary.purchaseCount === 1 ? "compra" : "compras"
                   } no período`}
@@ -90,11 +119,18 @@ export function CurrentInvoiceCompactCard({
 
           <footer>
             <small>
-              {summary.lastUpdatedAt
-                ? `Atualizado em ${formatDate(summary.lastUpdatedAt)}`
+              {lastUpdatedAt
+                ? `${
+                    detailsPartial || summary.dataCompleteness==="partial"
+                      ? "Atualização confiável"
+                      : "Atualizado"
+                  } em ${formatDate(lastUpdatedAt)}`
                 : "Atualização indisponível"}
             </small>
-            <InvoiceDetailsDrawer invoice={invoice} />
+            <InvoiceDetailsDrawer
+              invoice={invoice}
+              cycleDetails={resolvedDetails}
+            />
           </footer>
         </>
       ) : (

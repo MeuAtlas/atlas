@@ -1,5 +1,7 @@
 import { getCurrentBillingCycle, type BillingCycle } from "./billing-cycle";
-import type { CardPurchase, CreditCard } from "./types";
+import type { CardPurchase, CreditCard, OfficialBillFinanceCharge, OfficialBillPayment, StoredCardInvoice } from "./types";
+import {resolveInvoiceDisplayTotal,type InvoiceTotalSource} from "@/lib/pluggy/bill-domain";
+import { persistedCardMovementAmountBrl } from "./foreign-card-movement";
 
 const amount = (value: number | string | null | undefined) =>
   Math.abs(Number(value ?? 0));
@@ -15,8 +17,17 @@ export interface CurrentCardInvoice {
   paidAmount: number;
   outstandingAmount: number;
   purchaseCount: number;
+  reliablePurchaseCount:number|null;
   providerInvoiceTotal: number | null;
   manualInvoiceTotal:number|null;
+  confirmedInvoiceTotal:number|null;
+  lastReliableInvoiceTotal:number|null;
+  lastReliableValueReliable:boolean;
+  providerValueReliable:boolean;
+  calculatedValueReliable:boolean;
+  preservationReason:string|null;
+  lastCompleteSyncAt:string|null;
+  lastAttemptAt:string|null;
   accountCreditBalance: number | null;
   calculatedInvoiceTotal: number;
   totalSource:"provider_bill"|"manual_bank_confirmation"|"calculated_transactions";
@@ -36,7 +47,7 @@ export interface CurrentCardInvoice {
     | "provider_unavailable"
     | "incomplete_transactions";
   committedLimit: number;
-  availableLimit: number;
+  availableLimit: number|null;
   usedPercent: number;
   isStale: boolean;
   instrumentTotals: Array<{instrumentId:string;lastFour:string|null;cardKind:string;displayName:string;grossTotal:number;creditsTotal:number;adjustmentsTotal:number;netTotal:number;purchaseCount:number}>;
@@ -47,6 +58,11 @@ export interface CurrentCardInvoice {
   excludedItems: InvoiceExcludedItem[];
   linkedPayments: CardPurchase[];
   purchaseDataAvailable: boolean;
+  isPartial:boolean;
+  reliableSnapshotUsed:boolean;
+  officialPayments:OfficialBillPayment[];
+  financeCharges:OfficialBillFinanceCharge[];
+  paymentStatus:string|null;
   status:"open"|"closed"|"due"|"partially_paid"|"paid"|"overdue"|"estimated";
 }
 
@@ -103,6 +119,9 @@ export type CurrentBillSummary = {
   warningMessage: string | null;
   isEstimated: boolean;
   isOfficial: boolean;
+  resolvedSource:InvoiceTotalSource;
+  isReliable:boolean;
+  isPartial:boolean;
 };
 
 export type CurrentInvoiceSummary = {
@@ -261,8 +280,11 @@ export function calculateInvoiceAmounts(purchases: CardPurchase[]) {
         purchase.transaction_role !== "invoice_payment")
     )
       continue;
-    const value = amount(purchase.installment_amount);
-    if (purchase.transaction_role === "consumption") {
+    const value = amount(persistedCardMovementAmountBrl(purchase));
+    if (
+      purchase.transaction_role === "consumption" ||
+      purchase.transaction_role === "foreign_transaction_tax"
+    ) {
       purchasesTotal += value;
       purchaseCount++;
     } else if (purchase.transaction_role === "refund") {
@@ -291,6 +313,10 @@ export function calculateInvoiceAmounts(purchases: CardPurchase[]) {
 export function invoiceLineKind(
   purchase: CardPurchase,
 ): EstimatedInvoiceLineKind {
+  if (
+    purchase.transaction_role === "foreign_transaction_tax" ||
+    purchase.entry_type === "tax"
+  ) return "fee";
   if (purchase.transaction_role === "refund") return "refund";
   if (purchase.transaction_role === "adjustment") {
     if (Number(purchase.original_amount ?? -purchase.installment_amount) > 0) {
@@ -311,7 +337,7 @@ export function invoiceLineKind(
 }
 
 export function invoiceLineContribution(purchase: CardPurchase) {
-  const value = amount(purchase.installment_amount);
+  const value = amount(persistedCardMovementAmountBrl(purchase));
   return ["refund", "credit"].includes(invoiceLineKind(purchase))
     ? -value
     : value;
@@ -328,16 +354,23 @@ export function isInvoiceTotalLine(purchase: CardPurchase) {
 export function getCurrentBillSummary(
   invoice: CurrentCardInvoice,
 ): CurrentBillSummary {
-  const providerAmount = Number.isFinite(invoice.providerInvoiceTotal)
-    ? invoice.providerInvoiceTotal
+  const resolved=resolveInvoiceDisplayTotal({
+    providerInvoiceTotal:invoice.providerInvoiceTotal,
+    providerReliable:invoice.providerValueReliable,
+    manualInvoiceTotal:invoice.manualInvoiceTotal,
+    confirmedInvoiceTotal:invoice.confirmedInvoiceTotal,
+    calculatedInvoiceTotal:invoice.calculatedInvoiceTotal,
+    calculatedReliable:invoice.calculatedValueReliable,
+    lastReliableInvoiceTotal:invoice.lastReliableInvoiceTotal,
+    lastReliableReliable:invoice.lastReliableValueReliable,
+    isPartial:invoice.isPartial,
+  });
+  const providerAmount=resolved.source==="provider_bill"?resolved.amount:null;
+  const manualAmount=["manual","confirmed"].includes(resolved.source)
+    ? resolved.amount
     : null;
-  const manualAmount = Number.isFinite(invoice.manualInvoiceTotal)
-    ? invoice.manualInvoiceTotal
-    : null;
-  const calculatedAmount =
-    invoice.purchaseDataAvailable &&
-    Number.isFinite(invoice.calculatedInvoiceTotal)
-    ? invoice.calculatedInvoiceTotal
+  const calculatedAmount=["calculated","last_reliable"].includes(resolved.source)
+    ? resolved.amount
     : null;
   const amountSource =
     providerAmount !== null
@@ -346,16 +379,18 @@ export function getCurrentBillSummary(
         ? "manual_bank_confirmation"
         : "calculated_transactions";
   const amount = providerAmount ?? manualAmount ?? calculatedAmount;
-  const purchasesCount = invoice.purchaseDataAvailable
-    ? invoice.purchases.filter(
+  const partial=invoice.isPartial;
+  const purchasesCount = invoice.reliablePurchaseCount!==null
+    ? invoice.reliablePurchaseCount
+    : partial&&invoice.purchaseCount===0
+      ? null
+      : invoice.purchaseDataAvailable
+      ? invoice.purchases.filter(
         (purchase) =>
           isInvoiceTotalLine(purchase) &&
           purchase.transaction_role === "consumption",
-      ).length
-    : null;
-  const partial =
-    invoice.card.provider_status === "degraded" ||
-    invoice.card.bank_connections?.data_completeness === "partial";
+        ).length
+      : null;
   const statusLabel =
     invoice.status === "open"
       ? "Fatura aberta"
@@ -370,12 +405,16 @@ export function getCurrentBillSummary(
               : invoice.status === "closed"
                 ? "Fatura fechada"
                 : "Fatura estimada";
-  const warningMessage = !invoice.purchaseDataAvailable
+  const warningMessage = !invoice.purchaseDataAvailable&&!invoice.reliableSnapshotUsed
     ? "As compras importadas estão temporariamente indisponíveis. Nenhum valor calculado foi substituído por zero."
     : partial
-    ? amountSource === "calculated_transactions"
-      ? "Dados parciais da conexão. O valor calculado pelas movimentações importadas foi preservado."
-      : "Dados parciais fornecidos pela conexão. O último valor confiável foi preservado."
+    ? resolved.source==="last_reliable"
+      ? "Último valor confiável preservado."
+      : resolved.source==="unavailable"
+        ? "A instituição não enviou dados suficientes nesta atualização."
+        : amountSource === "calculated_transactions"
+          ? "Dados parciais da conexão. O valor calculado pelas movimentações importadas foi preservado."
+          : "Dados parciais fornecidos pela conexão. O último valor confiável foi preservado."
     : invoice.isStale
       ? "Os valores podem estar desatualizados."
       : amountSource === "calculated_transactions"
@@ -395,6 +434,9 @@ export function getCurrentBillSummary(
     isEstimated:
       amount !== null && amountSource === "calculated_transactions",
     isOfficial: amountSource === "provider_bill",
+    resolvedSource:resolved.source,
+    isReliable:resolved.isReliable,
+    isPartial:resolved.isPartial,
   };
 }
 
@@ -440,16 +482,16 @@ export function getCurrentInvoiceSummary(
           item.reference_month.slice(0, 7) === invoice.cycle?.referenceMonth,
       )?.informed_at ?? null
     : null;
+  const partial=invoice.isPartial;
   const lastUpdatedAt =
     bill.amountSource === "provider_bill"
       ? invoice.card.bank_connections?.last_complete_sync_at ?? null
       : bill.amountSource === "manual_bank_confirmation"
         ? manualDate
-        : invoice.card.last_sync_at;
-  const partial =
-    invoice.card.provider_status === "degraded" ||
-    invoice.card.bank_connections?.data_completeness === "partial";
-  const dataCompleteness = !invoice.purchaseDataAvailable
+        : partial
+          ? invoice.card.bank_connections?.last_complete_sync_at??invoice.card.last_sync_at
+          : invoice.card.last_sync_at;
+  const dataCompleteness = !invoice.purchaseDataAvailable&&!invoice.reliableSnapshotUsed
     ? "unavailable"
     : partial
       ? "partial"
@@ -468,11 +510,15 @@ export function getCurrentInvoiceSummary(
     displayAmount: bill.amount,
     amountSource: bill.amountSource,
     amountSourceLabel:
-      bill.amountSource === "provider_bill"
+      bill.resolvedSource === "provider_bill"
         ? "Valor oficial"
-        : bill.amountSource === "manual_bank_confirmation"
+        : ["manual","confirmed"].includes(bill.resolvedSource)
           ? "Valor informado"
-          : "Valor estimado",
+          : bill.resolvedSource==="last_reliable"
+            ? "Último valor confiável"
+            : bill.resolvedSource==="unavailable"
+              ? "Indisponível"
+              : "Valor estimado",
     cycleStart: bill.periodStart,
     cycleEnd: bill.periodEnd,
     closingDate: bill.closesAt,
@@ -484,7 +530,7 @@ export function getCurrentInvoiceSummary(
       dataCompleteness === "unavailable"
         ? "Compras temporariamente indisponíveis."
         : dataCompleteness === "partial"
-          ? "Alguns dados podem estar incompletos."
+          ? bill.warningMessage??"Alguns dados podem estar incompletos."
           : dataCompleteness === "stale"
             ? "Atualização pendente."
             : null,
@@ -504,7 +550,7 @@ export function getEstimatedInvoiceDetails(
   let adjustmentTotal = 0;
 
   for (const purchase of includedPurchases) {
-    const value = amount(purchase.installment_amount);
+    const value = amount(persistedCardMovementAmountBrl(purchase));
     const kind = invoiceLineKind(purchase);
     if (kind === "refund") refundTotal += value;
     else if (kind === "credit") creditTotal += value;
@@ -515,9 +561,7 @@ export function getEstimatedInvoiceDetails(
 
   const calculatedTotal =
     purchaseTotal + feeTotal + adjustmentTotal - refundTotal - creditTotal;
-  const partial =
-    invoice.card.provider_status === "degraded" ||
-    invoice.card.bank_connections?.data_completeness === "partial";
+  const partial=invoice.isPartial;
   const warnings = [
     ...(partial ? ["Os dados desta fatura podem estar incompletos."] : []),
     ...(invoice.isStale ? ["Os valores podem estar desatualizados."] : []),
@@ -553,11 +597,50 @@ export function getEstimatedInvoiceDetails(
   };
 }
 
+function optionalStoredNumber(value:unknown){
+  if(value===null||value===undefined)return null;
+  const parsed=typeof value==="number"?value:Number(value);
+  return Number.isFinite(parsed)?Math.abs(parsed):null;
+}
+
+function snapshotScore(invoice:StoredCardInvoice){
+  const reliable=optionalStoredNumber(invoice.last_reliable_invoice_total);
+  const calculated=optionalStoredNumber(invoice.calculated_invoice_total);
+  const count=optionalStoredNumber(invoice.last_reliable_purchase_count) ??
+    optionalStoredNumber(invoice.purchase_count);
+  return (invoice.provider_bill_id?100:0)+
+    (reliable!==null&&reliable>0?80:0)+
+    (calculated!==null&&calculated>0?60:0)+
+    (invoice.manual_invoice_total!==null?50:0)+
+    (invoice.confirmed_invoice_total!==null?50:0)+
+    (count!==null&&count>0?30:0)+
+    (invoice.last_complete_sync_at?20:0)+
+    (invoice.data_completeness==="complete"?10:0)+
+    (invoice.updated_at?Date.parse(invoice.updated_at)/1e15:0);
+}
+
+export function selectStoredInvoiceSnapshot(input:{
+  invoices:StoredCardInvoice[];
+  card:CreditCard;
+  referenceMonth:string;
+}){
+  return input.invoices
+    .filter(invoice=>
+      invoice.card_id===input.card.id&&
+      invoice.reference_month.slice(0,7)===input.referenceMonth&&
+      (!invoice.provider_account_id||!input.card.external_id||
+        invoice.provider_account_id===input.card.external_id))
+    .sort((left,right)=>snapshotScore(right)-snapshotScore(left))[0];
+}
+
 export function buildCurrentCardInvoices(
   cards: CreditCard[],
   purchases: CardPurchase[],
   referenceDate = new Date(),
-  options: { purchaseDataAvailable?: boolean } = {},
+  options: {
+    purchaseDataAvailable?: boolean;
+    storedInvoices?:StoredCardInvoice[];
+  } = {},
 ): CurrentCardInvoice[] {
   return cards.map((card) => {
     const estimatedCycle =
@@ -569,6 +652,16 @@ export function buildCurrentCardInvoices(
           })
         : null;
     const cycle=estimatedCycle;
+    const storedInvoice=cycle&&options.storedInvoices
+      ? selectStoredInvoiceSnapshot({
+          invoices:options.storedInvoices,
+          card,
+          referenceMonth:cycle.referenceMonth,
+        })
+      : undefined;
+    const partial=card.provider_status==="degraded"||
+      card.bank_connections?.data_completeness==="partial"||
+      storedInvoice?.data_completeness==="partial";
     const exactClosing=card.provider_bill_closing_date?.slice(0,10)??null;
     const exactDue=card.provider_bill_due_date?.slice(0,10)??null;
     const providerBillMatchesCycle=Boolean(
@@ -606,7 +699,45 @@ export function buildCurrentCardInvoices(
           );
         })
       : [];
-    const totals = calculateInvoiceAmounts(cardPurchases);
+    const liveTotals=calculateInvoiceAmounts(cardPurchases);
+    const storedPurchaseCount=optionalStoredNumber(
+      storedInvoice?.last_reliable_purchase_count??
+      storedInvoice?.purchase_count,
+    );
+    const storedCalculated=optionalStoredNumber(
+      storedInvoice?.last_reliable_invoice_total??
+      storedInvoice?.current_display_total??
+      storedInvoice?.calculated_invoice_total,
+    );
+    const storedTotalReliable=storedCalculated!==null&&(
+      storedCalculated>0||Boolean(storedInvoice?.last_complete_sync_at)
+    );
+    const storedCountReliable=storedPurchaseCount!==null&&(
+      storedPurchaseCount>0||Boolean(storedInvoice?.last_complete_sync_at)
+    );
+    const reliableTotalUsed=Boolean(
+      partial&&liveTotals.purchaseCount===0&&storedTotalReliable,
+    );
+    const reliableCountUsed=Boolean(
+      partial&&liveTotals.purchaseCount===0&&storedCountReliable,
+    );
+    const reliableSnapshotUsed=reliableTotalUsed||reliableCountUsed;
+    const totals={
+      ...liveTotals,
+      ...(reliableTotalUsed
+        ? {
+            purchasesTotal:Number(storedCalculated),
+            invoiceTotal:Number(storedCalculated),
+            outstandingAmount:Math.max(
+              0,
+              Number(storedCalculated)-liveTotals.paidAmount,
+            ),
+          }
+        : {}),
+      ...(reliableCountUsed
+        ? {purchaseCount:Number(storedPurchaseCount)}
+        : {}),
+    };
     const includedIds = new Set(
       cardPurchases.filter(isInvoiceTotalLine).map((purchase) => purchase.id),
     );
@@ -664,16 +795,31 @@ export function buildCurrentCardInvoices(
     const manualConfirmation=cycle
       ? card.card_invoice_confirmations?.find(confirmation=>confirmation.reference_month.slice(0,7)===cycle.referenceMonth)
       : undefined;
-    const manualInvoiceTotal=manualConfirmation?amount(manualConfirmation.official_amount):null;
+    const manualInvoiceTotal=manualConfirmation
+      ? amount(manualConfirmation.official_amount)
+      : partial&&storedInvoice?.manual_invoice_total!==null&&
+          storedInvoice?.manual_invoice_total!==undefined
+        ? amount(storedInvoice.manual_invoice_total)
+        : null;
+    const confirmedInvoiceTotal=
+      partial&&storedInvoice?.confirmed_invoice_total!==null&&
+      storedInvoice?.confirmed_invoice_total!==undefined
+        ? amount(storedInvoice.confirmed_invoice_total)
+        : null;
+    const reliableStoredTotal=partial&&storedTotalReliable
+      ? storedCalculated
+      : null;
     // Account.balance can be an aggregate shared by multiple CREDIT products in
     // some connectors. Keep it for diagnostics, but never promote it to the
     // invoice headline unless the provider exposes an explicitly scoped Bill.
     const totalSource=providerInvoiceTotal!==null
       ? "provider_bill" as const
-      : manualInvoiceTotal!==null
+      : manualInvoiceTotal!==null||confirmedInvoiceTotal!==null
         ? "manual_bank_confirmation" as const
       : "calculated_transactions" as const;
-    const officialInvoiceTotal=providerInvoiceTotal??manualInvoiceTotal??totals.invoiceTotal;
+    const officialInvoiceTotal=providerInvoiceTotal??manualInvoiceTotal??
+      confirmedInvoiceTotal??(reliableTotalUsed?reliableStoredTotal:null)??
+      totals.invoiceTotal;
     const difference =
       totalSource==="calculated_transactions" ? null : officialInvoiceTotal - totals.invoiceTotal;
     const reconciliationStatus =
@@ -706,7 +852,7 @@ export function buildCurrentCardInvoices(
       .reduce(
         (sum, purchase) =>
           sum +
-          amount(purchase.installment_amount) *
+          amount(persistedCardMovementAmountBrl(purchase)) *
             (Number(purchase.installment_count) - Number(purchase.installment_number)),
         0,
       );
@@ -714,22 +860,42 @@ export function buildCurrentCardInvoices(
       providerUsed,
       officialInvoiceTotal + futureInstallments,
     );
-    const limit = Math.max(0, Number(card.credit_limit ?? 0));
-    const status = deriveInvoiceStatus({
+    const limit=card.credit_limit===null||card.credit_limit===undefined
+      ? null
+      : Math.max(0,Number(card.credit_limit));
+    const effectivePaidAmount=storedInvoice?.provider_bill_id
+      ? amount(storedInvoice.paid_amount)
+      : totals.paidAmount;
+    const derivedStatus = deriveInvoiceStatus({
       cycle,
       invoiceTotal: officialInvoiceTotal,
-      paidAmount: totals.paidAmount,
+      paidAmount: effectivePaidAmount,
       referenceDate,
     });
+    const status=storedInvoice?.payment_status==="paid"
+      ? "paid" as const
+      : ["partially_paid","installment_payment"].includes(
+          storedInvoice?.payment_status??"",
+        )
+        ? "partially_paid" as const
+        : derivedStatus;
     return {
       card,
       cycle,
       purchases: cardPurchases,
       ...totals,
+      paidAmount:effectivePaidAmount,
+      reliablePurchaseCount:reliableCountUsed?Number(storedPurchaseCount):null,
       invoiceTotal:officialInvoiceTotal,
-      outstandingAmount:Math.max(0,officialInvoiceTotal-totals.paidAmount),
+      outstandingAmount:Math.max(0,officialInvoiceTotal-effectivePaidAmount),
       providerInvoiceTotal,
       manualInvoiceTotal,
+      confirmedInvoiceTotal,
+      lastReliableInvoiceTotal:reliableStoredTotal,
+      lastReliableValueReliable:storedTotalReliable,
+      providerValueReliable:providerInvoiceTotal!==null&&!partial,
+      calculatedValueReliable:(options.purchaseDataAvailable??true)&&
+        (!partial||liveTotals.purchaseCount>0),
       accountCreditBalance,
       calculatedInvoiceTotal: totals.invoiceTotal,
       totalSource,
@@ -743,8 +909,8 @@ export function buildCurrentCardInvoices(
       reconciliationDifference: difference,
       reconciliationStatus,
       committedLimit,
-      availableLimit: Math.max(0, limit - committedLimit),
-      usedPercent: limit ? Math.min(100, (committedLimit / limit) * 100) : 0,
+      availableLimit:limit===null?null:Math.max(0,limit-committedLimit),
+      usedPercent:limit?Math.min(100,(committedLimit/limit)*100):0,
       isStale: Boolean(
         card.last_sync_at &&
           referenceDate.valueOf() - new Date(card.last_sync_at).valueOf() >
@@ -758,6 +924,15 @@ export function buildCurrentCardInvoices(
       excludedItems,
       linkedPayments,
       purchaseDataAvailable: options.purchaseDataAvailable ?? true,
+      isPartial:partial,
+      reliableSnapshotUsed,
+      preservationReason:storedInvoice?.preservation_reason??null,
+      lastCompleteSyncAt:storedInvoice?.last_complete_sync_at??
+        card.bank_connections?.last_complete_sync_at??null,
+      lastAttemptAt:storedInvoice?.last_sync_at??card.last_sync_at,
+      officialPayments:storedInvoice?.credit_card_bill_payments??[],
+      financeCharges:storedInvoice?.credit_card_bill_finance_charges??[],
+      paymentStatus:storedInvoice?.payment_status??null,
       status,
     };
   });

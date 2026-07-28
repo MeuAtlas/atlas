@@ -33,8 +33,8 @@ test("somente entradas e saídas abrem o diálogo acessível", () => {
   assert.match(overview, /<BankAccountMovementCards/);
   assert.match(component, /title: "Entradas da conta"/);
   assert.match(component, /title: "Saídas da conta"/);
-  assert.match(component, /title: "Maior entrada"/);
-  assert.match(component, /title: "Maior saída"/);
+  assert.match(component, /largestLabel: "Maior entrada"/);
+  assert.match(component, /largestLabel: "Maior saída"/);
   assert.doesNotMatch(component, /title: "Receitas"/);
   assert.doesNotMatch(component, /title: "Despesas"/);
   assert.doesNotMatch(component, /A pagar|A receber/);
@@ -45,19 +45,11 @@ test("somente entradas e saídas abrem o diálogo acessível", () => {
   assert.match(component, /event\.key === "Escape"/);
   assert.match(component, /previous\?\.focus\(\)/);
   assert.match(component, /trapFocus/);
-  assert.match(
-    component,
-    /if \(card\.kind === "total"\)[\s\S]*?<button[\s\S]*?Ver detalhes ›/,
-  );
-  assert.match(
-    component,
-    /<article[\s\S]*?className=\{`overview-metric \$\{card\.type\} \$\{card\.kind\}`\}/,
-  );
-  const largestCard = component.slice(
-    component.indexOf("return (\n            <article"),
-    component.indexOf("</article>", component.indexOf("return (\n            <article")),
-  );
-  assert.doesNotMatch(largestCard, /Ver detalhes|aria-haspopup|onClick/);
+  assert.match(component, /className="overview-metric-highlight"/);
+  assert.match(component, /card\.largestLabel/);
+  assert.match(component, /card\.item\.description/);
+  assert.doesNotMatch(component, /className=\{`overview-metric[^`]*largest/);
+  assert.doesNotMatch(component, /<article/);
 });
 
 test("cards e detalhes usam o mesmo movimento mensal bancário", () => {
@@ -111,14 +103,14 @@ test("item usa details sem controles interativos dentro do summary", () => {
   assert.match(component, /<details className="finance-metric-item">/);
 });
 
-test("análise usa card principal amplo e grade lateral 2x2 equilibrada", () => {
+test("análise usa card principal amplo e dois cards laterais empilhados", () => {
   assert.match(
     css,
-    /\.account-analysis-grid\{display:grid;grid-template-columns:minmax\(0,1\.1fr\) minmax\(0,\.9fr\)/,
+    /\.account-analysis-grid\{display:grid;grid-template-columns:minmax\(0,1\.36fr\) minmax\(260px,\.64fr\)/,
   );
   assert.match(
     css,
-    /\.account-analysis-grid \.overview-metrics\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\);grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/,
+    /\.account-analysis-grid \.overview-metrics\{display:grid;grid-template-columns:1fr;grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/,
   );
   assert.match(
     css,
@@ -126,7 +118,7 @@ test("análise usa card principal amplo e grade lateral 2x2 equilibrada", () => 
   );
   assert.match(
     css,
-    /@media\(max-width:1120px\)\{[\s\S]*\.account-analysis-grid\{grid-template-columns:1fr\}/,
+    /@media\(max-width:1000px\)\{[\s\S]*\.account-analysis-grid\{grid-template-columns:1fr\}/,
   );
   assert.match(
     css,

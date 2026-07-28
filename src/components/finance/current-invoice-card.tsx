@@ -9,21 +9,30 @@ import {
 } from "@/modules/finance/card-invoices";
 import { installmentLabel } from "@/modules/finance/installments";
 import { CurrentInvoiceCompactCard } from "./current-invoice-compact-card";
+import type { ResolvedOpenCardInvoice } from "@/modules/finance/open-card-invoice";
+import type { ResolvedCardCycleDetails } from "@/modules/finance/resolved-card-cycle-details";
+import { persistedCardMovementAmountBrl } from "@/modules/finance/foreign-card-movement";
 
 export function CurrentInvoiceCard({
   invoice,
   compact = false,
   forcePartial = false,
+  resolvedInvoice,
+  resolvedDetails,
 }: {
   invoice: CurrentCardInvoice;
   compact?: boolean;
   forcePartial?: boolean;
+  resolvedInvoice?: ResolvedOpenCardInvoice;
+  resolvedDetails?: ResolvedCardCycleDetails;
 }) {
   if (compact) {
     return (
       <CurrentInvoiceCompactCard
         invoice={invoice}
         forcePartial={forcePartial}
+        resolvedInvoice={resolvedInvoice}
+        resolvedDetails={resolvedDetails}
       />
     );
   }
@@ -31,8 +40,12 @@ export function CurrentInvoiceCard({
   const { card, cycle } = invoice;
   const details = getEstimatedInvoiceDetails(invoice);
   const billSummary = getCurrentBillSummary(invoice);
+  const partial=forcePartial||
+    resolvedInvoice?.detailsCompleteness==="partial"||
+    resolvedInvoice?.detailsCompleteness==="unavailable"||
+    invoice.isPartial;
   const manualDate=cycle?card.card_invoice_confirmations?.find(item=>item.reference_month.slice(0,7)===cycle.referenceMonth)?.informed_at:null;
-  const sourceDate=billSummary.amountSource==="provider_bill"?card.bank_connections?.last_complete_sync_at:billSummary.amountSource==="manual_bank_confirmation"?manualDate:card.last_sync_at;
+  const sourceDate=billSummary.amountSource==="provider_bill"||partial?card.bank_connections?.last_complete_sync_at:billSummary.amountSource==="manual_bank_confirmation"?manualDate:card.last_sync_at;
   const risk =
     invoice.usedPercent > 90
       ? "danger"
@@ -58,22 +71,27 @@ export function CurrentInvoiceCard({
         <>
           <div className="invoice-total">
             <small>{billSummary.statusLabel}</small>
+            {partial?<span className="invoice-source-badge is-partial">Dados parciais</span>:null}
             <strong>
-              {billSummary.amount === null ? (
+              {(resolvedInvoice
+                ? resolvedInvoice.displayTotal
+                : billSummary.amount) === null ? (
                 "Indisponível"
               ) : (
-                <Money value={billSummary.amount} />
+                <Money value={resolvedInvoice
+                  ? resolvedInvoice.displayTotal!
+                  : billSummary.amount!} />
               )}
             </strong>
             <span>
               {billSummary.purchasesCount === null
                 ? "Compras temporariamente indisponíveis"
-                : `${billSummary.purchasesCount} compras importadas`}
+                : `${billSummary.purchasesCount} compras identificadas`}
             </span>
-            <span>Fonte: {billSummary.amountSource==="provider_bill"?"Pluggy Bill":billSummary.amountSource==="manual_bank_confirmation"?"informado pelo usuário":"calculado pelas movimentações"}</span>
-            {sourceDate?<span>Fonte atualizada em {formatDate(sourceDate)}</span>:null}
-            {invoice.totalSource !== "calculated_transactions" ? <span>Movimentações conciliadas: <Money value={invoice.calculatedInvoiceTotal}/></span> : null}
-            {invoice.reconciliationDifference !== null && Math.abs(invoice.reconciliationDifference) > 0.01 ? <span className="invoice-difference">Diferença ainda não detalhada: <Money value={Math.abs(invoice.reconciliationDifference)}/></span> : null}
+            <span>Fonte: {resolvedInvoice?.sourceLabel ?? (billSummary.resolvedSource==="provider_bill"?"Oficial":billSummary.resolvedSource==="manual"||billSummary.resolvedSource==="confirmed"?"Confirmada":billSummary.resolvedSource==="last_reliable"?"Último valor confiável":billSummary.resolvedSource==="calculated"?"Calculada pelas compras":"Indisponível")}</span>
+            {(resolvedInvoice?.updatedAt ?? sourceDate)?<span>Fonte atualizada em {formatDate(resolvedInvoice?.updatedAt ?? sourceDate ?? null)}</span>:null}
+            {(resolvedInvoice?.detailedTotal ?? invoice.calculatedInvoiceTotal) !== null ? <span>Movimentações conciliadas: <Money value={resolvedInvoice?.detailedTotal ?? invoice.calculatedInvoiceTotal}/></span> : null}
+            {(resolvedInvoice?.reconciliationDifference ?? invoice.reconciliationDifference) !== null && Math.abs((resolvedInvoice?.reconciliationDifference ?? invoice.reconciliationDifference)!) > 0.01 ? <span className="invoice-difference">Diferença ainda não detalhada: <Money value={Math.abs((resolvedInvoice?.reconciliationDifference ?? invoice.reconciliationDifference)!)}/></span> : null}
           </div>
           <div className="invoice-dates">
             <span>
@@ -95,7 +113,11 @@ export function CurrentInvoiceCard({
                       <b>{purchase.description}</b>
                       {installmentLabel(purchase,compact) ? <small>{installmentLabel(purchase,compact)}</small> : null}
                     </span>
-                    <strong><Money value={Number(purchase.installment_amount)}/></strong>
+                    <strong>
+                      {persistedCardMovementAmountBrl(purchase) === null
+                        ? "ConversÃ£o indisponÃ­vel"
+                        : <Money value={persistedCardMovementAmountBrl(purchase)!}/>}
+                    </strong>
                   </span>
                 ))}
             </div>
@@ -126,7 +148,11 @@ export function CurrentInvoiceCard({
             </div>
           ) : null}
           {!compact ? (
-            <>
+            invoice.availableLimit===null ? (
+              <div className="limit-caption">
+                <span>Limite não informado</span>
+              </div>
+            ) : <>
               <div
                 className="limit-progress"
                 role="progressbar"
@@ -159,7 +185,10 @@ export function CurrentInvoiceCard({
                 ? `Atualizado em ${formatDate(card.last_sync_at)}`
                 : "Ainda não sincronizado"}
             </small>
-            <InvoiceDetailsDrawer invoice={invoice} />
+            <InvoiceDetailsDrawer
+              invoice={invoice}
+              cycleDetails={resolvedDetails}
+            />
           </footer>
         </>
       ) : (

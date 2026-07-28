@@ -11,6 +11,7 @@ import type {
   HistoricalInvoiceStatus,
 } from "@/modules/finance/invoice-history";
 import type { CreditCard } from "@/modules/finance/types";
+import { persistedCardMovementAmountBrl } from "@/modules/finance/foreign-card-movement";
 
 const statusLabels: Record<HistoricalInvoiceStatus, string> = {
   paid: "Paga",
@@ -88,7 +89,7 @@ function InvoiceTransactionsList({
 }: {
   invoice: CreditCardInvoiceHistoryItem;
 }) {
-  if (!invoice.purchases.length) {
+  if (!invoice.purchases.length && !invoice.pdfEntries?.length) {
     return (
       <p className="previous-invoice-no-transactions">
         Os lançamentos deste ciclo ainda não estão disponíveis.
@@ -106,6 +107,23 @@ function InvoiceTransactionsList({
         </p>
       ) : null}
       <div>
+        {invoice.pdfEntries?.map((entry) => (
+          <article key={entry.id}>
+            <span>
+              <b>{entry.description}</b>
+              <small>
+                {formatDate(entry.transactionDate)} · Documento PDF
+                {entry.reconciledWithProvider ? " · Conciliado com Pluggy" : ""}
+              </small>
+              <small>
+                {entry.cardLastFour ? `Cartão final ${entry.cardLastFour}` : "Cartão principal"}
+                {entry.installmentTotal ? ` · Parcela ${entry.installmentNumber}/${entry.installmentTotal}` : ""}
+                {" · "}{Math.round(entry.confidence * 100)}% de confiança
+              </small>
+            </span>
+            <Money value={entry.amount} />
+          </article>
+        ))}
         {invoice.purchases.map((purchase) => (
           <article key={purchase.id}>
             <span>
@@ -137,8 +155,8 @@ function InvoiceTransactionsList({
             <Money
               value={
                 ["refund"].includes(purchase.transaction_role)
-                  ? -Number(purchase.installment_amount)
-                  : Number(purchase.installment_amount)
+                  ? -(persistedCardMovementAmountBrl(purchase) ?? 0)
+                  : persistedCardMovementAmountBrl(purchase) ?? 0
               }
             />
           </article>
@@ -157,6 +175,19 @@ function PreviousInvoiceDetailsDrawer({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+  const [reprocessing, setReprocessing] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  async function reprocess() {
+    if (!invoice.documentId) return;
+    setReprocessing(true); setDocumentError(null);
+    const response = await fetch(`/api/invoice-imports/${invoice.documentId}/reprocess`, { method: "POST" });
+    const body = await response.json();
+    if (!response.ok) {
+      setDocumentError(body.error?.message ?? "Não foi possível reprocessar o documento.");
+      setReprocessing(false); return;
+    }
+    window.location.assign(`/financeiro/cartoes/importar-fatura?document=${invoice.documentId}`);
+  }
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
@@ -259,6 +290,18 @@ function PreviousInvoiceDetailsDrawer({
             </p>
           ) : null}
           <InvoicePaymentSummary invoice={invoice} />
+          {invoice.documentId ? (
+            <section className="previous-invoice-payment">
+              <h3>Documento oficial</h3>
+              <a className="invoice-import-link compact" href={`/api/invoice-imports/${invoice.documentId}/pdf`} target="_blank" rel="noreferrer">
+                Abrir fatura em PDF
+              </a>
+              <button className="invoice-reprocess-button" type="button" onClick={reprocess} disabled={reprocessing}>
+                {reprocessing ? "Reprocessando…" : "Reprocessar documento"}
+              </button>
+              {documentError ? <p className="invoice-review-warning" role="alert">{documentError}</p> : null}
+            </section>
+          ) : null}
           <InvoiceTransactionsList invoice={invoice} />
         </div>
       </aside>
@@ -316,6 +359,7 @@ export function InvoiceHistorySection({
   filters,
   nextHref,
   error,
+  initialInvoiceId,
 }: {
   result: CreditCardInvoiceHistoryResult;
   cards: CreditCard[];
@@ -329,9 +373,12 @@ export function InvoiceHistorySection({
   };
   nextHref: string | null;
   error?: boolean;
+  initialInvoiceId?: string;
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
-  const [selected, setSelected] = useState<CreditCardInvoiceHistoryItem | null>(null);
+  const [selected, setSelected] = useState<CreditCardInvoiceHistoryItem | null>(
+    () => result.invoices.find(item => item.id === initialInvoiceId) ?? null,
+  );
   const search = (filters.query ?? "").trim().toLocaleLowerCase("pt-BR");
   const visible = useMemo(
     () =>

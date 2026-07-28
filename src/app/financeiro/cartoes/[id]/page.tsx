@@ -131,7 +131,7 @@ export default async function CardInvoiceDetails({
               <div><small>Fechamento</small><strong>{formatDate(billSummary.closesAt)}</strong></div>
               <div><small>Vencimento</small><strong>{formatDate(billSummary.dueAt)}</strong></div>
               <div><small>Limite total</small><strong><Money value={Number(card.credit_limit)} /></strong></div>
-              <div><small>Limite disponível</small><strong><Money value={invoice.availableLimit} /></strong></div>
+              <div><small>Limite disponível</small><strong>{invoice.availableLimit===null?"Não informado":<Money value={invoice.availableLimit} />}</strong></div>
             </div>
             {billSummary.warningMessage ? (
               <p className="invoice-warning">{billSummary.warningMessage}</p>

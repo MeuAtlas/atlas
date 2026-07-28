@@ -164,7 +164,7 @@ function MovementItem({ item }: { item: BankAccountMovementItem }) {
             </div>
           ) : null}
         </dl>
-        <Link href="/financeiro/movimentacoes?tab=bank">
+        <Link href="/financeiro/movimentacoes?type=bank">
           Ver na página completa
         </Link>
       </div>
@@ -210,10 +210,9 @@ function BankMovementDetails({
     [category, items, search, sort, source],
   );
   const visible = filtered.slice(0, limit);
-  const largest = items.reduce(
-    (value, item) => Math.max(value, item.amount),
-    0,
-  );
+  const largest = inflow
+    ? movement.largestInflow
+    : movement.largestOutflow;
 
   return (
     <section
@@ -368,7 +367,7 @@ function BankMovementDetails({
         <button className="finance-button" type="button" onClick={onClose}>
           Fechar
         </button>
-        <Link href="/financeiro/movimentacoes?tab=bank">
+        <Link href="/financeiro/movimentacoes?type=bank">
           Ver extrato completo
         </Link>
       </footer>
@@ -449,8 +448,11 @@ export function BankAccountMovementCards({
       total: movement.totalInflow,
       count: movement.inflowCount,
       previous: movement.previousMonthInflow,
+      largestLabel: "Maior entrada",
+      item: movement.inflowItems.find(
+        item => item.amount === movement.largestInflow,
+      ),
       icon: "↓",
-      kind: "total" as const,
     },
     {
       type: "outflow" as const,
@@ -459,88 +461,65 @@ export function BankAccountMovementCards({
       total: movement.totalOutflow,
       count: movement.outflowCount,
       previous: movement.previousMonthOutflow,
+      largestLabel: "Maior saída",
+      item: movement.outflowItems.find(
+        item => item.amount === movement.largestOutflow,
+      ),
       icon: "↗",
-      kind: "total" as const,
-    },
-    {
-      type: "inflow" as const,
-      title: "Maior entrada",
-      subtitle: "Nenhuma entrada no período.",
-      item: [...movement.inflowItems]
-        .sort((left, right) => right.amount - left.amount)
-        .at(0),
-      icon: "↓",
-      kind: "largest" as const,
-    },
-    {
-      type: "outflow" as const,
-      title: "Maior saída",
-      subtitle: "Nenhuma saída no período.",
-      item: [...movement.outflowItems]
-        .sort((left, right) => right.amount - left.amount)
-        .at(0),
-      icon: "↗",
-      kind: "largest" as const,
     },
   ];
 
   return (
     <>
       <div className="overview-metrics" aria-label="Movimentação da conta">
-        {cards.map((card) => {
-          if (card.kind === "total") {
-            return (
-              <button
-                type="button"
-                onClick={(event) => show(card.type, event.currentTarget)}
-                key={card.title}
-                className={`overview-metric ${card.type} ${card.kind}`}
-                aria-label={`Ver detalhes de ${card.title}`}
-                aria-haspopup="dialog"
-              >
-                <header>
-                  <i aria-hidden="true">{card.icon}</i>
-                  <span>{card.title}</span>
-                  <span className="overview-metric-open-label">
-                    Ver detalhes ›
-                  </span>
-                </header>
-                <strong>
-                  <Money value={card.total} />
-                </strong>
-                <small>
-                  {card.count}{" "}
-                  {card.count === 1 ? "lançamento" : "lançamentos"}
-                </small>
-                <p>{card.subtitle}</p>
-                <em>{comparison(card.total, card.previous)}</em>
-              </button>
-            );
-          }
-
-          return (
-            <article
+        {cards.map((card) => (
+            <button
+              type="button"
+              onClick={(event) => show(card.type, event.currentTarget)}
               key={card.title}
-              className={`overview-metric ${card.type} ${card.kind}`}
+              className={`overview-metric ${card.type} total`}
+              aria-label={`Ver detalhes de ${card.title}`}
+              aria-haspopup="dialog"
             >
               <header>
                 <i aria-hidden="true">{card.icon}</i>
                 <span>{card.title}</span>
+                <span className="overview-metric-open-label">
+                  Ver detalhes ›
+                </span>
               </header>
               <strong>
-                <Money value={card.item?.amount ?? 0} />
+                <Money value={card.total} />
               </strong>
+              <div className="overview-metric-meta">
+                <small>
+                  {card.count}{" "}
+                  {card.count === 1 ? "lançamento" : "lançamentos"}
+                </small>
+                <em>{comparison(card.total, card.previous)}</em>
+              </div>
               {card.item ? (
-                <>
-                  <small>{formatDate(card.item.date)}</small>
-                  <p>{card.item.description}</p>
-                </>
+                <div className="overview-metric-highlight">
+                  <small>{card.largestLabel}</small>
+                  <span>
+                    <b><Money value={card.item.amount} /></b>
+                    <i aria-hidden="true">•</i>
+                    <time dateTime={card.item.date}>
+                      {formatDate(card.item.date)}
+                    </time>
+                  </span>
+                  <p title={card.item.description}>
+                    {card.item.description}
+                  </p>
+                </div>
               ) : (
-                <p>{card.subtitle}</p>
+                <div className="overview-metric-highlight empty">
+                  <small>{card.largestLabel}</small>
+                  <p>{card.subtitle}</p>
+                </div>
               )}
-            </article>
-          );
-        })}
+            </button>
+          ))}
       </div>
       {open ? (
         <div

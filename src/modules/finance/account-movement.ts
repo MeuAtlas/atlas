@@ -7,6 +7,7 @@ import {
   shiftFinanceMonth,
   type FinanceMonthPeriod,
 } from "./monthly-result";
+import { calculateBankAccountCashFlow } from "./bank-cash-flow";
 
 const EFFECTIVE_STATUSES = new Set([
   "realized",
@@ -84,6 +85,8 @@ export type BankAccountMonthlyMovement = {
   netMovement: number;
   inflowCount: number;
   outflowCount: number;
+  largestInflow: number;
+  largestOutflow: number;
   inflowItems: BankAccountMovementItem[];
   outflowItems: BankAccountMovementItem[];
   previousMonthInflow: number;
@@ -151,13 +154,16 @@ function isSelectedAccount(
 }
 
 function isBankMovement(transaction: FinancialTransaction) {
+  const isInvoicePayment =
+    transaction.transaction_role === "invoice_payment" ||
+    transaction.cash_flow_kind === "invoice_payment";
   if (
-    transaction.source_type === "card" ||
-    transaction.source_type === "payroll" ||
-    transaction.financial_origin === "credit_card" ||
-    transaction.transaction_role === "consumption" ||
-    transaction.payment_source === "payroll" ||
-    transaction.cash_flow_kind === "balance_adjustment"
+    !isInvoicePayment &&
+    (
+      transaction.source_type === "card" ||
+      transaction.financial_origin === "credit_card" ||
+      transaction.transaction_role === "consumption"
+    )
   ) {
     return false;
   }
@@ -167,6 +173,65 @@ function isBankMovement(transaction: FinancialTransaction) {
 function signedProviderAmount(transaction: FinancialTransaction) {
   const original = Number(transaction.original_amount);
   return Number.isFinite(original) && original !== 0 ? original : null;
+}
+
+export function resolveBankTransactionDirection(
+  transaction: FinancialTransaction,
+  accountId?: string,
+): "inflow" | "outflow" | "unknown" {
+  const isOrigin = accountId && transaction.account_id === accountId;
+  const isDestination =
+    accountId && transaction.destination_account_id === accountId;
+  if (
+    accountId &&
+    (transaction.transaction_role === "transfer" ||
+      transaction.transaction_type === "transfer")
+  ) {
+    if (isDestination && !isOrigin) return "inflow";
+    if (isOrigin && !isDestination) return "outflow";
+  }
+  if (transaction.bank_direction === "inflow") return "inflow";
+  if (transaction.bank_direction === "outflow") return "outflow";
+
+  const providerDirection = [
+    transaction.provider_type,
+    transaction.operation_type,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+  if (/\bCREDIT\b/.test(providerDirection)) return "inflow";
+  if (/\bDEBIT\b/.test(providerDirection)) return "outflow";
+
+  const providerAmount = signedProviderAmount(transaction);
+  if (providerAmount !== null) {
+    return providerAmount > 0 ? "inflow" : "outflow";
+  }
+  if (
+    transaction.transaction_role === "invoice_payment" ||
+    transaction.cash_flow_kind === "invoice_payment"
+  ) {
+    return "outflow";
+  }
+  if (
+    ["loan_proceeds", "investment_redemption", "principal_redemption"]
+      .includes(transaction.cash_flow_kind ?? "")
+  ) {
+    return "inflow";
+  }
+  if (
+    ["investment_contribution", "investment_transfer"]
+      .includes(transaction.cash_flow_kind ?? "")
+  ) {
+    return "outflow";
+  }
+  if (
+    ["income", "refund", "reversal"].includes(transaction.transaction_type)
+  ) {
+    return "inflow";
+  }
+  if (transaction.transaction_type === "expense") return "outflow";
+  return "unknown";
 }
 
 export function classifyBankAccountMovement(
@@ -188,46 +253,9 @@ export function classifyBankAccountMovement(
   const isDestination = transaction.destination_account_id === accountId;
   if (isOrigin && isDestination) return "ignored";
 
-  if (
-    transaction.transaction_role === "transfer" ||
-    transaction.transaction_type === "transfer"
-  ) {
-    if (isDestination) return "inflow";
-    if (isOrigin) return "outflow";
-  }
-  if (transaction.transaction_role === "invoice_payment") {
-    return isOrigin ? "outflow" : "ignored";
-  }
-
-  if (transaction.bank_direction === "inflow") return "inflow";
-  if (transaction.bank_direction === "outflow") return "outflow";
   if (transaction.bank_direction === "review") return "pending_review";
-
-  const providerAmount = signedProviderAmount(transaction);
-  if (providerAmount !== null) {
-    return providerAmount > 0 ? "inflow" : "outflow";
-  }
-
-  if (
-    ["loan_proceeds", "investment_redemption", "principal_redemption"].includes(
-      transaction.cash_flow_kind ?? "",
-    )
-  ) {
-    return "inflow";
-  }
-  if (
-    ["investment_contribution", "investment_transfer", "invoice_payment"].includes(
-      transaction.cash_flow_kind ?? "",
-    )
-  ) {
-    return "outflow";
-  }
-  if (
-    ["income", "refund", "reversal"].includes(transaction.transaction_type)
-  ) {
-    return "inflow";
-  }
-  if (transaction.transaction_type === "expense") return "outflow";
+  const resolved = resolveBankTransactionDirection(transaction, accountId);
+  if (resolved !== "unknown") return resolved;
   return transaction.review_status === "pending"
     ? "pending_review"
     : "ignored";
@@ -336,27 +364,39 @@ function calculatePeriodMovement({
     const item = movementItem(transaction, direction, date);
     if (direction === "inflow") inflowItems.push(item);
     else outflowItems.push(item);
-    const point = points.get(date);
-    if (point) {
-      if (direction === "inflow") point.dailyInflow += item.amount;
-      else point.dailyOutflow += item.amount;
-    }
   }
 
+  const cashFlow = calculateBankAccountCashFlow([
+    ...inflowItems.map(item => ({
+      id: item.id,
+      date: item.date,
+      amount: item.amount,
+      effect: "inflow" as const,
+    })),
+    ...outflowItems.map(item => ({
+      id: item.id,
+      date: item.date,
+      amount: item.amount,
+      effect: "outflow" as const,
+    })),
+  ]);
+  const cashByDate = new Map(
+    cashFlow.dailySeries.map(point => [point.date, point]),
+  );
   let cumulativeInflow = 0;
   let cumulativeOutflow = 0;
   for (const point of points.values()) {
+    const cashPoint = cashByDate.get(point.date);
+    point.dailyInflow = cashPoint?.inflow ?? 0;
+    point.dailyOutflow = cashPoint?.outflow ?? 0;
     cumulativeInflow += point.dailyInflow;
     cumulativeOutflow += point.dailyOutflow;
     point.cumulativeInflow = cumulativeInflow;
     point.cumulativeOutflow = cumulativeOutflow;
   }
   if (!includeSeries) {
-    cumulativeInflow = inflowItems.reduce((total, item) => total + item.amount, 0);
-    cumulativeOutflow = outflowItems.reduce(
-      (total, item) => total + item.amount,
-      0,
-    );
+    cumulativeInflow = cashFlow.totalInflows;
+    cumulativeOutflow = cashFlow.totalOutflows;
   }
 
   return {
@@ -370,6 +410,8 @@ function calculatePeriodMovement({
     ),
     pendingCount,
     ignoredCount,
+    largestInflow: cashFlow.largestInflow,
+    largestOutflow: cashFlow.largestOutflow,
     dailySeries: [...points.values()],
   };
 }
@@ -444,6 +486,8 @@ export function calculateBankAccountMonthlyMovement({
     netMovement: current.totalInflow - current.totalOutflow,
     inflowCount: current.inflowItems.length,
     outflowCount: current.outflowItems.length,
+    largestInflow: current.largestInflow,
+    largestOutflow: current.largestOutflow,
     inflowItems: current.inflowItems,
     outflowItems: current.outflowItems,
     previousMonthInflow: previous.totalInflow,

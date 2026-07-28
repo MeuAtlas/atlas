@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { assessSyncCompleteness,shouldPreserveProviderValue } from "./resilience";
+import { assessSyncCompleteness,hasInterruptedPagination,isConfirmedZero,isUnavailableProviderValue,shouldAcceptIncomingFinancialData,shouldPreservePreviousValue,shouldPreserveProviderValue } from "./resilience";
 
 const complete={creditAccounts:2,cards:2,transactions:40,bills:2,instruments:3};
 
@@ -50,4 +50,58 @@ test("migration registra última sincronização confiável e estado parcial",()
 test("avaliação repetida é idempotente",()=>{
   const input={previous:complete,current:complete,full:true,warningCount:0,transactionFailures:0,itemStatus:"UPDATED"};
   assert.deepEqual(assessSyncCompleteness(input),assessSyncCompleteness(input));
+});
+
+test("null e undefined são indisponíveis, zero só é confirmado em sync completa",()=>{
+  assert.equal(isUnavailableProviderValue(null),true);
+  assert.equal(isUnavailableProviderValue(undefined),true);
+  assert.equal(isUnavailableProviderValue(0),false);
+  assert.equal(isConfirmedZero(0,"complete"),true);
+  assert.equal(isConfirmedZero(0,"partial"),false);
+  assert.equal(shouldPreservePreviousValue({previous:100,incoming:0,completeness:"partial"}),true);
+  assert.equal(shouldPreservePreviousValue({previous:100,incoming:0,completeness:"complete"}),false);
+});
+
+test("paginação interrompida é detectada por totalPages ou totalResults",()=>{
+  assert.equal(hasInterruptedPagination({page:1,totalPages:2,received:100,hasNext:false}),true);
+  assert.equal(hasInterruptedPagination({totalResults:101,received:100,hasNext:false}),true);
+  assert.equal(hasInterruptedPagination({page:2,totalPages:2,totalResults:100,received:100,hasNext:false}),false);
+});
+
+test("sync de faturas invalida a rota corrente e informa preservação",()=>{
+  const actions=readFileSync(
+    join(process.cwd(),"src/app/financeiro/integracoes/actions.ts"),
+    "utf8",
+  );
+  assert.match(actions,/revalidatePath\("\/financeiro\/cartoes\?view=current"\)/);
+  assert.match(actions,/Os valores anteriores foram preservados/);
+  assert.match(actions,/syncCurrentInvoicesAction/);
+});
+
+test("migration protege e repara snapshot usando compras persistidas",()=>{
+  const migration=readFileSync(
+    join(process.cwd(),"supabase/migrations/202607270027_preserve_reliable_current_invoices.sql"),
+    "utf8",
+  );
+  for(const field of [
+    "last_reliable_invoice_total","current_display_total",
+    "last_reliable_purchase_count","data_completeness",
+    "last_complete_sync_at","stale_since","preservation_reason",
+  ])assert.match(migration,new RegExp(field));
+  assert.match(migration,/restored_from_persisted_purchases/);
+  assert.doesNotMatch(migration,/3286[.,]78|purchase_count\s*=\s*36/);
+});
+
+test("decisão central bloqueia overwrite quando Item ou paginação são parciais",()=>{
+  const decision=shouldAcceptIncomingFinancialData({
+    itemStatus:"UPDATED",executionStatus:"PARTIAL_SUCCESS",
+    connectorAvailable:true,paginationComplete:false,errorCount:1,
+    previousCount:36,incomingCount:0,previousValue:3286.78,incomingValue:0,
+    providerBillPresent:false,dataCompleteness:"partial",
+    lastCompleteSyncAt:"2026-07-26T10:00:00Z",
+  });
+  assert.equal(decision.accept,false);
+  assert.equal(decision.preservePrevious,true);
+  assert.ok(decision.reasons.includes("pagination_incomplete"));
+  assert.ok(decision.reasons.includes("value_dropped_to_zero"));
 });

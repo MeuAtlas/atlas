@@ -16,6 +16,7 @@ import {
 import {
   getBankAccountMonthlyTransactions,
   getFinanceOverviewData,
+  resolveOpenCardInvoice,
 } from "@/modules/finance/queries";
 
 const UUID =
@@ -103,6 +104,16 @@ export default async function FinancePage({
   ).filter((invoice) =>
     ["open", "partially_paid", "estimated"].includes(invoice.status),
   );
+  const resolvedInvoices = new Map(
+    (await Promise.all(invoices.map(async invoice => {
+      const resolved = await resolveOpenCardInvoice(supabase, user.id, {
+        workspaceId,
+        cardAccountId: invoice.card.id,
+        referenceDate: now,
+      });
+      return resolved ? [invoice.card.id, resolved] as const : null;
+    }))).filter((entry): entry is NonNullable<typeof entry> => entry !== null),
+  );
   const dashboard = buildFinanceDashboard(
     data.accounts,
     data.transactions,
@@ -123,6 +134,7 @@ export default async function FinancePage({
       accounts={bankAccounts}
       accountMovement={accountMovement}
       invoices={invoices}
+      resolvedInvoices={resolvedInvoices}
       name={profile.preferred_name || profile.full_name || "você"}
       timeZone={timeZone}
       workspace={workspaceParam || "personal"}

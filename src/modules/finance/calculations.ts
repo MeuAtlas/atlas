@@ -11,6 +11,7 @@ import type {
   FinancialAccount,
   FinancialTransaction,
 } from "./types";
+import { persistedCardMovementAmountBrl } from "./foreign-card-movement";
 
 const money = (value: number | string | null | undefined) =>
   Math.abs(Number(value ?? 0));
@@ -72,9 +73,12 @@ export function cardConsumptionTotal(purchases: CardPurchase[]) {
   return purchases.reduce(
     (sum, purchase) =>
       purchase.transaction_role === "refund"
-        ? sum - money(purchase.installment_amount)
-        : purchase.transaction_role === "consumption"
-          ? sum + money(purchase.installment_amount)
+        ? sum - money(persistedCardMovementAmountBrl(purchase))
+        : (
+          purchase.transaction_role === "consumption" ||
+          purchase.transaction_role === "foreign_transaction_tax"
+        )
+          ? sum + money(persistedCardMovementAmountBrl(purchase))
           : sum,
     0,
   );

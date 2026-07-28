@@ -12,6 +12,7 @@ import {
 import { Money } from "./value-visibility";
 import { formatDate } from "@/modules/finance/format";
 import {
+  getCurrentBillSummary,
   getEstimatedInvoiceDetails,
   invoiceLineContribution,
   invoiceLineKind,
@@ -21,6 +22,15 @@ import {
 } from "@/modules/finance/card-invoices";
 import { installmentLabel } from "@/modules/finance/installments";
 import type { CardPurchase } from "@/modules/finance/types";
+import type {
+  CardCycleMovementDTO,
+  ResolvedCardCycleDetails,
+} from "@/modules/finance/resolved-card-cycle-details";
+import {
+  formatMoneyByCurrency,
+  implicitExchangeRate,
+  normalizeCardMovementAmounts,
+} from "@/modules/finance/foreign-card-movement";
 
 type InvoiceFilter =
   | "all"
@@ -30,17 +40,18 @@ type InvoiceFilter =
   | "credit"
   | "fee"
   | "pending"
-  | "unassigned";
+  | "unassigned"
+  | "low_confidence"
+  | "unreconciled";
 
 const filters: Array<[InvoiceFilter, string]> = [
   ["all", "Todos"],
   ["purchase", "Compras"],
   ["installment", "Parcelas"],
-  ["refund", "Estornos"],
   ["credit", "Créditos"],
-  ["fee", "Tarifas"],
-  ["pending", "Pendentes"],
-  ["unassigned", "Sem cartão"],
+  ["fee", "Encargos"],
+  ["low_confidence", "Baixa confiança"],
+  ["unreconciled", "Não conciliados"],
 ];
 
 const sourceLabels: Record<CurrentCardInvoice["totalSource"], string> = {
@@ -138,16 +149,108 @@ function matchesSearch(
     purchase.financial_categories?.name,
     purchase.source,
     instrumentLabel(invoice, purchase),
+    purchase.original_currency_code,
+    purchase.original_amount?.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+    purchase.amount_brl?.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
   ].some((value) => value?.toLocaleLowerCase("pt-BR").includes(normalized));
 }
 
 function matchesFilter(purchase: CardPurchase, filter: InvoiceFilter) {
   if (filter === "all") return true;
+  if (filter === "low_confidence") {
+    return purchase.review_status === "pending" || purchase.amount_brl === null;
+  }
+  if (filter === "unreconciled") {
+    return !["matched", "reconciled"].includes(
+      purchase.reconciliation_status ?? "",
+    );
+  }
   if (filter === "pending") return purchase.status === "pending";
   if (filter === "unassigned") return !purchase.instrument_id;
   if (filter === "purchase")
     return purchase.transaction_role === "consumption";
   return invoiceLineKind(purchase) === filter;
+}
+
+function movementAsPurchase(
+  movement: CardCycleMovementDTO,
+): CardPurchase {
+  return {
+    id: movement.id,
+    card_id: movement.cardId,
+    external_id: movement.sourceRecordId,
+    instrument_id: movement.instrumentId,
+    invoice_id: null,
+    description: movement.description,
+    total_amount: movement.amountBrl ?? movement.originalAmount ?? 0,
+    installment_amount:
+      (movement.effect === "credit" ? -1 : 1) *
+      (movement.amountBrl ?? movement.originalAmount ?? 0),
+    amount_brl: movement.amountBrl,
+    purchase_date: movement.date,
+    posting_date: movement.postingDate,
+    competence_date: movement.date,
+    installment_number: movement.installmentNumber,
+    installment_count: movement.installmentTotal,
+    source: movement.source,
+    source_type: "card",
+    financial_origin: "invoice",
+    transaction_role:
+      movement.effect === "credit"
+        ? "refund"
+        : movement.classification === "adjustment"
+          ? "adjustment"
+          : "consumption",
+    status: movement.status,
+    review_status: movement.reviewStatus,
+    invoice_reference: null,
+    bill_forecast_date: null,
+    provider_category: null,
+    merchant: null,
+    visibility: "private",
+    category_id: null,
+    currency: movement.originalCurrencyCode ?? "BRL",
+    original_amount: movement.originalAmount,
+    original_currency_code: movement.originalCurrencyCode,
+    exchange_rate: movement.exchangeRate,
+    foreign_iof_amount: movement.foreignIofAmount,
+    conversion_source: movement.conversionSource,
+    conversion_confidence: movement.conversionConfidence,
+    entry_type: movement.entryType,
+    reconciliation_status: movement.reconciliationStatus,
+    credit_cards: {
+      name: movement.cardLabel,
+      institution_name: null,
+      last_four_digits: null,
+    },
+    credit_card_instruments: movement.instrumentId
+      ? {
+          display_name: movement.cardLabel,
+          last_four_digits: null,
+          card_kind: "unknown",
+        }
+      : null,
+    financial_categories: null,
+  };
+}
+
+function resolvedTotalSourceLabel(
+  source: ResolvedCardCycleDetails["totals"]["confirmedTotalSource"],
+) {
+  if (source === "pluggy_current") return "Pluggy";
+  if (source === "pluggy_last_reliable") {
+    return "Pluggy — último valor confiável";
+  }
+  if (source === "pdf") return "PDF da fatura";
+  if (source === "manual") return "Informado manualmente";
+  if (source === "calculated") return "Calculado pelo Atlas";
+  return "Indisponível";
 }
 
 function PurchaseDetails({
@@ -160,6 +263,27 @@ function PurchaseDetails({
   const date = purchaseCompetenceDate(purchase);
   const installment = installmentLabel(purchase, false);
   const contribution = invoiceLineContribution(purchase);
+  const foreign = normalizeCardMovementAmounts({
+    persistedAmountBrl: purchase.amount_brl,
+    pdfAmountBrl:
+      purchase.conversion_source === "pdf" ? purchase.amount_brl : null,
+    manualAmountBrl:
+      purchase.conversion_source === "manual" ? purchase.amount_brl : null,
+    providerAmountBrl:
+      purchase.provider_metadata?.amountInAccountCurrency ??
+      purchase.provider_metadata?.convertedAmount ??
+      purchase.provider_metadata?.localAmount,
+    amount: purchase.installment_amount,
+    originalAmount: purchase.original_amount,
+    originalCurrencyCode: purchase.original_currency_code,
+    currencyCode: purchase.currency,
+    exchangeRate: purchase.exchange_rate,
+    iofAmountBrl: purchase.foreign_iof_amount,
+    conversionSource: purchase.conversion_source,
+    source: purchase.source,
+    description: purchase.description,
+  });
+  const implicitRate = implicitExchangeRate(foreign);
   const kind = invoiceLineKind(purchase);
   const category =
     purchase.financial_categories?.name ||
@@ -197,7 +321,15 @@ function PurchaseDetails({
           </i>
         </span>
         <strong className={contribution < 0 ? "negative" : ""}>
-          <Money value={contribution} />
+          {foreign.amountBrl === null
+            ? foreign.originalAmount !== null &&
+                foreign.originalCurrencyCode
+              ? formatMoneyByCurrency(
+                  foreign.originalAmount,
+                  foreign.originalCurrencyCode,
+                )
+              : "Conversão indisponível"
+            : <Money value={contribution} />}
         </strong>
         <i aria-hidden="true">›</i>
       </summary>
@@ -222,9 +354,51 @@ function PurchaseDetails({
           <div>
             <dt>Valor conciliado</dt>
             <dd>
-              <Money value={contribution} />
+              {foreign.amountBrl === null
+                ? "Valor convertido indisponÃ­vel"
+                : <Money value={contribution} />}
             </dd>
           </div>
+          {foreign.isForeignTransaction ? (
+            <>
+              <div>
+                <dt>Valor original</dt>
+                <dd>{formatMoneyByCurrency(
+                  foreign.originalAmount!,
+                  foreign.originalCurrencyCode!,
+                )}</dd>
+              </div>
+              <div>
+                <dt>Valor convertido</dt>
+                <dd>{foreign.amountBrl === null
+                  ? "Valor convertido indisponÃ­vel"
+                  : formatMoneyByCurrency(foreign.amountBrl, "BRL")}</dd>
+              </div>
+              {foreign.iofAmountBrl !== null ? (
+                <div>
+                  <dt>IOF</dt>
+                  <dd>{formatMoneyByCurrency(foreign.iofAmountBrl, "BRL")}</dd>
+                </div>
+              ) : null}
+              {foreign.exchangeRate !== null ? (
+                <div>
+                  <dt>CotaÃ§Ã£o informada</dt>
+                  <dd>R$ {foreign.exchangeRate.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 4,
+                    maximumFractionDigits: 8,
+                  })} por {foreign.originalCurrencyCode} 1</dd>
+                </div>
+              ) : implicitRate !== null ? (
+                <div>
+                  <dt>CotaÃ§Ã£o implÃ­cita</dt>
+                  <dd>R$ {implicitRate.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 4,
+                    maximumFractionDigits: 4,
+                  })} por {foreign.originalCurrencyCode} 1</dd>
+                </div>
+              ) : null}
+            </>
+          ) : null}
           <div>
             <dt>Status</dt>
             <dd>{status}</dd>
@@ -270,9 +444,11 @@ function PurchaseDetails({
 
 export function InvoiceDetailsDrawer({
   invoice,
+  cycleDetails,
   initialOpen = false,
 }: {
   invoice: CurrentCardInvoice;
+  cycleDetails?: ResolvedCardCycleDetails;
   initialOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
@@ -285,8 +461,41 @@ export function InvoiceDetailsDrawer({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const pushedEntry = useRef(false);
-  const details = useMemo(() => getEstimatedInvoiceDetails(invoice), [invoice]);
-  const invalidCalculation = !Number.isFinite(details.calculatedTotal);
+  const estimatedDetails = useMemo(
+    () => getEstimatedInvoiceDetails(invoice),
+    [invoice],
+  );
+  const details = useMemo(() => {
+    if (!cycleDetails) return estimatedDetails;
+    const purchases = cycleDetails.movements.map(movementAsPurchase);
+    return {
+      ...estimatedDetails,
+      includedPurchases: purchases,
+      purchaseTotal:
+        (cycleDetails.totals.newPurchasesTotal ?? 0) +
+        (cycleDetails.totals.postedInstallmentsTotal ?? 0) +
+        (cycleDetails.totals.projectedInstallmentsTotal ?? 0),
+      refundTotal: cycleDetails.totals.creditsAndRefundsTotal ?? 0,
+      creditTotal: 0,
+      feeTotal: cycleDetails.totals.feesAndTaxesTotal ?? 0,
+      adjustmentTotal: 0,
+      calculatedTotal: cycleDetails.totals.detailedTotal ?? 0,
+      displayedTotal: cycleDetails.totals.confirmedTotal ?? 0,
+      providerTotal: cycleDetails.totals.confirmedTotal,
+      reconciliationDifference:
+        cycleDetails.totals.reconciliationDifference,
+      reconciliationStatus: cycleDetails.reconciliation.status,
+      purchaseCount: cycleDetails.counts.movementCount,
+      dataCompleteness:
+        cycleDetails.completeness.detailsCompleteness === "complete"
+          ? "complete" as const
+          : "partial" as const,
+      warnings: cycleDetails.completeness.warnings,
+    };
+  }, [cycleDetails, estimatedDetails]);
+  const billSummary = useMemo(() => getCurrentBillSummary(invoice), [invoice]);
+  const invalidCalculation =
+    !cycleDetails && !Number.isFinite(details.calculatedTotal);
 
   const close = useCallback(() => {
     setReady(false);
@@ -300,7 +509,10 @@ export function InvoiceDetailsDrawer({
 
   const show = () => {
     const url = new URL(window.location.href);
-    url.searchParams.set("invoiceDetails", invoice.card.id);
+    url.searchParams.set(
+      "invoiceDetailsCycle",
+      cycleDetails?.cycle.id ?? invoice.card.id,
+    );
     window.history.pushState(null, "", url);
     pushedEntry.current = true;
     setReady(false);
@@ -310,15 +522,15 @@ export function InvoiceDetailsDrawer({
   useEffect(() => {
     const onPopState = () => {
       const selected = new URL(window.location.href).searchParams.get(
-        "invoiceDetails",
+        "invoiceDetailsCycle",
       );
       setReady(false);
-      setOpen(selected === invoice.card.id);
+      setOpen(selected === (cycleDetails?.cycle.id ?? invoice.card.id));
       pushedEntry.current = false;
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [invoice.card.id]);
+  }, [cycleDetails?.cycle.id, invoice.card.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -446,21 +658,36 @@ export function InvoiceDetailsDrawer({
             <div>
               <dt>Período</dt>
               <dd>
-                {formatDate(invoice.cycle.cycleStart)} a{" "}
-                {formatDate(invoice.cycle.cycleEnd)}
+                {formatDate(
+                  cycleDetails?.cycle.cycleStartDate ??
+                    invoice.cycle.cycleStart,
+                )} a{" "}
+                {formatDate(
+                  cycleDetails?.cycle.cycleEndDate ?? invoice.cycle.cycleEnd,
+                )}
               </dd>
             </div>
             <div>
               <dt>Fechamento</dt>
-              <dd>{formatDate(invoice.cycle.closingDate)}</dd>
+              <dd>{formatDate(
+                cycleDetails?.cycle.closingDate ?? invoice.cycle.closingDate,
+              )}</dd>
             </div>
             <div>
               <dt>Vencimento</dt>
-              <dd>{formatDate(invoice.cycle.dueDate)}</dd>
+              <dd>{formatDate(
+                cycleDetails?.cycle.dueDate ?? invoice.cycle.dueDate,
+              )}</dd>
             </div>
             <div>
               <dt>Fonte</dt>
-              <dd>{sourceLabels[invoice.totalSource]}</dd>
+              <dd>
+                {cycleDetails
+                  ? resolvedTotalSourceLabel(
+                      cycleDetails.totals.confirmedTotalSource,
+                    )
+                  : sourceLabels[invoice.totalSource]}
+              </dd>
             </div>
           </dl>
         </header>
@@ -504,7 +731,41 @@ export function InvoiceDetailsDrawer({
                 </p>
               ))}
 
-              <section
+              {cycleDetails ? (
+                <section
+                  className="invoice-details-summary"
+                  aria-label="Resumo da fatura"
+                >
+                  <div className="primary">
+                    <span>Total confirmado</span>
+                    <b>{cycleDetails.totals.confirmedTotal === null
+                      ? "Não informado"
+                      : <Money value={cycleDetails.totals.confirmedTotal} />}</b>
+                    <small>{resolvedTotalSourceLabel(
+                      cycleDetails.totals.confirmedTotalSource,
+                    )}</small>
+                  </div>
+                  <div>
+                    <span>Total detalhado</span>
+                    <b>{cycleDetails.totals.detailedTotal === null
+                      ? "Não informado"
+                      : <Money value={cycleDetails.totals.detailedTotal} />}</b>
+                    <small>
+                      {cycleDetails.counts.movementCount} movimentações
+                    </small>
+                  </div>
+                  <div>
+                    <span>Total pago</span>
+                    <b><Money value={cycleDetails.totals.paidTotal ?? 0} /></b>
+                  </div>
+                  <div>
+                    <span>Saldo pendente</span>
+                    <b>{cycleDetails.totals.pendingBalance === null
+                      ? "Não informado"
+                      : <Money value={cycleDetails.totals.pendingBalance} />}</b>
+                  </div>
+                </section>
+              ) : <section
                 className="invoice-details-summary"
                 aria-label="Resumo da fatura"
               >
@@ -537,8 +798,99 @@ export function InvoiceDetailsDrawer({
                       : "Total exibido"}
                   </span>
                   <b>
-                    <Money value={details.displayedTotal} />
+                    {billSummary.amount===null
+                      ? "NÃ£o informado"
+                      : <Money value={billSummary.amount} />}
                   </b>
+                </div>
+                <div>
+                  <span>Total pago</span>
+                  <b><Money value={invoice.paidAmount} /></b>
+                </div>
+                <div>
+                  <span>Saldo pendente</span>
+                  <b><Money value={invoice.outstandingAmount} /></b>
+                </div>
+              </section>}
+
+              {cycleDetails ? (
+                <section className="invoice-composition" aria-label="Composição">
+                  <h3>Composição</h3>
+                  <div>
+                    <button type="button" onClick={() => setFilter("purchase")}>
+                      <span>Compras novas</span>
+                      <b><Money value={
+                        cycleDetails.totals.newPurchasesTotal ?? 0
+                      } /></b>
+                      <small>{cycleDetails.counts.newPurchaseCount}</small>
+                    </button>
+                    <button type="button" onClick={() => setFilter("installment")}>
+                      <span>Parcelas lançadas</span>
+                      <b><Money value={
+                        cycleDetails.totals.postedInstallmentsTotal ?? 0
+                      } /></b>
+                      <small>{cycleDetails.counts.postedInstallmentCount}</small>
+                    </button>
+                    <button type="button" onClick={() => setFilter("fee")}>
+                      <span>Encargos e impostos</span>
+                      <b><Money value={
+                        cycleDetails.totals.feesAndTaxesTotal ?? 0
+                      } /></b>
+                      <small>{cycleDetails.counts.feeAndTaxCount}</small>
+                    </button>
+                    <button type="button" onClick={() => setFilter("credit")}>
+                      <span>Créditos e estornos</span>
+                      <b><Money value={
+                        -(cycleDetails.totals.creditsAndRefundsTotal ?? 0)
+                      } /></b>
+                      <small>{cycleDetails.counts.creditAndRefundCount}</small>
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
+              <section
+                className="invoice-details-summary"
+                aria-label="Confiabilidade da fatura"
+              >
+                <div>
+                  <span>Total oficial</span>
+                  <b>{invoice.providerValueReliable&&invoice.providerInvoiceTotal!==null
+                    ? <Money value={invoice.providerInvoiceTotal}/>
+                    : "NÃ£o informado"}</b>
+                </div>
+                <div>
+                  <span>Total calculado</span>
+                  <b>{invoice.calculatedValueReliable
+                    ? <Money value={invoice.calculatedInvoiceTotal}/>
+                    : "NÃ£o informado"}</b>
+                </div>
+                <div>
+                  <span>Ãšltimo valor confiÃ¡vel</span>
+                  <b>{invoice.lastReliableValueReliable&&
+                    invoice.lastReliableInvoiceTotal!==null
+                    ? <Money value={invoice.lastReliableInvoiceTotal}/>
+                    : "NÃ£o informado"}</b>
+                </div>
+                <div>
+                  <span>Status da sincronizaÃ§Ã£o</span>
+                  <b>{billSummary.isPartial?"Dados parciais":"Completa"}</b>
+                </div>
+                <div>
+                  <span>Ãšltima sincronizaÃ§Ã£o completa</span>
+                  <b>{invoice.lastCompleteSyncAt
+                    ? formatDate(invoice.lastCompleteSyncAt)
+                    : "NÃ£o informado"}</b>
+                </div>
+                <div>
+                  <span>Ãšltima tentativa</span>
+                  <b>{invoice.lastAttemptAt
+                    ? formatDate(invoice.lastAttemptAt)
+                    : "NÃ£o informado"}</b>
+                </div>
+                <div>
+                  <span>Motivo da preservaÃ§Ã£o</span>
+                  <b>{invoice.preservationReason??"NÃ£o informado"}</b>
                 </div>
               </section>
 
@@ -584,7 +936,9 @@ export function InvoiceDetailsDrawer({
                   <div>
                     <dt>Total calculado</dt>
                     <dd>
-                      <Money value={details.calculatedTotal} />
+                      {invoice.calculatedValueReliable
+                        ? <Money value={invoice.calculatedInvoiceTotal}/>
+                        : "NÃ£o informado"}
                     </dd>
                   </div>
                 </dl>
@@ -597,12 +951,52 @@ export function InvoiceDetailsDrawer({
                     </span>
                     <span>
                       Diferença:{" "}
-                      <Money value={details.reconciliationDifference || 0} />
+                      {details.reconciliationDifference===null
+                        ? "NÃ£o informado"
+                        : <Money value={details.reconciliationDifference} />}
                     </span>
                     <span>Status: {details.reconciliationStatus}</span>
                   </div>
                 )}
               </details>
+
+              {invoice.officialPayments.length ? (
+                <details className="invoice-excluded">
+                  <summary>
+                    Pagamentos oficiais ({invoice.officialPayments.length})
+                  </summary>
+                  <p>Status: {invoice.paymentStatus ?? "unknown"}</p>
+                  {invoice.officialPayments.map((payment)=>(
+                    <span key={payment.id}>
+                      <span>
+                        <b>{payment.value_type}</b>
+                        <small>
+                          {formatDate(payment.payment_date)} ·{" "}
+                          {payment.payment_mode ?? "Forma não informada"}
+                        </small>
+                      </span>
+                      <Money value={Number(payment.amount)} />
+                    </span>
+                  ))}
+                </details>
+              ) : null}
+
+              {invoice.financeCharges.length ? (
+                <details className="invoice-excluded">
+                  <summary>
+                    Encargos ({invoice.financeCharges.length})
+                  </summary>
+                  {invoice.financeCharges.map((charge)=>(
+                    <span key={charge.id}>
+                      <span>
+                        <b>{charge.charge_type}</b>
+                        {charge.additional_info?<small>{charge.additional_info}</small>:null}
+                      </span>
+                      <Money value={Number(charge.amount)} />
+                    </span>
+                  ))}
+                </details>
+              ) : null}
 
               {unassigned.length ? (
                 <aside className="invoice-unassigned-summary">
@@ -624,10 +1018,9 @@ export function InvoiceDetailsDrawer({
               <section className="invoice-accounted">
                 <header>
                   <div>
-                    <h3>Compras contabilizadas</h3>
+                    <h3>Movimentações</h3>
                     <p>
-                      {details.includedPurchases.length} lançamentos usados no
-                      cálculo
+                      {details.includedPurchases.length} lançamentos deste ciclo
                     </p>
                   </div>
                   <select
@@ -653,7 +1046,7 @@ export function InvoiceDetailsDrawer({
                       setSearch(event.target.value);
                       setLimit(20);
                     }}
-                    placeholder="Buscar compra, categoria, cartão ou origem"
+                    placeholder="Buscar movimentação, cartão ou origem"
                   />
                 </label>
                 <nav className="invoice-details-filters" aria-label="Filtros">
@@ -716,10 +1109,16 @@ export function InvoiceDetailsDrawer({
                   </div>
                 ) : (
                   <div className="invoice-details-empty">
-                    <b>Nenhuma compra foi encontrada neste ciclo.</b>
+                    <b>Nenhuma movimentação foi encontrada neste ciclo.</b>
                     <p>
-                      Período: {formatDate(invoice.cycle.cycleStart)} a{" "}
-                      {formatDate(invoice.cycle.cycleEnd)}
+                      Período: {formatDate(
+                        cycleDetails?.cycle.cycleStartDate ??
+                          invoice.cycle.cycleStart,
+                      )} a{" "}
+                      {formatDate(
+                        cycleDetails?.cycle.cycleEndDate ??
+                          invoice.cycle.cycleEnd,
+                      )}
                     </p>
                     <small>
                       Última sincronização:{" "}
@@ -737,6 +1136,82 @@ export function InvoiceDetailsDrawer({
                   </button>
                 ) : null}
               </section>
+
+              {cycleDetails?.installments.length ? (
+                <details className="invoice-excluded">
+                  <summary>
+                    Parcelas ({cycleDetails.installments.length})
+                  </summary>
+                  {cycleDetails.installments.map(installment => (
+                    <span key={installment.id}>
+                      <span>
+                        <b>{installment.description}</b>
+                        <small>
+                          {installment.installmentNumber}/
+                          {installment.installmentTotal} ·{" "}
+                          {installment.nextInstallments} restantes ·{" "}
+                          {installment.status}
+                        </small>
+                      </span>
+                      {installment.amountBrl === null
+                        ? <small>Conversão indisponível</small>
+                        : <Money value={installment.amountBrl} />}
+                    </span>
+                  ))}
+                </details>
+              ) : null}
+
+              {cycleDetails ? (
+                <details className="invoice-calculation">
+                  <summary>Conciliação e sincronização</summary>
+                  <dl>
+                    <div>
+                      <dt>Total confirmado</dt>
+                      <dd>{cycleDetails.totals.confirmedTotal === null
+                        ? "Não informado"
+                        : <Money value={
+                            cycleDetails.totals.confirmedTotal
+                          } />}</dd>
+                    </div>
+                    <div>
+                      <dt>Total explicado</dt>
+                      <dd>{cycleDetails.reconciliation.explainedAmount === null
+                        ? "Não informado"
+                        : <Money value={
+                            cycleDetails.reconciliation.explainedAmount
+                          } />}</dd>
+                    </div>
+                    <div>
+                      <dt>Diferença ainda não detalhada</dt>
+                      <dd>{cycleDetails.reconciliation.unexplainedAmount === null
+                        ? "Não informado"
+                        : <Money value={
+                            cycleDetails.reconciliation.unexplainedAmount
+                          } />}</dd>
+                    </div>
+                    <div>
+                      <dt>Confiabilidade do total</dt>
+                      <dd>{cycleDetails.completeness.totalReliability}</dd>
+                    </div>
+                    <div>
+                      <dt>Detalhamento</dt>
+                      <dd>{cycleDetails.completeness.detailsCompleteness}</dd>
+                    </div>
+                    <div>
+                      <dt>Última sincronização completa</dt>
+                      <dd>{formatDate(
+                        cycleDetails.synchronization.lastCompleteSyncAt,
+                      )}</dd>
+                    </div>
+                    <div>
+                      <dt>Última tentativa</dt>
+                      <dd>{formatDate(
+                        cycleDetails.synchronization.lastAttemptAt,
+                      )}</dd>
+                    </div>
+                  </dl>
+                </details>
+              ) : null}
 
               {details.linkedPayments.length ? (
                 <details className="invoice-excluded">
@@ -778,8 +1253,12 @@ export function InvoiceDetailsDrawer({
         </div>
 
         <footer className="invoice-details-footer">
-          <Link href={`/financeiro/cartoes/${invoice.card.id}`}>
-            Ver na página de cartões
+          <Link href={
+            cycleDetails
+              ? `/financeiro/movimentacoes?type=card&cycle=${cycleDetails.cycle.id}`
+              : `/financeiro/cartoes/${invoice.card.id}`
+          }>
+            {cycleDetails ? "Ver em Movimentações" : "Ver na página de cartões"}
           </Link>
           <button type="button" onClick={close}>
             Fechar

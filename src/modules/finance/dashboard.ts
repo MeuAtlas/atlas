@@ -369,7 +369,7 @@ export function buildFinanceDashboard(
       id: "bank-classification",
       label: `${inconsistentClassifications} ${inconsistentClassifications === 1 ? "movimentação bancária precisa" : "movimentações bancárias precisam"} de revisão`,
       priority: "Alta",
-      href: "/financeiro/movimentacoes?tab=bank&review=pending",
+      href: "/financeiro/movimentacoes?type=bank&review=pending",
     });
   }
   if (degradedConnection) {

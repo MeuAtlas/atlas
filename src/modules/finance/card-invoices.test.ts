@@ -10,8 +10,9 @@ import {
   getCurrentBillSummary,
   getCurrentInvoiceSummary,
   getEstimatedInvoiceDetails,
+  selectStoredInvoiceSnapshot,
 } from "./card-invoices";
-import type { CardPurchase, CreditCard } from "./types";
+import type { CardPurchase, CreditCard, StoredCardInvoice } from "./types";
 
 const purchase = (
   overrides: Partial<CardPurchase> & Pick<CardPurchase, "id" | "card_id">,
@@ -700,4 +701,137 @@ test("detalhamento preserva instrumentos e expõe duplicata conciliada", () => {
     new Set(details.includedPurchases.map((item) => item.instrument_id)),
     new Set(["physical", "virtual", null]),
   );
+});
+
+test("fatura parcial usa o snapshot confiável sem transformar ausência em zero",()=>{
+  const partialCard:CreditCard={
+    ...card("santander"),
+    last_four_digits:"5718",
+    closing_day:3,
+    due_day:10,
+    provider_status:"degraded",
+    bank_connections:{
+      data_completeness:"partial",
+      provider_status:"degraded",
+      last_complete_sync_at:"2026-07-26T10:00:00.000Z",
+    },
+  };
+  const stored:StoredCardInvoice={
+    id:"invoice",card_id:"santander",reference_month:"2026-08-01",
+    cycle_start_date:"2026-07-04",cycle_end_date:"2026-08-03",
+    closing_date:"2026-08-03",due_date:"2026-08-10",
+    total_amount:3286.78,paid_amount:0,paid_at:null,
+    outstanding_amount:3286.78,purchase_count:36,status:"open",
+    external_id:"atlas:santander:2026-08",provider_invoice_total:null,
+    calculated_invoice_total:3286.78,manual_invoice_total:null,
+    confirmed_invoice_total:null,last_reliable_invoice_total:3286.78,
+    last_reliable_purchase_count:36,data_completeness:"partial",
+    total_source:"calculated_transactions",reconciliation_difference:null,
+    reconciliation_status:"provider_unavailable",provider_updated_at:null,
+    invoice_breakdown:null,
+  };
+  const invoice=buildCurrentCardInvoices(
+    [partialCard],[],new Date("2026-07-27T12:00:00Z"),
+    {storedInvoices:[stored]},
+  )[0];
+  const summary=getCurrentInvoiceSummary(
+    invoice,new Date("2026-07-27T12:00:00Z"),
+  );
+  assert.equal(summary.displayAmount,3286.78);
+  assert.equal(summary.purchaseCount,36);
+  assert.equal(summary.cycleStart,"2026-07-04");
+  assert.equal(summary.cycleEnd,"2026-08-03");
+  assert.equal(summary.dataCompleteness,"partial");
+  assert.equal(invoice.reliableSnapshotUsed,true);
+});
+
+test("fatura parcial com zero corrompido e sem evidência fica indisponível",()=>{
+  const partialCard:CreditCard={
+    ...card("partial-empty"),provider_status:"degraded",
+    closing_day:3,due_day:10,
+    bank_connections:{data_completeness:"partial",provider_status:"degraded",
+      last_complete_sync_at:null},
+  };
+  const stored:StoredCardInvoice={
+    id:"empty",card_id:"partial-empty",reference_month:"2026-08-01",
+    cycle_start_date:"2026-07-04",cycle_end_date:"2026-08-03",
+    closing_date:"2026-08-03",due_date:"2026-08-10",
+    total_amount:0,paid_amount:0,paid_at:null,outstanding_amount:0,
+    purchase_count:0,status:"open",external_id:"atlas:empty",
+    provider_invoice_total:0,calculated_invoice_total:0,
+    manual_invoice_total:null,confirmed_invoice_total:null,
+    last_reliable_invoice_total:0,last_reliable_purchase_count:0,
+    data_completeness:"partial",last_complete_sync_at:null,
+    total_source:"calculated_transactions",reconciliation_difference:null,
+    reconciliation_status:"provider_unavailable",provider_updated_at:null,
+  };
+  const invoice=buildCurrentCardInvoices(
+    [partialCard],[],new Date("2026-07-27T12:00:00Z"),
+    {storedInvoices:[stored]},
+  )[0];
+  const summary=getCurrentInvoiceSummary(invoice);
+  assert.equal(summary.displayAmount,null);
+  assert.equal(summary.purchaseCount,null);
+  assert.equal(summary.dataCompleteness,"partial");
+  assert.match(summary.warningMessage??"",/não enviou dados suficientes/i);
+});
+
+test("parcial recupera cálculo e compras persistidos antes do backfill",()=>{
+  const partialCard:CreditCard={
+    ...card("legacy"),provider_status:"degraded",closing_day:3,due_day:10,
+    bank_connections:{data_completeness:"partial",provider_status:"degraded",
+      last_complete_sync_at:"2026-07-25T10:00:00.000Z"},
+  };
+  const stored:StoredCardInvoice={
+    id:"legacy-good",card_id:"legacy",reference_month:"2026-08-01",
+    cycle_start_date:"2026-07-04",cycle_end_date:"2026-08-03",
+    closing_date:"2026-08-03",due_date:"2026-08-10",
+    total_amount:450,paid_amount:0,paid_at:null,outstanding_amount:450,
+    purchase_count:4,status:"open",external_id:"atlas:legacy",
+    provider_invoice_total:null,calculated_invoice_total:450,
+    manual_invoice_total:null,confirmed_invoice_total:null,
+    last_reliable_invoice_total:null,last_reliable_purchase_count:null,
+    data_completeness:"partial",
+    last_complete_sync_at:"2026-07-25T10:00:00.000Z",
+    total_source:"calculated_transactions",reconciliation_difference:null,
+    reconciliation_status:"provider_unavailable",provider_updated_at:null,
+  };
+  const summary=getCurrentInvoiceSummary(buildCurrentCardInvoices(
+    [partialCard],[],new Date("2026-07-27T12:00:00Z"),
+    {storedInvoices:[stored]},
+  )[0]);
+  assert.equal(summary.displayAmount,450);
+  assert.equal(summary.purchaseCount,4);
+});
+
+test("selector não deixa snapshot auxiliar vazio substituir o válido",()=>{
+  const base:StoredCardInvoice={
+    id:"empty",card_id:"same",reference_month:"2026-08-01",
+    cycle_start_date:"2026-07-04",cycle_end_date:"2026-08-03",
+    closing_date:"2026-08-03",due_date:"2026-08-10",
+    total_amount:0,paid_amount:0,paid_at:null,outstanding_amount:0,
+    purchase_count:0,status:"open",external_id:"empty",
+    provider_invoice_total:null,calculated_invoice_total:0,
+    manual_invoice_total:null,total_source:"calculated_transactions",
+    reconciliation_status:"provider_unavailable",provider_updated_at:null,
+  };
+  const selected=selectStoredInvoiceSnapshot({
+    card:{...card("same"),external_id:"account-1"},
+    referenceMonth:"2026-08",
+    invoices:[
+      {...base,provider_account_id:"account-1"},
+      {...base,id:"good",external_id:"good",calculated_invoice_total:700,
+        purchase_count:7,last_reliable_invoice_total:700,
+        last_reliable_purchase_count:7,provider_account_id:"account-1"},
+    ],
+  });
+  assert.equal(selected?.id,"good");
+});
+
+test("limite nunca informado permanece indisponível",()=>{
+  const withoutLimit={...card("no-limit"),credit_limit:null} as unknown as CreditCard;
+  const invoice=buildCurrentCardInvoices(
+    [withoutLimit],[],new Date("2026-07-23T12:00:00Z"),
+  )[0];
+  assert.equal(invoice.availableLimit,null);
 });

@@ -167,7 +167,7 @@ test("saldo e análise mensal são blocos independentes", () => {
   assert.match(overview, /CurrentAccountBalanceCard/);
   assert.match(overview, /AccountMovementAnalysis/);
   assert.match(css, /\.account-analysis-grid\{display:grid;grid-template-columns/);
-  assert.match(css, /\.account-analysis-grid \.overview-metrics\{grid-template-columns:repeat\(2/);
+  assert.match(css, /\.account-analysis-grid \.overview-metrics\{display:grid;grid-template-columns:1fr/);
 });
 
 test("topo da visão geral reúne saudação e título em uma única faixa", () => {
