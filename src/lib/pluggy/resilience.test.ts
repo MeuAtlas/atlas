@@ -74,7 +74,7 @@ test("sync de faturas invalida a rota corrente e informa preservação",()=>{
     "utf8",
   );
   assert.match(actions,/revalidatePath\("\/financeiro\/cartoes\?view=current"\)/);
-  assert.match(actions,/Os valores anteriores foram preservados/);
+  assert.match(actions,/últimos dados confiáveis/);
   assert.match(actions,/syncCurrentInvoicesAction/);
 });
 

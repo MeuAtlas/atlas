@@ -76,11 +76,97 @@ export type CreditCardInvoiceHistoryResult = {
   dataCompleteness: "complete" | "partial" | "unavailable";
 };
 
+export type InvoiceHistoryAnalyticsEntry = Pick<
+  CreditCardInvoiceHistoryItem,
+  "id" | "cardId" | "dueDate" | "status" | "total" | "totalSource"
+>;
+
+export type InvoiceHistoryAnalytics = {
+  months: Array<{
+    month: string;
+    total: number;
+    invoiceCount: number;
+  }>;
+  median: number | null;
+  average: number | null;
+  minimum: number | null;
+  maximum: number | null;
+  currentTotal: number | null;
+  currentDifference: number | null;
+  currentDifferencePercentage: number | null;
+  currentPosition: "above" | "below" | "equal" | "unavailable";
+};
+
 const amountOrNull = (value: number | string | null | undefined) => {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.abs(parsed) : null;
 };
+
+const roundedMoney = (value: number) =>
+  Math.round((value + Number.EPSILON) * 100) / 100;
+
+function median(values: number[]) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : roundedMoney((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+export function buildInvoiceHistoryAnalytics(
+  invoices: InvoiceHistoryAnalyticsEntry[],
+  currentTotal: number | null,
+  monthLimit = 12,
+): InvoiceHistoryAnalytics {
+  const grouped = new Map<string, { total: number; invoiceCount: number }>();
+  for (const invoice of invoices) {
+    if (invoice.status === "cancelled" || invoice.total === null) continue;
+    const month = invoice.dueDate.slice(0, 7);
+    const current = grouped.get(month) ?? { total: 0, invoiceCount: 0 };
+    current.total = roundedMoney(current.total + Math.abs(invoice.total));
+    current.invoiceCount += 1;
+    grouped.set(month, current);
+  }
+  const months = [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-Math.max(1, monthLimit))
+    .map(([month, value]) => ({ month, ...value }));
+  const totals = months.map(month => month.total);
+  const historicalMedian = median(totals);
+  const average = totals.length
+    ? roundedMoney(totals.reduce((sum, value) => sum + value, 0) / totals.length)
+    : null;
+  const normalizedCurrent = amountOrNull(currentTotal);
+  const currentDifference =
+    normalizedCurrent !== null && historicalMedian !== null
+      ? roundedMoney(normalizedCurrent - historicalMedian)
+      : null;
+  const currentDifferencePercentage =
+    currentDifference !== null && historicalMedian !== null && historicalMedian > 0
+      ? roundedMoney((currentDifference / historicalMedian) * 100)
+      : null;
+  const currentPosition =
+    currentDifference === null
+      ? "unavailable" as const
+      : Math.abs(currentDifference) <= 0.01
+        ? "equal" as const
+        : currentDifference > 0
+          ? "above" as const
+          : "below" as const;
+  return {
+    months,
+    median: historicalMedian,
+    average,
+    minimum: totals.length ? Math.min(...totals) : null,
+    maximum: totals.length ? Math.max(...totals) : null,
+    currentTotal: normalizedCurrent,
+    currentDifference,
+    currentDifferencePercentage,
+    currentPosition,
+  };
+}
 
 export function isHistoricalInvoice(invoice: StoredCardInvoice, today: string) {
   if (
@@ -94,7 +180,14 @@ export function isHistoricalInvoice(invoice: StoredCardInvoice, today: string) {
   return invoice.closing_date < today;
 }
 
-export function resolveHistoricalInvoiceTotal(invoice: StoredCardInvoice): {
+export function resolveHistoricalInvoiceTotal(invoice: Pick<
+  StoredCardInvoice,
+  | "provider_invoice_total"
+  | "manual_invoice_total"
+  | "confirmed_invoice_total"
+  | "calculated_invoice_total"
+  | "total_source"
+>): {
   total: number | null;
   source: InvoiceTotalSource;
 } {

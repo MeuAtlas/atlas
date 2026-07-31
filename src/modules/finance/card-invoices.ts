@@ -5,6 +5,8 @@ import { persistedCardMovementAmountBrl } from "./foreign-card-movement";
 
 const amount = (value: number | string | null | undefined) =>
   Math.abs(Number(value ?? 0));
+const DAY_MS = 86_400_000;
+const PENDING_CUTOFF_GRACE_DAYS = 2;
 
 export interface CurrentCardInvoice {
   card: CreditCard;
@@ -148,7 +150,55 @@ export type CurrentInvoiceSummary = {
 };
 
 export function purchaseCompetenceDate(purchase: CardPurchase) {
-  return purchase.bill_forecast_date || purchase.purchase_date || purchase.competence_date || "";
+  const projected =
+    purchase.source === "projection" || purchase.status === "projected";
+  if (projected) {
+    return (
+      purchase.bill_forecast_date ||
+      purchase.competence_date ||
+      purchase.purchase_date ||
+      ""
+    );
+  }
+  return (
+    purchase.purchase_date ||
+    purchase.posting_date ||
+    purchase.competence_date ||
+    purchase.bill_forecast_date ||
+    ""
+  );
+}
+
+function addIsoDays(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setTime(date.getTime() + days * DAY_MS);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * A card purchase can be authorized before the closing date and only settle
+ * after the bill closes. Until Pluggy supplies a definitive billId, keep
+ * pending purchases from the cutoff window in the current open bill estimate.
+ * A provider bill reference always wins over this provisional rule.
+ */
+export function isPendingPurchaseCarriedIntoOpenCycle(
+  purchase: CardPurchase,
+  cycle: BillingCycle,
+) {
+  if (
+    purchase.status !== "pending" ||
+    purchase.provider_bill_id ||
+    purchase.invoice_reference
+  ) {
+    return false;
+  }
+  const date = purchaseCompetenceDate(purchase);
+  if (!date) return false;
+  const graceStart = addIsoDays(
+    cycle.cycleStart,
+    -PENDING_CUTOFF_GRACE_DAYS,
+  );
+  return date >= graceStart && date < cycle.cycleStart;
 }
 
 const normalizedDescription = (purchase: CardPurchase) =>
@@ -162,7 +212,33 @@ const normalizedDescription = (purchase: CardPurchase) =>
 const purchaseTimestamp = (purchase: CardPurchase) =>
   new Date(`${purchase.purchase_date}T12:00:00Z`).valueOf();
 
+function hasConflictingInstallmentDuplicate(
+  left: CardPurchase,
+  right: CardPurchase,
+) {
+  return (
+    left.source === "pluggy" &&
+    right.source === "pluggy" &&
+    left.invoice_id === null &&
+    right.invoice_id === null &&
+    left.card_id === right.card_id &&
+    left.installment_count !== null &&
+    left.installment_count === right.installment_count &&
+    left.installment_count > 1 &&
+    left.installment_number !== null &&
+    right.installment_number !== null &&
+    left.installment_number !== right.installment_number &&
+    Math.abs(purchaseTimestamp(left) - purchaseTimestamp(right)) === 0 &&
+    Math.abs(
+      Number(left.installment_amount) - Number(right.installment_amount),
+    ) <= 0.01 &&
+    normalizedDescription(left) === normalizedDescription(right)
+  );
+}
+
 function preferPosted(left: CardPurchase, right: CardPurchase) {
+  if (left.invoice_id && !right.invoice_id) return right;
+  if (right.invoice_id && !left.invoice_id) return left;
   if (left.status === "pending" && right.status !== "pending") return right;
   if (right.status === "pending" && left.status !== "pending") return left;
   return purchaseTimestamp(right) >= purchaseTimestamp(left) ? right : left;
@@ -193,8 +269,9 @@ export function deduplicateCardPurchases(purchases: CardPurchase[]) {
   );
   const result: CardPurchase[] = [];
   for (const purchase of candidates) {
-    const duplicate = result.find(
-      (existing) =>
+    const duplicate = result.find((existing) =>
+      hasConflictingInstallmentDuplicate(existing, purchase) ||
+      (
         existing.card_id === purchase.card_id &&
         existing.transaction_role === purchase.transaction_role &&
         new Set([existing.status, purchase.status]).size === 2 &&
@@ -207,7 +284,8 @@ export function deduplicateCardPurchases(purchases: CardPurchase[]) {
         ) <= 0.01 &&
         normalizedDescription(existing) === normalizedDescription(purchase) &&
         Math.abs(purchaseTimestamp(existing) - purchaseTimestamp(purchase)) <=
-          3 * 86_400_000,
+          3 * 86_400_000
+      ),
     );
     if (!duplicate) result.push(purchase);
   }
@@ -687,6 +765,19 @@ export function buildCurrentCardInvoices(
             Boolean(card.provider_bill_id) &&
             (purchase.provider_bill_id === card.provider_bill_id ||
               purchase.invoice_reference === card.provider_bill_id);
+          const belongsToAnotherStoredInvoice = Boolean(
+            purchase.invoice_id && purchase.invoice_id !== storedInvoice?.id,
+          );
+          const belongsToAnotherProviderBill = Boolean(
+            card.provider_bill_id &&
+            (purchase.provider_bill_id || purchase.invoice_reference) &&
+            !matchesProviderBill,
+          );
+          // The provider may retain an old transaction date after settlement,
+          // but a persisted invoice/bill link is authoritative for membership.
+          if (belongsToAnotherStoredInvoice || belongsToAnotherProviderBill) {
+            return false;
+          }
           if (purchase.transaction_role === "invoice_payment") {
             return (
               matchesProviderBill ||
@@ -695,6 +786,7 @@ export function buildCurrentCardInvoices(
           }
           return (
             matchesProviderBill ||
+            isPendingPurchaseCarriedIntoOpenCycle(purchase, cycle) ||
             (date >= cycle.cycleStart && date <= cycle.cycleEnd)
           );
         })

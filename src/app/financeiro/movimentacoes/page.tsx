@@ -20,6 +20,14 @@ import {
   getMovementsData,
   resolveOpenCardInvoice,
 } from "@/modules/finance/queries";
+import { scoreCommitmentMatch } from "@/modules/finance/commitments";
+import {
+  mapCommitment,
+  mapOccurrence,
+} from "@/modules/finance/commitments-query";
+import {
+  getMovementPersonContexts,
+} from "@/modules/finance/person-reimbursements-query";
 
 const PAGE_SIZE = 40;
 
@@ -30,6 +38,11 @@ export default async function MovementsPage({
 }) {
   const rawFilters = await searchParams;
   const { supabase, user } = await requireFinanceAccess();
+  const workspacesResult = await supabase.from("workspaces")
+    .select("id").order("type");
+  const workspaceId = workspacesResult.data?.find(item =>
+    item.id === rawFilters.workspace
+  )?.id ?? workspacesResult.data?.[0]?.id ?? null;
   const cardCycles = await getAvailableCardCycles(supabase, user.id);
   const filters = normalizeMovementFilterState(rawFilters, cardCycles);
   const selectedCycle = filters.type === "card"
@@ -74,7 +87,7 @@ export default async function MovementsPage({
         referenceDate: new Date(),
       })
     : null;
-  const normalized = deduplicateMovements([
+  const normalizedBase = deduplicateMovements([
     ...data.transactions.map(transaction =>
       normalizeMovementListItem(transaction, data.accounts)),
     ...data.cardPurchases.map(purchase => normalizeMovementListItem(purchase)),
@@ -82,6 +95,7 @@ export default async function MovementsPage({
     right.date.localeCompare(left.date) ||
     (right.createdAt ?? "").localeCompare(left.createdAt ?? ""),
   );
+  const normalized = normalizedBase;
   const filtered = normalized.filter(item =>
     matchesMovement(item, filters, selectedCycle));
   const summary = calculateMovementPeriodSummary(filtered);
@@ -110,6 +124,13 @@ export default async function MovementsPage({
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const items = filtered.slice(offset, offset + PAGE_SIZE);
+  const personContexts = workspaceId
+    ? await getMovementPersonContexts(
+        supabase,
+        workspaceId,
+        items.filter(item => item.sourceKind === "transaction").map(item => item.id),
+      )
+    : {};
   const activeAccounts = data.accounts
     .filter(account => account.status === "active")
     .map(account => ({
@@ -142,6 +163,27 @@ export default async function MovementsPage({
           }`,
         }];
     });
+  const [peopleResult, occurrenceResult, decisionsResult] = workspaceId
+    ? await Promise.all([
+        supabase.from("financial_people").select("id,name")
+          .eq("workspace_id", workspaceId).eq("is_active", true)
+          .neq("relation_type", "self")
+          .is("archived_at", null).order("name"),
+        supabase.from("financial_commitment_occurrences").select(
+          "*,financial_commitments!inner(id,workspace_id,title,description,commitment_type,recurrence_frequency,recurrence_interval,amount_type,expected_amount,minimum_expected_amount,maximum_expected_amount,currency_code,category_id,account_id,card_id,payment_method,due_day,due_date,start_date,end_date,next_due_date,status,auto_match_enabled,merchant_match_pattern,description_match_pattern,expected_day_tolerance,expected_amount_tolerance,source,source_record_id,is_payroll_deduction,generates_future_projections,last_generated_until)",
+        ).eq("workspace_id", workspaceId)
+          .in("status", ["projected", "expected", "pending", "overdue", "partially_paid"])
+          .is("linked_transaction_id", null)
+          .is("linked_card_movement_id", null)
+          .order("expected_due_date").limit(300),
+        supabase.from("commitment_match_decisions")
+          .select("fingerprint").eq("workspace_id", workspaceId)
+          .eq("decision", "rejected"),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+  const rejectedMatches = new Set((decisionsResult.data ?? []).map(item =>
+    String(item.fingerprint)
+  ));
   return (
     <MovementsBrowser
       key={buildMovementQueryKey(filters)}
@@ -165,6 +207,61 @@ export default async function MovementsPage({
       hasConnectedAccount={data.connections.length > 0}
       completeness={data.completeness}
       warnings={data.warnings}
+      workspaceId={workspaceId}
+      people={(peopleResult.data ?? []).map(item => ({
+        id: String(item.id),
+        name: String(item.name),
+      }))}
+      commitmentOccurrences={(occurrenceResult.data ?? []).map(item => {
+        const commitment = Array.isArray(item.financial_commitments)
+          ? item.financial_commitments[0]
+          : item.financial_commitments;
+        return {
+          id: String(item.id),
+          name: `${commitment?.title ?? "Compromisso"} · ${
+            item.expected_due_date ?? item.competence_month
+          } · R$ ${Number(item.expected_amount ?? 0).toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+          })}`,
+        };
+      })}
+      commitmentMatches={items
+        .filter(item => item.sourceKind === "transaction")
+        .flatMap(item => (occurrenceResult.data ?? []).map(row => {
+          const commitmentRow = Array.isArray(row.financial_commitments)
+            ? row.financial_commitments[0]
+            : row.financial_commitments;
+          if (!commitmentRow?.auto_match_enabled) return null;
+          const candidate = scoreCommitmentMatch({
+            occurrence: mapOccurrence(
+              row as unknown as Parameters<typeof mapOccurrence>[0],
+            ),
+            commitment: mapCommitment(
+              commitmentRow as unknown as Parameters<typeof mapCommitment>[0],
+            ),
+            transaction: {
+              id: item.id,
+              description: item.originalDescription,
+              merchant: item.normalizedDescription,
+              amountCents: Math.round(Math.abs(item.amount) * 100),
+              date: item.date,
+              accountId: item.accountId,
+              cardId: item.cardId,
+            },
+          });
+          const fingerprint =
+            `transaction:${item.id}:commitment:${commitmentRow.id}`;
+          return candidate.score >= 0.7 && !rejectedMatches.has(fingerprint) ? {
+            transactionId: item.id,
+            occurrenceId: String(row.id),
+            commitmentId: String(commitmentRow.id),
+            title: String(commitmentRow.title),
+            score: candidate.score,
+            decision: candidate.decision,
+            reasons: candidate.reasons,
+          } : null;
+        }).filter(candidate => candidate !== null))}
+      personContexts={personContexts}
     />
   );
 }

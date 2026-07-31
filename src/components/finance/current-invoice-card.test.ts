@@ -64,7 +64,8 @@ test("resumo compacto prioriza o resolvedor central e mantém o selector como fa
 test("resumo e detalhe partem da mesma normalização de fatura", () => {
   assert.match(compact, /getCurrentInvoiceSummary/);
   assert.match(detail, /getCurrentBillSummary/);
-  assert.match(detail, /billSummary\.amount/);
+  assert.match(detail, /resolveOpenCardInvoice/);
+  assert.match(detail, /resolvedInvoice\.displayTotal/);
   assert.match(detail, /billSummary\.purchasesCount/);
   assert.match(detail, /billSummary\.periodStart/);
   assert.match(detail, /billSummary\.closesAt/);

@@ -249,7 +249,9 @@ function resolvedTotalSourceLabel(
   }
   if (source === "pdf") return "PDF da fatura";
   if (source === "manual") return "Informado manualmente";
-  if (source === "calculated") return "Calculado pelo Atlas";
+  if (source === "calculated") {
+    return "Estimativa pelas compras sincronizadas";
+  }
   return "Indisponível";
 }
 
@@ -1260,6 +1262,11 @@ export function InvoiceDetailsDrawer({
           }>
             {cycleDetails ? "Ver em Movimentações" : "Ver na página de cartões"}
           </Link>
+          {cycleDetails ? (
+            <Link href={`/financeiro/cartoes/${invoice.card.id}`}>
+              Informar valor do banco
+            </Link>
+          ) : null}
           <button type="button" onClick={close}>
             Fechar
           </button>

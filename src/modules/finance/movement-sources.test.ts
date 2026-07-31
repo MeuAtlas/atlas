@@ -319,5 +319,5 @@ test("integração: ciclo aberto sem Bill recupera Pluggy por competência e pro
   );
   assert.match(String(openFilter?.args[0]), /purchase_date\.gte\.2026-07-04/);
   assert.match(String(openFilter?.args[0]), /competence_date\.gte\.2026-07-04/);
-  assert.doesNotMatch(String(openFilter?.args[0]), /invoice_id\.is\.null/);
+  assert.match(String(openFilter?.args[0]), /invoice_id\.is\.null/);
 });

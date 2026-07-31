@@ -34,6 +34,7 @@ export function AtlasLogo({
           alt=""
           width={1024}
           height={1024}
+          loading={priority ? "eager" : undefined}
           fetchPriority={priority ? "high" : undefined}
           sizes={`${size}px`}
         />
@@ -43,6 +44,7 @@ export function AtlasLogo({
           alt=""
           width={1024}
           height={1024}
+          loading={priority ? "eager" : undefined}
           fetchPriority={priority ? "high" : undefined}
           sizes={`${size}px`}
         />

@@ -787,6 +787,9 @@ test("interface remove abas e cards altos e mantém drawer acessível", () => {
   assert.equal(source.match(/router\.refresh\(\)/g)?.length, 1);
   assert.match(source, /onClick=\{\(\) => router\.refresh\(\)\}/);
   assert.doesNotMatch(source, /setInterval|refetchInterval|polling/);
+  assert.match(source, /O dinheiro entrou na conta/);
+  assert.match(source, /O dinheiro saiu da conta/);
+  assert.doesNotMatch(source, /Pessoa e reembolso|Classificar como reembolso/);
   assert.doesNotMatch(page, /rawFilters\.cycle\s*\|\|/);
   assert.match(
     page,
@@ -806,18 +809,19 @@ test("interface possui estados, paginação e privacidade de valores", () => {
   assert.match(error, /Tentar novamente/);
 });
 
-test("interface e cadastro manual preservam as duas moedas da compra internacional", () => {
+test("interface preserva as duas moedas sem oferecer cadastro manual", () => {
   const source = readFileSync("src/components/finance/movements-browser.tsx", "utf8");
   const actions = readFileSync("src/modules/finance/actions.ts", "utf8");
   assert.match(source, /formatMoneyByCurrency/);
   assert.match(source, /Valor original/);
   assert.match(source, /Valor convertido/);
+  assert.match(source, /movement-row-foreign-original/);
+  assert.match(source, /\$\{convertedMoney\} em reais/);
+  assert.match(source, /Conversão em reais indisponível/);
+  assert.match(source, /movement-drawer-foreign-amount/);
   assert.match(source, /Data da compra/);
-  assert.match(source, /name="posting_date"/);
-  assert.match(source, /name="currency"/);
-  assert.match(source, /name="original_amount"/);
-  assert.match(source, /name="exchange_rate"/);
-  assert.match(source, /name="foreign_iof_amount"/);
+  assert.doesNotMatch(source, /Adicionar lançamento/);
+  assert.doesNotMatch(source, /addManualCardCycleMovement/);
   assert.match(actions, /amount_brl:amount/);
   assert.match(actions, /original_currency_code:currency==="BRL"\?null:currency/);
   assert.match(actions, /external_id:`\$\{externalId\}:iof`/);
@@ -840,7 +844,7 @@ test("consulta é limitada ao período e aos campos da lista", () => {
   assert.match(query, /\["forecast", "cancelled"\]\.includes\(transaction\.status\)/);
   assert.match(query, /\.from\("card_invoices"\)[\s\S]*?\.eq\("owner_id",\s*userId\)[\s\S]*?\.eq\("id",\s*scope\.cycleId\)/);
   assert.match(query, /\.from\("invoice_entries"\)[\s\S]*?\.eq\("bill_id",\s*selectedCycle\.id\)[\s\S]*?\.in\("entry_type"/);
-  assert.match(query, /invoice_id\.eq\.\$\{selectedCycle\.id\},and\(purchase_date\.gte\.\$\{period\.from\},purchase_date\.lte\.\$\{period\.to\}\),and\(competence_date\.gte\.\$\{period\.from\},competence_date\.lte\.\$\{period\.to\}\)/);
+  assert.match(query, /invoice_id\.eq\.\$\{selectedCycle\.id\},and\(invoice_id\.is\.null,purchase_date\.gte\.\$\{period\.from\},purchase_date\.lte\.\$\{period\.to\}\),and\(invoice_id\.is\.null,competence_date\.gte\.\$\{period\.from\},competence_date\.lte\.\$\{period\.to\}\)/);
   assert.match(query, /card_installment_occurrences/);
   assert.equal(restoredInvoicePaymentQueries.length, 4);
   assert.doesNotMatch(query, /financial_investments|financial_loans/);
@@ -862,9 +866,15 @@ test("backfill restaura pagamentos migrados e é idempotente", () => {
 test("layout é compacto, responsivo e sem scroll horizontal", () => {
   const css = readFileSync("src/app/globals.css", "utf8");
   assert.match(css, /\.movement-row\{[\s\S]*min-height:72px/);
+  assert.match(
+    css,
+    /\.movement-drawer-backdrop\{[^}]*align-items:center;justify-content:center/,
+  );
+  assert.match(css, /\.movement-drawer\{[^}]*width:min\(980px/);
   assert.match(css, /@media\(max-width:640px\)[\s\S]*\.movement-drawer/);
   assert.match(css, /\.movement-row:focus-visible/);
-  assert.doesNotMatch(css.slice(css.indexOf("Movements - compact personal ledger")), /overflow-x:auto/);
+  assert.match(css, /\.finance-scroll\{[^}]*overflow-x:hidden/);
+  assert.match(css, /\.movements-page\{[^}]*min-width:0/);
 });
 
 test("interface alterna período bancário e fatura real com estado vazio responsivo", () => {

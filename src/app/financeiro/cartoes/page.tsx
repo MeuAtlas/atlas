@@ -7,6 +7,7 @@ import { CurrentInvoiceCard } from "@/components/finance/current-invoice-card";
 import { ImportInvoiceButton } from "@/components/finance/import-invoice-button";
 import { EmptyState } from "@/components/finance/empty-state";
 import { InvoiceHistorySection } from "@/components/finance/invoice-history-section";
+import { InvoiceConsumptionAnalytics } from "@/components/finance/invoice-consumption-analytics";
 import { SubmitButton } from "@/components/finance/submit-button";
 import { Money, ValueVisibility } from "@/components/finance/value-visibility";
 import {
@@ -22,11 +23,14 @@ import { requireFinanceAccess } from "@/modules/finance/access";
 import { buildCurrentCardInvoices } from "@/modules/finance/card-invoices";
 import {
   HISTORICAL_INVOICE_STATUSES,
+  buildInvoiceHistoryAnalytics,
+  type InvoiceHistoryAnalyticsEntry,
   type CreditCardInvoiceHistoryResult,
   type HistoricalInvoiceStatus,
 } from "@/modules/finance/invoice-history";
 import {
   getCreditCardInvoiceHistory,
+  getCreditCardInvoiceAnalyticsEntries,
   getFinanceData,
   getReliableCurrentInvoiceSnapshots,
   getResolvedCardCycleDetails,
@@ -120,6 +124,26 @@ export default async function Page({
       return [invoice.card.id, { resolved, details }] as const;
     }))).filter((entry): entry is NonNullable<typeof entry> => entry !== null),
   );
+  const currentInvoiceTotals = [...resolvedInvoices.values()]
+    .map(value => value.resolved.displayTotal)
+    .filter((value): value is number => value !== null);
+  const currentInvoiceTotal = currentInvoiceTotals.length
+    ? currentInvoiceTotals.reduce((sum, value) => sum + value, 0)
+    : null;
+  let analyticsEntries: InvoiceHistoryAnalyticsEntry[] = [];
+  try {
+    analyticsEntries = await getCreditCardInvoiceAnalyticsEntries(
+      supabase,
+      user.id,
+      workspaceId,
+    );
+  } catch {
+    // A indisponibilidade do histórico não bloqueia a fatura vigente.
+  }
+  const invoiceAnalytics = buildInvoiceHistoryAnalytics(
+    analyticsEntries,
+    currentInvoiceTotal,
+  );
 
   let historyError = false;
   let history: CreditCardInvoiceHistoryResult = {
@@ -185,6 +209,7 @@ export default async function Page({
       {view === "history" ? (
         <>
         <div className="invoice-import-action-row"><ImportInvoiceButton /></div>
+        <InvoiceConsumptionAnalytics analytics={invoiceAnalytics} />
         <InvoiceHistorySection
           result={history}
           cards={data.cards}
@@ -241,6 +266,7 @@ export default async function Page({
                 description="Cadastre um cartão ou conecte a Pluggy para importar compras."
               />
             )}
+            <InvoiceConsumptionAnalytics analytics={invoiceAnalytics} />
           </section>
 
           {activeCards

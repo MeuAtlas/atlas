@@ -5,7 +5,7 @@ import {
   resolveCycleCompetenceMonth,
 } from "./card-cycle-accounts";
 
-test("resolve conta principal, adicional ativo e instrumentos do ciclo", () => {
+test("mantém contas Mastercard e Visa independentes na mesma conexão", () => {
   const result = resolveCardCycleAccountIds("mastercard", [
     {
       id: "mastercard",
@@ -19,8 +19,8 @@ test("resolve conta principal, adicional ativo e instrumentos do ciclo", () => {
       ],
     },
     {
-      id: "sibling-active",
-      external_id: "provider-sibling",
+      id: "visa-active",
+      external_id: "provider-visa",
       bank_connection_id: "santander",
       status: "active",
     },
@@ -37,11 +37,11 @@ test("resolve conta principal, adicional ativo e instrumentos do ciclo", () => {
       status: "active",
     },
   ]);
-  assert.deepEqual(result.cardIds, ["mastercard", "sibling-active"]);
-  assert.deepEqual(result.accountIds, ["provider-master", "provider-sibling"]);
+  assert.deepEqual(result.cardIds, ["mastercard"]);
+  assert.deepEqual(result.accountIds, ["provider-master"]);
   assert.deepEqual(result.instrumentIds, ["physical", "additional", "virtual"]);
   assert.deepEqual(result.instrumentLastFours, ["5718", "6579", "5991"]);
-  assert.equal(result.resolutionSource, "pluggy_connection");
+  assert.equal(result.resolutionSource, "primary_card");
 });
 
 test("competência usa vencimento e recua para fechamento/referência", () => {

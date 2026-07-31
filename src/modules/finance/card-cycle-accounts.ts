@@ -17,7 +17,7 @@ export type CardCycleAccountResolution = {
   cardIds: string[];
   instrumentIds: string[];
   instrumentLastFours: string[];
-  resolutionSource: "primary_card" | "pluggy_connection";
+  resolutionSource: "primary_card";
 };
 
 export function resolveCardCycleAccountIds(
@@ -25,18 +25,11 @@ export function resolveCardCycleAccountIds(
   cards: CardCycleAccountCandidate[],
 ): CardCycleAccountResolution {
   const primary = cards.find(card => card.id === primaryCardId);
-  const connectionId = primary?.bank_connection_id ?? null;
-  const resolved = cards.filter(card =>
-    card.id === primaryCardId ||
-    Boolean(
-      connectionId &&
-      card.bank_connection_id === connectionId &&
-      card.status === "active" &&
-      !card.user_archived_at,
-    ));
-  if (!resolved.some(card => card.id === primaryCardId)) {
-    resolved.unshift({ id: primaryCardId });
-  }
+  // A Pluggy Item/connection can expose multiple independent CREDIT accounts
+  // (for example, one Mastercard and one Visa). Sharing a connection does not
+  // mean sharing a bill. Additional and virtual cards belonging to the same
+  // bill are already represented as instruments of the primary credit account.
+  const resolved = [primary ?? { id: primaryCardId }];
   const cardIds = [...new Set(resolved.map(card => card.id))];
   const providerAccountIds = [...new Set(
     resolved
@@ -56,7 +49,7 @@ export function resolveCardCycleAccountIds(
         .map(instrument => instrument.last_four_digits)
         .filter((value): value is string => Boolean(value)),
     )],
-    resolutionSource: connectionId ? "pluggy_connection" : "primary_card",
+    resolutionSource: "primary_card",
   };
 }
 

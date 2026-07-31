@@ -19,10 +19,8 @@ export async function persistOfficialBills(input:{
   connectionId:string;
   billsByProviderAccount:Map<string,PluggyBill[]>;
   cardMap:Map<string,string>;
-  complete:boolean;
 }){
- const {supabase,ownerId,connectionId,billsByProviderAccount,cardMap,complete}=input;
- if(!complete)return {bills:0,payments:0,charges:0,linkedPayments:0,preserved:true};
+ const {supabase,ownerId,connectionId,billsByProviderAccount,cardMap}=input;
  let billCount=0,paymentCount=0,chargeCount=0;
  for(const [providerAccountId,providerBills] of billsByProviderAccount){
   const cardId=cardMap.get(providerAccountId);if(!cardId)continue;
@@ -174,9 +172,8 @@ export async function refreshOfficialBill(input:{
   return persistOfficialBills({
    supabase:input.supabase,ownerId:input.ownerId,
    connectionId:String(card.data.bank_connection_id),
-   billsByProviderAccount:new Map([[accountId,[bill]]]),
-   cardMap:new Map([[accountId,String(local.data.card_id)]]),
-   complete:true,
+    billsByProviderAccount:new Map([[accountId,[bill]]]),
+    cardMap:new Map([[accountId,String(local.data.card_id)]]),
   });
  }catch(error){
   const normalized=normalizeIntegrationError(error);

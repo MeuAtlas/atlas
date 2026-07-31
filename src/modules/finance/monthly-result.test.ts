@@ -137,7 +137,7 @@ test("compra parcelada usa somente installment_amount e não total_amount", () =
   assert.equal(result.monthlyResult, -500);
 });
 
-test("desconto em folha realizado entra sem conta bancária fictícia", () => {
+test("desconto em folha é analítico sem reduzir novamente o resultado", () => {
   const result = calculate([
     transaction({
       account_id: null,
@@ -151,7 +151,10 @@ test("desconto em folha realizado entra sem conta bancária fictícia", () => {
       amount: 1_000,
     }),
   ]);
-  assert.equal(result.realizedExpenses, 1_000);
+  assert.equal(result.realizedExpenses, 0);
+  assert.equal(result.payrollDeductions, 1_000);
+  assert.equal(result.analyticalExpenses, 1_000);
+  assert.equal(result.monthlyResult, 0);
 });
 
 test("crédito de empréstimo e principal de investimento são excluídos", () => {

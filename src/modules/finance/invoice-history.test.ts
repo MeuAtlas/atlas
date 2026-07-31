@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   decodeInvoiceHistoryCursor,
   encodeInvoiceHistoryCursor,
+  buildInvoiceHistoryAnalytics,
   filterHistoricalInvoices,
   inferFullInvoicePayment,
   isHistoricalInvoice,
@@ -385,6 +386,75 @@ test("cursor é opaco, estável e suporta paginação", () => {
   assert.equal(encodeInvoiceHistoryCursor(12), "hc");
   assert.equal(decodeInvoiceHistoryCursor("hc"), 12);
   assert.equal(decodeInvoiceHistoryCursor("inválido"), 0);
+});
+
+test("histórico calcula mediana mensal e compara a fatura vigente", () => {
+  const analytics = buildInvoiceHistoryAnalytics([
+    {
+      id: "may",
+      cardId: "mastercard",
+      dueDate: "2026-05-10",
+      status: "paid",
+      total: 8000,
+      totalSource: "provider_bill",
+    },
+    {
+      id: "june-master",
+      cardId: "mastercard",
+      dueDate: "2026-06-10",
+      status: "paid",
+      total: 9000,
+      totalSource: "provider_bill",
+    },
+    {
+      id: "june-visa",
+      cardId: "visa",
+      dueDate: "2026-06-10",
+      status: "paid",
+      total: 1000,
+      totalSource: "provider_bill",
+    },
+    {
+      id: "july",
+      cardId: "mastercard",
+      dueDate: "2026-07-10",
+      status: "closed",
+      total: 11517.22,
+      totalSource: "provider_bill",
+    },
+  ], 7397.25);
+
+  assert.deepEqual(
+    analytics.months.map(month => [month.month, month.total]),
+    [["2026-05", 8000], ["2026-06", 10000], ["2026-07", 11517.22]],
+  );
+  assert.equal(analytics.median, 10000);
+  assert.equal(analytics.currentDifference, -2602.75);
+  assert.equal(analytics.currentDifferencePercentage, -26.03);
+  assert.equal(analytics.currentPosition, "below");
+});
+
+test("faturas canceladas e sem total não distorcem a mediana", () => {
+  const analytics = buildInvoiceHistoryAnalytics([
+    {
+      id: "cancelled",
+      cardId: "mastercard",
+      dueDate: "2026-06-10",
+      status: "cancelled",
+      total: 99999,
+      totalSource: "manual_bank_confirmation",
+    },
+    {
+      id: "unavailable",
+      cardId: "mastercard",
+      dueDate: "2026-07-10",
+      status: "closed",
+      total: null,
+      totalSource: "unavailable",
+    },
+  ], null);
+  assert.equal(analytics.median, null);
+  assert.equal(analytics.currentPosition, "unavailable");
 });
 
 test("migrations aplicam escopo e reprocessamento idempotente do pagamento", () => {

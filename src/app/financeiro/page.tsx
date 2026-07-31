@@ -18,6 +18,8 @@ import {
   getFinanceOverviewData,
   resolveOpenCardInvoice,
 } from "@/modules/finance/queries";
+import { getActiveFinanceWorkspaceContext } from "@/modules/finance/workspace-context";
+import { getIncomeExpenseOverview } from "@/modules/finance/income-expenses-query";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -127,7 +129,11 @@ export default async function FinancePage({
       scope: { workspaceId },
     },
   );
-
+  const activeWorkspace = await getActiveFinanceWorkspaceContext(workspaceId);
+  const flowSummary = await getIncomeExpenseOverview(supabase, {
+    workspaceId: activeWorkspace.workspaceId,
+    month: period.key,
+  });
   return (
     <FinanceOverview
       dashboard={dashboard}
@@ -140,6 +146,7 @@ export default async function FinancePage({
       workspace={workspaceParam || "personal"}
       warnings={data.warnings}
       initialDetails={detailsParam}
+      flowSummary={flowSummary.overview}
     />
   );
 }

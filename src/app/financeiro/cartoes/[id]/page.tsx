@@ -14,6 +14,7 @@ import {
   getCardInvoiceHistory,
   getCreditCardInvoiceHistory,
   getFinanceData,
+  resolveOpenCardInvoice,
 } from "@/modules/finance/queries";
 import { assignPurchaseInstrument, confirmCurrentInvoiceAmount, updatePurchaseInstallment } from "@/modules/finance/actions";
 import { buildFutureInstallmentProjection, estimatedInstallmentRemaining, installmentLabel, isInstallmentPurchase, matchesInstallmentFilter, type InstallmentFilter } from "@/modules/finance/installments";
@@ -47,6 +48,12 @@ export default async function CardInvoiceDetails({
   const card = data.cards.find((item) => item.id === id);
   if (!card) notFound();
   const invoice = buildCurrentCardInvoices([card], data.cardPurchases)[0];
+  const resolvedInvoice = invoice.cycle
+    ? await resolveOpenCardInvoice(supabase, user.id, {
+        cardAccountId: card.id,
+        referenceDate: new Date(),
+      })
+    : null;
   const billSummary = getCurrentBillSummary(invoice);
   const invoiceTab = ["atual", "anteriores", "futuras"].includes(
     query.fatura ?? "",
@@ -120,10 +127,10 @@ export default async function CardInvoiceDetails({
         ) : (
           <>
             <div className="invoice-detail-summary">
-              <div><small>{billSummary.statusLabel}</small><strong>{billSummary.amount === null ? "Indisponível" : <Money value={billSummary.amount} />}</strong></div>
+              <div><small>{billSummary.statusLabel}</small><strong>{resolvedInvoice?.displayTotal === null || resolvedInvoice?.displayTotal === undefined ? "Indisponível" : <Money value={resolvedInvoice.displayTotal} />}</strong></div>
               <div><small>Compras importadas</small><strong>{billSummary.purchasesCount ?? "Indisponível"}</strong></div>
               <div><small>Movimentações conciliadas</small><strong><Money value={invoice.calculatedInvoiceTotal} /></strong></div>
-              <div><small>Diferença ainda não detalhada</small><strong><Money value={Math.abs(invoice.reconciliationDifference??0)} /></strong></div>
+              <div><small>Diferença ainda não detalhada</small><strong><Money value={Math.abs(resolvedInvoice?.reconciliationDifference??0)} /></strong></div>
               <div><small>Saldo em aberto</small><strong><Money value={invoice.outstandingAmount} /></strong></div>
               <div><small>Compras do ciclo</small><strong><Money value={invoice.purchasesTotal} /></strong></div>
               <div><small>Créditos e estornos</small><strong><Money value={-invoice.creditsTotal} /></strong></div>
@@ -139,7 +146,7 @@ export default async function CardInvoiceDetails({
             <details className="invoice-reconciliation" open={invoice.reconciliationStatus==="divergent"}>
               <summary>Diagnóstico interno de conciliação</summary>
               <div className="invoice-detail-summary">
-                <div><small>Fonte do total</small><strong>{invoice.totalSource==="provider_bill"?"Bill.totalAmount":invoice.totalSource==="manual_bank_confirmation"?"Confirmação manual do banco":"Transações calculadas"}</strong></div>
+                <div><small>Fonte do total</small><strong>{resolvedInvoice?.sourceLabel ?? (invoice.totalSource==="provider_bill"?"Bill.totalAmount":invoice.totalSource==="manual_bank_confirmation"?"Confirmação manual do banco":"Estimativa pelas compras sincronizadas")}</strong></div>
                 <div><small>Account.balance (diagnóstico)</small><strong>{invoice.accountCreditBalance===null?"Não informado":<Money value={invoice.accountCreditBalance}/>}</strong></div>
                 <div><small>Compras POSTED</small><strong>{invoice.postedTransactionsCount} · <Money value={postedAmounts.invoiceTotal}/></strong></div>
                 <div><small>Compras PENDING</small><strong>{invoice.pendingTransactionsCount} · <Money value={invoice.pendingTransactionsTotal}/></strong></div>

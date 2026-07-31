@@ -22,3 +22,19 @@ test("backfill é autenticado, idempotente e possui dry-run", () => {
   assert.match(sql, /is distinct from/);
   assert.match(sql, /'mode',case when p_apply then 'apply' else 'dry-run'/);
 });
+
+test("migration 074 usa o maior valor entre confirmação e estimativa", () => {
+  const policy = readFileSync(
+    "supabase/migrations/202607300074_invoice_history_and_open_total_policy.sql",
+    "utf8",
+  );
+  assert.match(
+    policy,
+    /greatest\(\s*new\.confirmed_open_total,\s*new\.manual_invoice_total,\s*new\.confirmed_invoice_total,\s*new\.calculated_invoice_total\s*\)/,
+  );
+  assert.match(
+    policy,
+    /new\.source='pluggy_bill'[\s\S]*new\.total_source='provider_bill'/,
+  );
+  assert.match(policy, /where status='open'/);
+});

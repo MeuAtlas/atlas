@@ -11,7 +11,7 @@ const items: FinanceTabItem[] = [
   { href: "/financeiro/contas", label: "Contas" },
   { href: "/financeiro/cartoes", label: "Cartões" },
   { href: "/financeiro/emprestimos", label: "Empréstimos" },
-  { href: "/financeiro#compromissos", label: "Compromissos" },
+  { href: "/financeiro/receitas-despesas", label: "Receitas e Despesas" },
   { href: "/financeiro/planejamento", label: "Planejamento" },
   { href: "/financeiro/relatorios", label: "Relatórios" },
   { href: "/financeiro/integracoes", label: "Integrações" },

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { Money } from "./value-visibility";
 import {
   buildMovementFiltersUrl,
@@ -24,12 +25,32 @@ import {
   formatMoneyByCurrency,
   implicitExchangeRate,
 } from "@/modules/finance/foreign-card-movement";
+import { correctForeignCardMovementAmounts } from "@/modules/finance/actions";
 import {
-  addManualCardCycleMovement,
-  correctForeignCardMovementAmounts,
-} from "@/modules/finance/actions";
+  confirmCommitmentMatch,
+  linkCardMovementToOccurrence,
+  linkTransactionToOccurrence,
+  rejectCommitmentMatch,
+  transformTransactionIntoRecurringCommitment,
+} from "@/modules/finance/commitments-actions";
+import {
+  linkMovementSourceToPersonAction,
+  unlinkMovementSourceFromPersonAction,
+} from "@/modules/finance/movement-person-actions";
+import type {
+  MovementPersonContext,
+} from "@/modules/finance/person-reimbursements-query";
 
 type Option = { id: string; name: string; parentId?: string };
+type CommitmentMatchView = {
+  transactionId: string;
+  occurrenceId: string;
+  commitmentId: string;
+  title: string;
+  score: number;
+  decision: string;
+  reasons: string[];
+};
 type OpenCycleBreakdownView = {
   newPurchasesTotal: number | null;
   postedInstallmentsTotal: number | null;
@@ -66,6 +87,31 @@ function formatShortDate(value: string) {
   }).format(new Date(`${value}T12:00:00Z`));
 }
 
+function movementStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    realized: "Realizado",
+    pending: "Pendente",
+    projected: "Previsto",
+    cancelled: "Cancelado",
+    disputed: "Em contestação",
+  };
+  return labels[status] ?? status;
+}
+
+function financialRoleLabel(role: string | null | undefined) {
+  const labels: Record<string, string> = {
+    revenue: "Receita",
+    expense: "Despesa",
+    transfer: "Transferência",
+    investment_principal: "Movimentação de investimento",
+    investment_income: "Rendimento",
+    loan_principal: "Principal de empréstimo",
+    fee: "Tarifa",
+    refund: "Estorno",
+  };
+  return role ? labels[role] ?? role : "Não informado";
+}
+
 function SummaryCards({
   summary,
   cycle,
@@ -77,6 +123,17 @@ function SummaryCards({
   breakdown?: OpenCycleBreakdownView | null;
   resolvedInvoice?: ResolvedOpenCardInvoice | null;
 }) {
+  if (summary.mode === "all") {
+    return (
+      <aside className="movement-all-context" role="note">
+        <strong>Pesquisa geral</strong>
+        <span>
+          Esta visão reúne conta corrente, cartões e ajustes apenas para localizar
+          lançamentos. Os totais financeiros aparecem nas visões específicas.
+        </span>
+      </aside>
+    );
+  }
   const isConfirmedClosedCycle = Boolean(
     cycle &&
     cycle.officialTotal !== null &&
@@ -213,6 +270,41 @@ function SummaryCards({
   );
 }
 
+function MovementViewTabs({ filters }: { filters: MovementFilters }) {
+  const type = (filters.type || "bank") as MovementSourceFilter;
+  const views: Array<{ value: MovementSourceFilter; label: string; href: string }> = [
+    {
+      value: "bank",
+      label: "Conta corrente",
+      href: "/financeiro/movimentacoes?type=bank&period=this-month",
+    },
+    {
+      value: "card",
+      label: "Cartões",
+      href: "/financeiro/movimentacoes?type=card",
+    },
+    {
+      value: "all",
+      label: "Todas",
+      href: "/financeiro/movimentacoes?type=all&period=this-month",
+    },
+  ];
+  return (
+    <nav className="movement-view-tabs" aria-label="Visão das movimentações">
+      {views.map(view => (
+        <Link
+          key={view.value}
+          href={view.href}
+          className={type === view.value ? "active" : undefined}
+          aria-current={type === view.value ? "page" : undefined}
+        >
+          {view.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 export function MovementTypeSelect({
   value,
   onChange,
@@ -330,19 +422,19 @@ function MovementFiltersForm({
   cards,
   cardCycles,
   categories,
+  people,
 }: {
   filters: MovementFilters;
   accounts: Option[];
   cards: Option[];
   cardCycles: AvailableCardCycle[];
   categories: Option[];
+  people: Option[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [period, setPeriod] = useState(filters.period || "this-month");
-  const [type, setType] = useState<MovementSourceFilter>(
-    (filters.type || "all") as MovementSourceFilter,
-  );
+  const type = (filters.type || "bank") as MovementSourceFilter;
   const defaultCycle = cardCycles.find(cycle => cycle.isCurrent)?.cycleId ??
     cardCycles[0]?.cycleId ?? "";
   const [cycleId, setCycleId] = useState(filters.cycle || defaultCycle);
@@ -354,6 +446,8 @@ function MovementFiltersForm({
     : cards;
   const advancedCount = [
     filters.category,
+    filters.nature,
+    filters.person,
     filters.origin,
     filters.status,
     filters.review,
@@ -382,6 +476,7 @@ function MovementFiltersForm({
       }}
     >
       <div className="movement-main-filters">
+        <input type="hidden" name="type" value={type} />
         <label className="movement-search">
           <span>Busca</span>
           <input
@@ -390,17 +485,6 @@ function MovementFiltersForm({
             placeholder="Buscar movimentação"
           />
         </label>
-        <MovementTypeSelect value={type} onChange={nextType => {
-          setType(nextType);
-          if (nextType === "card") {
-            setCycleId(defaultCycle);
-            setCardId("");
-          } else {
-            setCycleId("");
-            setCardId("");
-            setPeriod(filters.period || "this-month");
-          }
-        }} />
         {type === "card" ? (
           cardCycles.length ? (
             <CardBillSelect value={cycleId} cycles={cardCycles} onChange={value => {
@@ -412,7 +496,7 @@ function MovementFiltersForm({
           <>
             <BankPeriodSelect value={period} onChange={setPeriod} />
             <label>
-              <span>Conta</span>
+              <span>{type === "bank" ? "Conta" : "Conta (opcional)"}</span>
               <select name="account" defaultValue={filters.account || ""}>
                 <option value="">Todas as contas</option>
                 {accounts.map(account => <option value={account.id} key={account.id}>{account.name}</option>)}
@@ -441,6 +525,16 @@ function MovementFiltersForm({
             <option value="">Todas</option>
             {categories.map(category => <option value={category.id} key={category.id}>{category.name}</option>)}
           </select></label>
+          <label><span>Natureza</span><select name="nature" defaultValue={filters.nature || ""}>
+            <option value="">Todas</option><option value="income">Receita</option>
+            <option value="expense">Despesa</option><option value="reimbursement">Reembolso</option>
+            <option value="refund">Estorno</option><option value="transfer">Transferência</option>
+            <option value="neutral">Neutro</option>
+          </select></label>
+          <label><span>Pessoa</span><select name="person" defaultValue={filters.person || ""}>
+            <option value="">Todas</option>
+            {people.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}
+          </select></label>
           <label><span>Origem</span><select name="origin" defaultValue={filters.origin || ""}>
             <option value="">Todas</option><option value="pluggy">Pluggy</option><option value="manual">Manual</option>
           </select></label>
@@ -464,6 +558,41 @@ function MovementFiltersForm({
   );
 }
 
+function CurrentCardCyclesOverview({
+  cycles,
+  selectedCycle,
+}: {
+  cycles: AvailableCardCycle[];
+  selectedCycle: AvailableCardCycle | null;
+}) {
+  const currentCycles = cycles.filter(cycle => cycle.isCurrent);
+  if (!currentCycles.length) return null;
+  return (
+    <section className="movement-card-cycle-overview" aria-labelledby="current-card-cycles">
+      <header>
+        <div>
+          <span>Faturas do mês</span>
+          <h2 id="current-card-cycles">Cartões em aberto</h2>
+        </div>
+        <p>Escolha um cartão para detalhar suas compras e a conciliação da fatura.</p>
+      </header>
+      <div>
+        {currentCycles.map(cycle => (
+          <Link
+            key={cycle.cycleId}
+            href={queryHref({ type: "card" }, { cycle: cycle.cycleId })}
+            className={selectedCycle?.cycleId === cycle.cycleId ? "active" : undefined}
+          >
+            <span>{cycle.compactLabel}</span>
+            <strong>{cycle.officialTotal === null ? "Valor em conciliação" : <Money value={cycle.officialTotal} />}</strong>
+            <small>{cycleMilestoneLabel(cycle) ?? cycleStatusLabel(cycle)}</small>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function exceptionLabels(item: MovementListItem) {
   return [
     item.reviewRequired ? "Revisar" : null,
@@ -475,25 +604,27 @@ function exceptionLabels(item: MovementListItem) {
 
 function MovementRow({
   item,
+  personContext,
   onOpen,
 }: {
   item: MovementListItem;
+  personContext?: MovementPersonContext;
   onOpen: (item: MovementListItem, trigger: HTMLButtonElement) => void;
 }) {
   const exceptions = exceptionLabels(item);
+  const originalMoney = item.isForeignTransaction &&
+    item.originalAmount !== null &&
+    item.originalCurrencyCode
+    ? formatMoneyByCurrency(item.originalAmount, item.originalCurrencyCode)
+    : null;
+  const convertedMoney = item.amountBrl === null
+    ? null
+    : formatMoneyByCurrency(item.amountBrl, "BRL");
   const signedValue = item.consumptionEffect === "expense" || item.cashFlowEffect === "outflow"
     ? -(item.amountBrl ?? 0)
     : item.consumptionEffect === "income" || item.cashFlowEffect === "inflow"
       ? item.amountBrl ?? 0
       : 0;
-  const originalMoney = item.isForeignTransaction &&
-    item.originalAmount !== null &&
-    item.originalCurrencyCode
-      ? formatMoneyByCurrency(
-        item.originalAmount,
-        item.originalCurrencyCode,
-      )
-      : null;
   return (
     <button
       type="button"
@@ -505,6 +636,9 @@ function MovementRow({
           ? "Valor convertido indisponÃ­vel."
           : `Valor convertido: ${formatMoneyByCurrency(item.amountBrl, "BRL")}.`,
         originalMoney ? `Valor original: ${originalMoney}.` : "",
+        item.installmentNumber && item.installmentTotal
+          ? `Parcela ${item.installmentNumber} de ${item.installmentTotal}.`
+          : "",
       ].filter(Boolean).join(" ")}
     >
       <span className="movement-row-main">
@@ -514,23 +648,40 @@ function MovementRow({
           {item.accountMaskedIdentifier ? ` • ${item.accountMaskedIdentifier}` : ""}
           {item.provider === "Pluggy" ? " • Pluggy" : ""}
           {` • ${formatShortDate(item.date)}`}
+          {item.installmentNumber && item.installmentTotal
+            ? ` • Parcela ${item.installmentNumber} de ${item.installmentTotal}`
+            : ""}
         </small>
         {exceptions.length ? <span className="movement-exceptions">
           {exceptions.map(label => <i key={label}>{label}</i>)}
         </span> : null}
+        {personContext ? (
+          <span className="movement-person-badges">
+            <i>{personContext.personName}</i>
+            <i>{item.direction === "inflow"
+              ? "Entrou na conta"
+              : item.direction === "outflow"
+                ? "Saiu da conta"
+                : "Movimento neutro"}</i>
+          </span>
+        ) : null}
       </span>
       <span className="movement-row-category">{item.categoryName}</span>
       <span className="movement-row-value">
-        {item.amountBrl === null
-          ? <b>Valor convertido indisponÃ­vel</b>
-          : item.direction === "transfer" || item.direction === "adjustment"
+        {originalMoney ? (
+          <>
+            <b className="movement-row-foreign-original">{originalMoney}</b>
+            <small className="movement-row-converted">
+              {convertedMoney
+                ? `${convertedMoney} em reais`
+                : "Conversão em reais indisponível"}
+            </small>
+          </>
+        ) : item.amountBrl === null
+          ? <b>Valor convertido indisponível</b>
+          : item.direction === "card" || item.direction === "transfer" || item.direction === "adjustment"
             ? <Money value={item.amountBrl} />
             : <Money value={signedValue} signed />}
-        {originalMoney ? (
-          <small className="movement-row-original" aria-hidden="true">
-            {originalMoney} original
-          </small>
-        ) : null}
         <small>{item.displayType}</small>
       </span>
     </button>
@@ -540,16 +691,48 @@ function MovementRow({
 function MovementDetailsDrawer({
   item,
   cycle,
+  workspaceId,
+  people,
+  personContext,
+  commitmentOccurrences,
+  commitmentMatches,
   onClose,
 }: {
   item: MovementListItem | null;
   cycle?: AvailableCardCycle | null;
+  workspaceId: string | null;
+  people: Option[];
+  personContext?: MovementPersonContext;
+  commitmentOccurrences: Option[];
+  commitmentMatches: CommitmentMatchView[];
   onClose: () => void;
 }) {
   const drawerRef = useRef<HTMLElement>(null);
+  const [counterpartyFeedback, setCounterpartyFeedback] = useState<{
+    kind: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [isCounterpartyPending, startCounterpartyTransition] = useTransition();
+  const [recurringFeedback, setRecurringFeedback] = useState<{
+    kind: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [isRecurringPending, startRecurringTransition] = useTransition();
+  const [commitmentFeedback, setCommitmentFeedback] = useState<{
+    kind: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [
+    commitmentReplacementRequired,
+    setCommitmentReplacementRequired,
+  ] = useState(false);
+  const [isCommitmentPending, startCommitmentTransition] = useTransition();
   useEffect(() => {
     if (!item) return;
     const drawer = drawerRef.current;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (drawer) drawer.scrollTop = 0;
     const focusable = drawer?.querySelectorAll<HTMLElement>(
       "button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
     );
@@ -566,9 +749,12 @@ function MovementDetailsDrawer({
       }
     };
     document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousBodyOverflow;
+    };
   }, [item, onClose]);
-  if (!item) return null;
+  if (!item || typeof document === "undefined") return null;
   const cashLabel = item.cashFlowEffect === "inflow" ? "Aumenta o caixa" :
     item.cashFlowEffect === "outflow" ? "Reduz o caixa" :
       item.origin === "credit_card" ? "Será reconhecido no pagamento da fatura" : "Neutro";
@@ -578,6 +764,14 @@ function MovementDetailsDrawer({
     item.origin === "bank_account" ? "Conta bancária" :
       item.origin === "transfer" ? "Transferência" :
         item.origin === "manual_adjustment" ? "Ajuste manual" : "PDF de fatura";
+  const originalMoney = item.isForeignTransaction &&
+    item.originalAmount !== null &&
+    item.originalCurrencyCode
+    ? formatMoneyByCurrency(item.originalAmount, item.originalCurrencyCode)
+    : null;
+  const convertedMoney = item.amountBrl === null
+    ? null
+    : formatMoneyByCurrency(item.amountBrl, "BRL");
   const signedValue = item.consumptionEffect === "expense" || item.cashFlowEffect === "outflow"
     ? -(item.amountBrl ?? 0) : item.amountBrl ?? 0;
   const implicitRate = implicitExchangeRate({
@@ -594,7 +788,7 @@ function MovementDetailsDrawer({
         : item.conversionSource === "derived"
           ? "Derivada da descrição"
           : "Não informada";
-  return (
+  return createPortal(
     <div className="movement-drawer-backdrop" onMouseDown={event => {
       if (event.currentTarget === event.target) onClose();
     }}>
@@ -604,11 +798,24 @@ function MovementDetailsDrawer({
           <button type="button" onClick={onClose} aria-label="Fechar detalhes">×</button>
         </header>
         <strong className={`movement-drawer-amount movement-${item.direction}`}>
-          {item.amountBrl === null
-            ? "Valor convertido indisponÃ­vel"
+          {originalMoney ? (
+            <span className="movement-drawer-foreign-amount">
+              <span>{originalMoney}</span>
+              <small>
+                {convertedMoney
+                  ? `${convertedMoney} em reais`
+                  : "Conversão em reais indisponível"}
+              </small>
+            </span>
+          ) : item.amountBrl === null
+            ? "Valor convertido indisponível"
             : <Money value={signedValue} signed />}
         </strong>
         <dl>
+          <div className="movement-drawer-section-title">
+            <dt>Detalhes da movimentação</dt>
+            <dd>Datas, origem e classificação financeira</dd>
+          </div>
           {item.origin === "credit_card" && cycle ? (
             <>
               <div><dt>Fatura</dt><dd>{cycle.label} · {cycleStatusLabel(cycle)}</dd></div>
@@ -676,13 +883,19 @@ function MovementDetailsDrawer({
           <div><dt>{item.origin === "credit_card" ? "Cartão" : "Conta"}</dt><dd>{item.cardLabel || item.accountName}</dd></div>
           <div><dt>Categoria</dt><dd>{item.categoryName}</dd></div>
           <div><dt>Origem</dt><dd>{originLabel}{item.provider ? ` · ${item.provider}` : ""}</dd></div>
-          <div><dt>Status</dt><dd>{item.status}</dd></div>
+          <div><dt>Status</dt><dd>{movementStatusLabel(item.status)}</dd></div>
           {item.installmentNumber && item.installmentTotal ? (
             <div><dt>Parcela</dt><dd>{item.installmentNumber}/{item.installmentTotal}</dd></div>
           ) : null}
-          <div><dt>Papel financeiro</dt><dd>{item.financialRole || item.transactionRole}</dd></div>
+          <div><dt>Papel financeiro</dt><dd>{financialRoleLabel(
+            item.financialRole || item.transactionRole,
+          )}</dd></div>
           <div><dt>Efeito no caixa</dt><dd>{cashLabel}</dd></div>
           <div><dt>Efeito no consumo</dt><dd>{consumptionLabel}</dd></div>
+          <div className="movement-drawer-section-title">
+            <dt>Referências e conciliação</dt>
+            <dd>Identificadores protegidos e vínculos do lançamento</dd>
+          </div>
           <div><dt>Descrição original</dt><dd>{item.originalDescription}</dd></div>
           <div><dt>Identificador externo</dt><dd>{item.externalIdMasked || "Não informado"}</dd></div>
           <div><dt>Fatura vinculada</dt><dd>{item.invoiceLinked ? "Sim" : "Não"}</dd></div>
@@ -710,6 +923,263 @@ function MovementDetailsDrawer({
           <div><dt>Transferência vinculada</dt><dd>{item.transferLinked ? "Sim" : "Não"}</dd></div>
           <div><dt>Última alteração</dt><dd>{item.updatedAt ? formatShortDate(item.updatedAt.slice(0, 10)) : "Não informada"}</dd></div>
         </dl>
+        {workspaceId ? (
+          <section className="movement-commitments">
+            <header>
+              <h3 aria-label="Pessoas e compromissos">
+                Pessoa vinculada
+              </h3>
+              <Link href={`/financeiro/compromissos?workspace=${workspaceId}`}>
+                Gerenciar pessoas
+              </Link>
+            </header>
+            {item.sourceKind === "transaction" &&
+            commitmentMatches.some(match => match.transactionId === item.id) ? (
+              <div className="movement-match-suggestions">
+                <b>Sugestões de reconhecimento</b>
+                {commitmentMatches.filter(match =>
+                  match.transactionId === item.id
+                ).slice(0, 3).map(match => <article key={match.occurrenceId}>
+                  <span><strong>{match.title}</strong><small>
+                    {Math.round(match.score * 100)}% · {match.reasons.join(", ")}
+                  </small></span>
+                  <form action={confirmCommitmentMatch}>
+                    <input type="hidden" name="workspace_id" value={workspaceId} />
+                    <input type="hidden" name="transaction_id" value={item.id} />
+                    <input type="hidden" name="occurrence_id" value={match.occurrenceId} />
+                    <input type="hidden" name="commitment_id" value={match.commitmentId} />
+                    <button>Confirmar</button>
+                  </form>
+                  <form action={rejectCommitmentMatch}>
+                    <input type="hidden" name="workspace_id" value={workspaceId} />
+                    <input type="hidden" name="transaction_id" value={item.id} />
+                    <input type="hidden" name="commitment_id" value={match.commitmentId} />
+                    <button>Rejeitar</button>
+                  </form>
+                </article>)}
+              </div>
+            ) : null}
+            {item.sourceKind === "transaction" ? (
+              <>
+                {personContext ? (
+                  <div className="movement-person-context" role="status">
+                    <div>
+                      <span>Pessoa vinculada</span>
+                      <strong>{personContext.personName}</strong>
+                    </div>
+                    <div>
+                      <span>Movimento na conta</span>
+                      <strong>{item.direction === "inflow"
+                        ? "O dinheiro entrou na conta"
+                        : item.direction === "outflow"
+                          ? "O dinheiro saiu da conta"
+                          : "Não alterou o saldo da conta"}</strong>
+                    </div>
+                    <form action={async formData => {
+                      setCounterpartyFeedback(null);
+                      startCounterpartyTransition(async () => {
+                        const result =
+                          await unlinkMovementSourceFromPersonAction(formData);
+                        setCounterpartyFeedback({
+                          kind: result.ok ? "success" : "error",
+                          message: result.message,
+                        });
+                      });
+                    }}>
+                      <input type="hidden" name="workspace_id" value={workspaceId} />
+                      <input type="hidden" name="movement_id" value={item.id} />
+                      <input
+                        type="hidden"
+                        name="person_id"
+                        value={personContext.personId}
+                      />
+                      <button
+                        type="submit"
+                        className="movement-entity-unlink"
+                        disabled={isCounterpartyPending}
+                      >
+                        Desvincular pessoa
+                      </button>
+                    </form>
+                  </div>
+                ) : null}
+                <form action={async formData => {
+                  setCounterpartyFeedback(null);
+                  startCounterpartyTransition(async () => {
+                    const result = await linkMovementSourceToPersonAction(formData);
+                    setCounterpartyFeedback({
+                      kind: result.ok ? "success" : "error",
+                      message: result.message,
+                    });
+                  });
+                }} className="movement-person-simple-form">
+                  <input type="hidden" name="workspace_id" value={workspaceId} />
+                  <input type="hidden" name="movement_id" value={item.id} />
+                  <label><span>Pessoa</span>
+                    <select
+                      name="person_id"
+                      required
+                      defaultValue={personContext?.personId ?? ""}
+                    >
+                      <option value="" disabled>Selecione uma pessoa</option>
+                      {people.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+                    </select>
+                  </label>
+                  <p className="movement-person-explanation">
+                    A pessoa será associada somente a esta movimentação.
+                    Nenhuma regra ou vínculo automático será criado.
+                  </p>
+                  <button type="submit" disabled={!people.length || isCounterpartyPending}>
+                    {isCounterpartyPending ? "Associando..." : "Associar pessoa"}
+                  </button>
+                  {counterpartyFeedback ? (
+                    <p
+                      className={`movement-form-feedback movement-form-feedback-${counterpartyFeedback.kind}`}
+                      role={counterpartyFeedback.kind === "error" ? "alert" : "status"}
+                    >
+                      {counterpartyFeedback.message}
+                    </p>
+                  ) : null}
+                </form>
+                <details className="movement-secondary-action">
+                  <summary>Vincular a um compromisso ou parcela</summary>
+                  <form action={async formData => {
+                    setCommitmentFeedback(null);
+                    startCommitmentTransition(async () => {
+                      const result =
+                        await linkTransactionToOccurrence(formData);
+                      setCommitmentFeedback({
+                        kind: result.ok ? "success" : "error",
+                        message: result.message,
+                      });
+                      setCommitmentReplacementRequired(
+                        Boolean(result.fieldErrors.replace_existing),
+                      );
+                    });
+                  }}>
+                    <input type="hidden" name="workspace_id" value={workspaceId} />
+                    <input type="hidden" name="transaction_id" value={item.id} />
+                    <label>
+                      <span>Compromisso</span>
+                      <select name="occurrence_id" required defaultValue="">
+                        <option value="" disabled>Selecione uma ocorrência</option>
+                        {commitmentOccurrences.map(option =>
+                          <option key={option.id} value={option.id}>{option.name}</option>)}
+                      </select>
+                    </label>
+                    {commitmentReplacementRequired ? (
+                      <label className="movement-link-replace-confirm">
+                        <input
+                          type="checkbox"
+                          name="replace_existing"
+                          value="true"
+                          required
+                        />
+                        <span>
+                          <b>Transferir este pagamento</b>
+                          <small>
+                            O compromisso anterior voltará a ficar pendente ou
+                            atrasado, conforme a data.
+                          </small>
+                        </span>
+                      </label>
+                    ) : null}
+                    <button
+                      type="submit"
+                      disabled={!commitmentOccurrences.length ||
+                        isCommitmentPending}
+                    >
+                      {isCommitmentPending
+                        ? "Vinculando..."
+                        : commitmentReplacementRequired
+                          ? "Confirmar transferência"
+                          : "Vincular pagamento"}
+                    </button>
+                    {commitmentFeedback ? (
+                      <p
+                        className={`movement-form-feedback movement-form-feedback-${commitmentFeedback.kind}`}
+                        role={commitmentFeedback.kind === "error"
+                          ? "alert"
+                          : "status"}
+                      >
+                        {commitmentFeedback.message}
+                      </p>
+                    ) : null}
+                  </form>
+                </details>
+                <details className="movement-secondary-action">
+                  <summary>Prever novamente</summary>
+                  <form action={async formData => {
+                    setRecurringFeedback(null);
+                    startRecurringTransition(async () => {
+                      try {
+                        const result =
+                          await transformTransactionIntoRecurringCommitment(formData);
+                        setRecurringFeedback({
+                          kind: result.ok ? "success" : "error",
+                          message: result.message,
+                        });
+                      } catch {
+                        setRecurringFeedback({
+                          kind: "error",
+                          message: "Não foi possível criar a recorrência. Tente novamente.",
+                        });
+                      }
+                    });
+                  }}>
+                    <input type="hidden" name="workspace_id" value={workspaceId} />
+                    <input type="hidden" name="transaction_id" value={item.id} />
+                    <label><span>Nome</span><input name="title" defaultValue={item.description} required /></label>
+                    <label><span>Isso se repete?</span><select name="recurrence_frequency" defaultValue="monthly">
+                      <option value="monthly">Todo mês</option>
+                      <option value="weekly">Toda semana</option>
+                      <option value="biweekly">A cada 15 dias</option>
+                      <option value="annual">Todo ano</option>
+                      <option value="custom">Outra frequência</option>
+                    </select></label>
+                    <label><span>Relacionado a quem?</span><select name="person_id" defaultValue="">
+                      <option value="">Pessoal</option>
+                      {people.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+                    </select></label>
+                    <button type="submit" disabled={isRecurringPending}>
+                      {isRecurringPending ? "Criando recorrência..." : "Criar e vincular"}
+                    </button>
+                    {recurringFeedback ? (
+                      <p
+                        className={`movement-form-feedback movement-form-feedback-${recurringFeedback.kind}`}
+                        role={recurringFeedback.kind === "error" ? "alert" : "status"}
+                      >
+                        {recurringFeedback.message}
+                      </p>
+                    ) : null}
+                  </form>
+                </details>
+              </>
+            ) : (
+              <>
+                <p>Compras do cartão podem pagar um compromisso. A identificação por pessoa é feita na despesa conciliada.</p>
+                <details className="movement-secondary-action">
+                  <summary>Vincular a um compromisso ou parcela</summary>
+                  <form action={linkCardMovementToOccurrence}>
+                    <input type="hidden" name="workspace_id" value={workspaceId} />
+                    <input type="hidden" name="movement_id" value={item.id} />
+                    <label>
+                      <span>Compromisso</span>
+                      <select name="occurrence_id" required defaultValue="">
+                        <option value="" disabled>Selecione uma ocorrência</option>
+                        {commitmentOccurrences.map(option =>
+                          <option key={option.id} value={option.id}>{option.name}</option>)}
+                      </select>
+                    </label>
+                    <button type="submit" disabled={!commitmentOccurrences.length}>
+                      Vincular pagamento
+                    </button>
+                  </form>
+                </details>
+              </>
+            )}
+          </section>
+        ) : null}
         {item.sourceKind === "transaction" ? (
           <p className="movement-drawer-note">
             Correções de categoria e classificação permanecem disponíveis no fluxo financeiro seguro do Atlas.
@@ -787,7 +1257,8 @@ function MovementDetailsDrawer({
           </form>
         ) : null}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -809,6 +1280,11 @@ export function MovementsBrowser({
   hasConnectedAccount,
   completeness,
   warnings,
+  workspaceId,
+  people,
+  commitmentOccurrences,
+  commitmentMatches,
+  personContexts,
 }: {
   filters: MovementFilters;
   items: MovementListItem[];
@@ -827,11 +1303,14 @@ export function MovementsBrowser({
   hasConnectedAccount: boolean;
   completeness: "complete" | "partial";
   warnings: Array<{ source: string; message: string; code?: string }>;
+  workspaceId: string | null;
+  people: Option[];
+  commitmentOccurrences: Option[];
+  commitmentMatches: CommitmentMatchView[];
+  personContexts: Record<string, MovementPersonContext>;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<MovementListItem | null>(null);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualType, setManualType] = useState("new_purchase");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const groups = useMemo(() => groupMovementsByDate(items), [items]);
   const closeDrawer = () => {
@@ -855,162 +1334,13 @@ export function MovementsBrowser({
         <div>
           <h1>Movimentações</h1>
           <p>{filters.type === "card"
-            ? "Consulte as compras e os créditos da fatura selecionada."
-            : "Consulte entradas, saídas e transferências das suas contas."}</p>
+            ? "Acompanhe a fatura aberta e as compras de cada cartão."
+            : filters.type === "all"
+              ? "Localize qualquer lançamento sem misturar os totais financeiros."
+              : "Acompanhe o que entrou e saiu das suas contas no período selecionado."}</p>
         </div>
-        {filters.type === "card" && selectedCycle ? (
-          <button
-            type="button"
-            className="finance-button"
-            onClick={() => setManualOpen(true)}
-          >
-            Adicionar lançamento
-          </button>
-        ) : null}
       </header>
-      {manualOpen && selectedCycle ? (
-        <div
-          className="movement-manual-backdrop"
-          role="presentation"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) setManualOpen(false);
-          }}
-        >
-          <section
-            className="movement-manual-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="movement-manual-title"
-          >
-            <header>
-              <div>
-                <h2 id="movement-manual-title">Adicionar lançamento</h2>
-                <p>O valor informado deve ser o valor em reais que compõe a fatura.</p>
-              </div>
-              <button
-                type="button"
-                aria-label="Fechar"
-                onClick={() => setManualOpen(false)}
-              >
-                ×
-              </button>
-            </header>
-            <form action={addManualCardCycleMovement}>
-              <input type="hidden" name="cycle_id" value={selectedCycle.cycleId} />
-              <input type="hidden" name="card_id" value={selectedCycle.cardAccountId} />
-              <label>
-                <span>Descrição</span>
-                <input name="description" maxLength={160} required />
-              </label>
-              <label>
-                <span>Tipo</span>
-                <select
-                  name="movement_type"
-                  value={manualType}
-                  onChange={event => setManualType(event.target.value)}
-                >
-                  <option value="new_purchase">Compra nova</option>
-                  <option value="posted_installment">Parcela lançada</option>
-                  <option value="credit">Crédito</option>
-                  <option value="refund">Estorno</option>
-                  <option value="fee">Taxa</option>
-                  <option value="tax">IOF ou imposto</option>
-                  <option value="adjustment">Ajuste</option>
-                </select>
-              </label>
-              <label>
-                <span>Data original</span>
-                <input
-                  name="original_date"
-                  type="date"
-                  defaultValue={selectedCycle.cycleEndDate}
-                  required
-                />
-              </label>
-              <label>
-                <span>Data de lançamento</span>
-                <input
-                  name="posting_date"
-                  type="date"
-                  defaultValue={selectedCycle.cycleEndDate}
-                  required
-                />
-              </label>
-              <label>
-                <span>Competência</span>
-                <input
-                  name="competence_month"
-                  type="date"
-                  defaultValue={
-                    `${(selectedCycle.dueDate ?? selectedCycle.cycleEndDate).slice(0, 7)}-01`
-                  }
-                  required
-                />
-              </label>
-              <label>
-                <span>Valor em BRL</span>
-                <input name="amount" inputMode="decimal" placeholder="0,00" required />
-              </label>
-              <label>
-                <span>Cartão</span>
-                <select name="instrument_id" defaultValue="">
-                  <option value="">Não identificado</option>
-                  {cards.map(card => (
-                    <option value={card.id} key={card.id}>{card.name}</option>
-                  ))}
-                </select>
-              </label>
-              {manualType === "posted_installment" ? (
-                <>
-                  <label>
-                    <span>Parcela atual</span>
-                    <input name="installment_number" type="number" min="1" required />
-                  </label>
-                  <label>
-                    <span>Total de parcelas</span>
-                    <input name="installment_total" type="number" min="2" max="120" required />
-                  </label>
-                </>
-              ) : null}
-              <label>
-                <span>Moeda original</span>
-                <input
-                  name="currency"
-                  defaultValue="BRL"
-                  maxLength={3}
-                  pattern="[A-Za-z]{3}"
-                  title="Código ISO com três letras, como BRL, USD ou EUR"
-                  required
-                />
-              </label>
-              <label>
-                <span>Valor original (opcional)</span>
-                <input name="original_amount" inputMode="decimal" />
-              </label>
-              <label>
-                <span>Cotação (opcional)</span>
-                <input name="exchange_rate" inputMode="decimal" />
-              </label>
-              <label>
-                <span>IOF em BRL (opcional)</span>
-                <input name="foreign_iof_amount" inputMode="decimal" />
-              </label>
-              <label className="movement-manual-note">
-                <span>Observação</span>
-                <textarea name="note" maxLength={500} rows={3} />
-              </label>
-              <footer>
-                <button type="button" onClick={() => setManualOpen(false)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="finance-button">
-                  Salvar lançamento
-                </button>
-              </footer>
-            </form>
-          </section>
-        </div>
-      ) : null}
+      <MovementViewTabs filters={filters} />
       {completeness === "partial" ? (
         <aside className="movement-partial-warning" role="status">
           <div>
@@ -1032,6 +1362,12 @@ export function MovementsBrowser({
           </div>
         </aside>
       ) : null}
+      {filters.type === "card" ? (
+        <CurrentCardCyclesOverview
+          cycles={cardCycles}
+          selectedCycle={selectedCycle}
+        />
+      ) : null}
       <SummaryCards
         summary={displaySummary}
         cycle={selectedCycle}
@@ -1044,6 +1380,7 @@ export function MovementsBrowser({
         cards={cards}
         cardCycles={cardCycles}
         categories={categories}
+        people={people}
       />
       {filters.type === "card" && !cardCycles.length ? (
         <section className="finance-panel movement-empty-state movement-cycle-empty">
@@ -1108,7 +1445,12 @@ export function MovementsBrowser({
                     signed={filters.type !== "card"}
                   />
                 </p></header>
-                <div>{group.map(item => <MovementRow item={item} onOpen={openDrawer} key={`${item.sourceKind}-${item.id}`} />)}</div>
+                <div>{group.map(item => <MovementRow
+                  item={item}
+                  personContext={personContexts[item.id]}
+                  onOpen={openDrawer}
+                  key={`${item.sourceKind}-${item.id}`}
+                />)}</div>
               </section>;
             })}
           </div>
@@ -1124,7 +1466,17 @@ export function MovementsBrowser({
         </footer> : null}
       </section>
       )}
-      <MovementDetailsDrawer item={selected} cycle={selectedCycle} onClose={closeDrawer} />
+      <MovementDetailsDrawer
+        key={selected ? `${selected.sourceKind}:${selected.id}` : "closed"}
+        item={selected}
+        cycle={selectedCycle}
+        workspaceId={workspaceId}
+        people={people}
+        personContext={selected ? personContexts[selected.id] : undefined}
+        commitmentOccurrences={commitmentOccurrences}
+        commitmentMatches={commitmentMatches}
+        onClose={closeDrawer}
+      />
     </div>
   );
 }

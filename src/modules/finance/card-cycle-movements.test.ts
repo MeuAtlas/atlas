@@ -124,6 +124,38 @@ test("fingerprint conservador deduplica PDF e Pluggy sem vínculo persistido", (
   assert.equal(result[0].source, "pdf");
 });
 
+test("deduplicates conflicting Pluggy installments from one same-day purchase", () => {
+  const result = deduplicateCardMovements([
+    movement({
+      id: "first-installment",
+      sourceRecordId: "first-installment",
+      providerTransactionId: "provider-first",
+      transactionDate: "2026-07-15",
+      description: "On Sportswear",
+      merchantNormalized: "ON SPORTSWEAR",
+      amount: 124.91,
+      amountBrl: 124.91,
+      installmentNumber: 1,
+      installmentTotal: 8,
+    }),
+    movement({
+      id: "sixth-installment",
+      sourceRecordId: "sixth-installment",
+      providerTransactionId: "provider-sixth",
+      transactionDate: "2026-07-15",
+      description: "On Sportswear",
+      merchantNormalized: "ON SPORTSWEAR",
+      amount: 124.91,
+      amountBrl: 124.91,
+      installmentNumber: 6,
+      installmentTotal: 8,
+    }),
+  ]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].amount, 124.91);
+});
+
 test("parcela projetada conciliada com lançamento real não duplica", () => {
   const projection = movement({
     id: "projection",

@@ -72,6 +72,7 @@ export async function POST(request:Request){
     await syncPluggyItem(
      supabase as Parameters<typeof syncPluggyItem>[0],
      String(connection.data.owner_id),String(connection.data.id),false,
+     {triggerType:"webhook"},
     );
    }
    await supabase.from("pluggy_webhook_events").update({

@@ -44,6 +44,22 @@ test("compra internacional Pluggy preserva USD e usa o valor convertido em BRL",
   assert.equal(row.conversion_source,"pluggy");
   assert.equal(row.provider_metadata.amountInAccountCurrency,65.62);
 });
+test("Uber em USD preserva o valor original e soma o BRL informado pela Pluggy",()=>{
+  const row=mapCardPurchase({
+    id:"uber-usd",
+    accountId:"provider-card",
+    description:"UBER *TRIP",
+    amount:20.95,
+    amountInAccountCurrency:113.98,
+    currencyCode:"USD",
+    date:"2026-07-10",
+  },"user","connection","card");
+  assert.equal(row.amount_brl,113.98);
+  assert.equal(row.installment_amount,113.98);
+  assert.equal(row.original_amount,20.95);
+  assert.equal(row.original_currency_code,"USD");
+  assert.equal(row.provider_metadata.amountInAccountCurrency,113.98);
+});
 test("Pluggy sem valor convertido nÃ£o promove USD para amount_brl",()=>{
   const row=mapCardPurchase({
     id:"foreign-without-conversion",
@@ -92,5 +108,5 @@ test("sanitização descarta payload bancário bruto",()=>assert.deepEqual(safeM
 test("normalização preserva stage, operação, status, código e causa",()=>{const cause=new PluggyApiError("Parâmetro inválido",{code:"INVALID_PARAMETER",status:422,operation:"GET /v2/transactions"});const error=new IntegrationSyncError("Falha ao importar movimentações.",{stage:"transactions_fetch",cause,code:cause.code,status:cause.status,operation:cause.operation});assert.deepEqual(normalizeIntegrationError(error),{name:"IntegrationSyncError",message:"Falha ao importar movimentações.",code:"INVALID_PARAMETER",status:422,operation:"GET /v2/transactions",stage:"transactions_fetch",causeMessage:"Parâmetro inválido",stack:undefined})});
 test("diagnóstico mascara credenciais, UUID e linha SQL",()=>{const safe=sanitizeDiagnostic("clientSecret=hidden 57dd1234-1234-1234-1234-abcdef126006 Failing row contains (private data).");assert.equal(safe?.includes("hidden"),false);assert.equal(safe?.includes("private data"),false);assert.match(safe??"",/57dd…6006/)});
 test("IDs usados em filtros PostgREST são divididos abaixo do limite de URL",()=>{const batches=chunkForUrlFilter(Array.from({length:251},(_,index)=>`00000000-0000-0000-0000-${String(index).padStart(12,"0")}`));assert.equal(SUPABASE_FILTER_BATCH_SIZE,100);assert.deepEqual(batches.map(batch=>batch.length),[100,100,51]);assert.ok(batches.every(batch=>encodeURIComponent(batch.join(",")).length<8000))});
-test("warning de transações força recuperação completa até existir full posterior",()=>{const warning={mode:"incremental",status:"completed_with_warnings",started_at:"2026-07-22T10:00:00Z"};assert.equal(shouldRecoverFullHistory([warning]),true);assert.equal(shouldRecoverFullHistory([{mode:"full",status:"completed",started_at:"2026-07-22T11:00:00Z"},warning]),false)});
-test("sincronização consome o cursor até a última página e persiste diagnóstico por cartão",()=>{const sync=readFileSync(join(process.cwd(),"src/lib/pluggy/sync.ts"),"utf8");assert.match(sync,/do\{[\s\S]*getPluggyTransactions\(account\.id,after,dateFrom\)[\s\S]*after=cursorFromNext\(page\.next\)[\s\S]*\}while\(after\)/);assert.match(sync,/credit_card_sync_diagnostics/);assert.match(sync,/received_from_pluggy:state\.received/);assert.match(sync,/persisted:persistedRows\.length/);assert.match(sync,/included_in_invoice:inclusion\.includedCount/)});
+test("somente warning de paginação força recuperação completa",()=>{const cardWarning={mode:"incremental",status:"completed_with_warnings",started_at:"2026-07-22T10:00:00Z",warning_codes:["connector_offline"]};const transactionWarning={...cardWarning,warning_codes:["pluggy_pagination_incomplete"]};assert.equal(shouldRecoverFullHistory([cardWarning]),false);assert.equal(shouldRecoverFullHistory([transactionWarning]),true);assert.equal(shouldRecoverFullHistory([{mode:"full",status:"completed",started_at:"2026-07-22T11:00:00Z"},transactionWarning]),false)});
+test("sincronização consome o cursor e recupera conversões estrangeiras pelo ID",()=>{const sync=readFileSync(join(process.cwd(),"src/lib/pluggy/sync.ts"),"utf8");assert.match(sync,/do\{[\s\S]*getPluggyTransactions\(account\.id,after,accountDateFrom\)[\s\S]*after=cursorFromNext\(page\.next\)[\s\S]*\}while\(after\)/);assert.match(sync,/getPluggyTransaction\(String\(row\.external_id\)\)/);assert.match(sync,/chunks\(unresolved\.data\?\?\[\],5\)/);assert.match(sync,/\.not\("external_id","is",null\)/);assert.match(sync,/if\(wants\("transactions"\)\)for\(const localCardId of new Set\(cardMap\.values\(\)\)\)/);assert.match(sync,/credit_card_sync_diagnostics/);assert.match(sync,/received_from_pluggy:state\.received/);assert.match(sync,/persisted:persistedRows\.length/);assert.match(sync,/included_in_invoice:inclusion\.includedCount/)}); 

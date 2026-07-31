@@ -60,7 +60,8 @@ test("metadados documentados preservam billId, parcela e PENDING sem billId",()=
   assert.equal(pending.status,"pending");
   assert.equal(pending.installment_number,2);
   assert.equal(pending.installment_count,6);
-  assert.equal(pending.competence_date,"2026-08-01");
+  assert.equal(pending.competence_date,"2026-07-23");
+  assert.equal(pending.bill_forecast_date,"2026-08-01");
 });
 
 test("seleção de Bill rejeita fatura explicitamente vinculada a outra conta",()=>{

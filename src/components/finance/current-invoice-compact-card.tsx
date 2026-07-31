@@ -50,7 +50,9 @@ export function CurrentInvoiceCompactCard({
     resolvedInvoice?.detailsCompleteness === "partial" ||
     resolvedInvoice?.detailsCompleteness === "unavailable";
   const partialMessage = detailsPartial
-    ? "Compras ainda em conciliação. O total confirmado permanece disponível."
+    ? resolvedInvoice?.displayTotalSource === "calculated"
+      ? "Estimativa baseada nas compras sincronizadas. O valor pode aumentar até o fechamento."
+      : "Compras ainda em conciliação. O valor informado permanece disponível."
     : forcePartial
       ? "Alguns dados podem estar incompletos."
       : summary.warningMessage;
@@ -58,6 +60,12 @@ export function CurrentInvoiceCompactCard({
     ? resolvedInvoice.displayTotal
     : summary.displayAmount;
   const lastUpdatedAt = resolvedInvoice?.updatedAt ?? summary.lastUpdatedAt;
+  const instrumentTotals = invoice.instrumentTotals.filter((total) => {
+    const instrument = invoice.card.credit_card_instruments?.find(
+      (item) => item.id === total.instrumentId,
+    );
+    return !instrument?.user_archived_at && total.purchaseCount > 0;
+  });
 
   return (
     <article className="current-invoice-card current-invoice-summary-card">
@@ -112,6 +120,47 @@ export function CurrentInvoiceCompactCard({
                   } no período`}
             </span>
           </div>
+
+          {instrumentTotals.length ? (
+            <div className="invoice-instrument-breakdown">
+              <small>Consumo identificado por cartão</small>
+              {instrumentTotals.map((total) => {
+                const label =
+                  total.lastFour === summary.lastFour
+                    ? "Titular"
+                    : total.cardKind === "additional"
+                      ? "Adicional"
+                      : total.cardKind === "virtual"
+                        ? "Virtual"
+                        : total.cardKind === "online"
+                          ? "Online"
+                          : total.cardKind === "physical"
+                            ? "Físico"
+                            : total.displayName || "Cartão";
+                return (
+                  <span key={total.instrumentId}>
+                    <span>
+                      <b>{label} · final {total.lastFour || "••••"}</b>
+                      <small>
+                        {total.purchaseCount}{" "}
+                        {total.purchaseCount === 1 ? "compra" : "compras"}
+                      </small>
+                    </span>
+                    <strong><Money value={total.netTotal} /></strong>
+                  </span>
+                );
+              })}
+              {invoice.unassignedCount ? (
+                <span>
+                  <span>
+                    <b>Cartão não identificado</b>
+                    <small>{invoice.unassignedCount} lançamentos</small>
+                  </span>
+                  <strong><Money value={invoice.unassignedTotal} /></strong>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           {partialMessage ? (
             <p className="invoice-summary-notice">{partialMessage}</p>

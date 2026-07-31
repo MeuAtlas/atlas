@@ -7,6 +7,7 @@ import { getPluggyItem, testPluggyConnection } from "@/lib/pluggy/client";
 import { databaseFailure,logIntegrationFailure } from "@/lib/pluggy/diagnostics";
 import { publicPluggyMessage } from "@/lib/pluggy/errors";
 import { syncPluggyItem } from "@/lib/pluggy/sync";
+import type { PluggyResourceType } from "@/lib/pluggy/incremental-sync";
 import { invalidateOpenInvoiceCache } from "@/modules/finance/open-invoice-cache";
 
 export type IntegrationActionState={status:"idle"|"success"|"error";message:string};
@@ -14,6 +15,24 @@ const okay=(message:string):IntegrationActionState=>({status:"success",message})
 const fail=(error:unknown):IntegrationActionState=>({status:"error",message:publicPluggyMessage(error)});
 function field(data:FormData,name:string,max=180){const value=String(data.get(name)??"").trim();if(!value||value.length>max)throw new Error("invalid_field");return value}
 function refresh(){revalidatePath("/financeiro");revalidatePath("/financeiro/integracoes");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/cartoes?view=current");revalidatePath("/financeiro/cartoes?view=history");revalidatePath("/financeiro/movimentacoes")}
+function refreshSyncedResources(summary:Awaited<ReturnType<typeof syncPluggyItem>>["summary"]){
+ revalidatePath("/financeiro/integracoes");
+ const succeeded=new Set(summary.resources.filter(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status)).map(resource=>resource.resourceType));
+ if(succeeded.has("accounts")||succeeded.has("transactions")){revalidatePath("/financeiro");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/movimentacoes");revalidatePath("/financeiro/planejamento");revalidatePath("/financeiro/relatorios")}
+ if(succeeded.has("credit_cards")||succeeded.has("bills")){revalidatePath("/financeiro");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/planejamento")}
+ if(succeeded.has("loans"))revalidatePath("/financeiro/emprestimos");
+}
+function syncFeedback(result:Awaited<ReturnType<typeof syncPluggyItem>>){
+ const bankTransactions=result.summary.resources.filter(resource=>resource.resourceType==="transactions"&&resource.entityType==="bank_account");
+ const inserted=bankTransactions.reduce((sum,resource)=>sum+resource.inserted,0);
+ const cardsPreserved=result.summary.resources.some(resource=>resource.resourceType==="credit_cards"&&["preserved","unavailable","failed"].includes(resource.status));
+ const billsPreserved=result.summary.resources.some(resource=>resource.resourceType==="bills"&&["preserved","unavailable","failed"].includes(resource.status));
+ if(result.summary.overallStatus==="completed")return inserted?`Sincronização concluída. ${inserted} nova(s) movimentação(ões) bancária(s) adicionada(s).`:"A conta corrente e os demais recursos estão atualizados.";
+ const preserved=[cardsPreserved?"os cartões":null,billsPreserved?"as faturas":null].filter(Boolean).join(" e ");
+ return inserted
+  ? `Sincronização concluída parcialmente. A conta corrente recebeu ${inserted} nova(s) movimentação(ões). ${preserved?`${preserved} permaneceram com os últimos dados confiáveis.`:"Os recursos indisponíveis foram preservados."}`
+  : `Parte dos dados foi atualizada. ${preserved?`${preserved} permaneceram com os últimos dados confiáveis.`:"Os recursos indisponíveis foram preservados."}`;
+}
 async function refreshOpenInvoiceCache(supabase:Awaited<ReturnType<typeof requireFinanceAccess>>["supabase"],userId:string){
  const result=await supabase.from("card_invoices").select("id,workspace_id").eq("owner_id",userId).eq("status","open");
  invalidateOpenInvoiceCache((result.data??[]).map(invoice=>({
@@ -37,10 +56,51 @@ export async function linkItemAction(_state:IntegrationActionState,data:FormData
 }
 
 export async function syncItemAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
- const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const result=await syncPluggyItem(supabase,user.id,field(data,"connection_id",50),false);await refreshOpenInvoiceCache(supabase,user.id);refresh();return okay(result.warnings.length?"Sincronização concluída com dados parciais. Os valores anteriores foram preservados.":`Sincronização concluída: ${result.counts.transactions} movimentações processadas.`)}catch(error){logIntegrationFailure(error,{operation:"sync.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
+ const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const result=await syncPluggyItem(supabase,user.id,field(data,"connection_id",50),false,{triggerType:"manual"});await refreshOpenInvoiceCache(supabase,user.id);refreshSyncedResources(result.summary);return okay(syncFeedback(result))}catch(error){logIntegrationFailure(error,{operation:"sync.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
 }
 export async function fullSyncItemAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
- const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const result=await syncPluggyItem(supabase,user.id,field(data,"connection_id",50),true);await refreshOpenInvoiceCache(supabase,user.id);refresh();return okay(`Ressincronização concluída: ${result.counts.transactions} movimentações processadas${result.warnings.length?` com ${result.warnings.length} aviso(s)`:""}.`)}catch(error){logIntegrationFailure(error,{operation:"sync.full.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
+ const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const result=await syncPluggyItem(supabase,user.id,field(data,"connection_id",50),true,{triggerType:"full_resync"});await refreshOpenInvoiceCache(supabase,user.id);refreshSyncedResources(result.summary);return okay(syncFeedback(result))}catch(error){logIntegrationFailure(error,{operation:"sync.full.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
+}
+export async function retryResourceAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
+ const {supabase,user}=await requireFinanceAccess();const started=Date.now();
+ try{
+  const resource=field(data,"resource_type",40) as PluggyResourceType;
+  const allowed:PluggyResourceType[]=["accounts","transactions","credit_cards","bills","loans","investments"];
+  if(!allowed.includes(resource))return {status:"error",message:"Recurso inválido para nova tentativa."};
+  const result=await syncPluggyItem(supabase,user.id,field(data,"connection_id",50),false,{triggerType:"retry",resourceTypes:[resource]});
+  refreshSyncedResources(result.summary);
+  return okay(`${resource==="transactions"?"Movimentações":"Recurso"} atualizado em uma tentativa independente.`);
+ }catch(error){logIntegrationFailure(error,{operation:"sync.resource.retry",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Resource Retry Failure]"});return fail(error)}
+}
+export async function toggleAutomaticSyncAction(
+ _state:IntegrationActionState,
+ data:FormData,
+):Promise<IntegrationActionState>{
+ const {supabase,user}=await requireFinanceAccess();
+ try{
+  const connectionId=field(data,"connection_id",50);
+  const enabled=String(data.get("enabled")??"false")==="true";
+  const updated=await supabase.from("bank_connections")
+   .update({automatic_sync_enabled:enabled})
+   .eq("id",connectionId).eq("owner_id",user.id)
+   .eq("provider","pluggy").neq("status","disabled")
+   .select("id").single();
+  if(updated.error)databaseFailure(
+   updated.error,"connection_update","bank_connections.automatic_sync",
+  );
+  revalidatePath("/financeiro/integracoes");
+  return okay(
+   enabled
+    ?"Sincronização automática ativada."
+    :"Sincronização automática desativada.",
+  );
+ }catch(error){
+  logIntegrationFailure(error,{
+   operation:"sync.automatic.toggle",stage:"connection_update",
+   durationMs:0,user:user.id,label:"[Atlas Pluggy Automatic Sync Failure]",
+  });
+  return fail(error);
+ }
 }
 export async function syncCurrentInvoicesAction(){
  const {supabase,user}=await requireFinanceAccess();const connections=await supabase.from("bank_connections").select("id").eq("owner_id",user.id).eq("provider","pluggy").eq("status","active");if(connections.error)databaseFailure(connections.error,"connection_load","bank_connections.current_invoice_sync");let partial=false;for(const connection of connections.data??[]){const result=await syncPluggyItem(supabase,user.id,String(connection.id),false);partial=partial||result.warnings.length>0}await refreshOpenInvoiceCache(supabase,user.id);refresh();redirect(`/financeiro/cartoes?view=current&sync=${partial?"partial":"complete"}`)

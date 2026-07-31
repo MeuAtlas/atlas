@@ -12,6 +12,7 @@ import type { FinanceDashboard } from "@/modules/finance/dashboard";
 import type { BankAccountMonthlyMovement } from "@/modules/finance/account-movement";
 import type { FinancialAccount } from "@/modules/finance/types";
 import type { ResolvedOpenCardInvoice } from "@/modules/finance/open-card-invoice";
+import type { IncomeExpenseOverview } from "@/modules/finance/income-expenses";
 
 const daysBetween = (date: string, today: Date) =>
   Math.ceil(
@@ -51,6 +52,7 @@ export function FinanceOverview({
   workspace,
   warnings,
   initialDetails,
+  flowSummary,
   today = new Date(),
 }: {
   dashboard: FinanceDashboard;
@@ -63,6 +65,7 @@ export function FinanceOverview({
   workspace: string;
   warnings: { cards: boolean; cardPurchases: boolean; connections: boolean };
   initialDetails?: BankMovementDetailsType;
+  flowSummary?: IncomeExpenseOverview;
   today?: Date;
 }) {
   const monthLabel = new Intl.DateTimeFormat("pt-BR", {
@@ -96,6 +99,20 @@ export function FinanceOverview({
             </div>
           </header>
         </section>
+
+        {flowSummary ? (
+          <section
+            className="income-expense-summary overview-flow-summary"
+            aria-label="Receitas e despesas"
+          >
+            <article data-kind="income"><span>Recebido</span><strong><Money value={flowSummary.receivedIncomeCents / 100} /></strong></article>
+            <article data-kind="income"><span>Ainda esperado</span><strong><Money value={Math.max(flowSummary.expectedIncomeCents - flowSummary.receivedIncomeCents, 0) / 100} /></strong></article>
+            <article data-kind="expense"><span>Despesas pagas</span><strong><Money value={flowSummary.paidExpenseCents / 100} /></strong></article>
+            <article data-kind="expense"><span>Despesas pendentes</span><strong><Money value={flowSummary.expectedExpenseCents / 100} /></strong></article>
+            <article data-kind="balance"><span>Resultado realizado</span><strong><Money value={flowSummary.realizedBalanceCents / 100} /></strong></article>
+            <article data-kind="balance"><span>Resultado projetado</span><strong><Money value={flowSummary.projectedBalanceCents / 100} /></strong></article>
+          </section>
+        ) : null}
 
         {accountMovement ? (
           <>

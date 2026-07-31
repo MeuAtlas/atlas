@@ -47,6 +47,7 @@ export type BankPeriodFilter =
 export type MovementPeriod = BankPeriodFilter;
 
 export interface MovementFilters {
+  workspace?: string;
   search?: string;
   q?: string;
   period?: MovementPeriod | string;
@@ -57,6 +58,8 @@ export interface MovementFilters {
   account?: string;
   card?: string;
   category?: string;
+  nature?: string;
+  person?: string;
   status?: string;
   origin?: string;
   type?: MovementSourceFilter | string;
@@ -147,6 +150,8 @@ export interface MovementListItem {
   updatedAt: string | null;
   financialNature: string | null;
   financialRole: string | null;
+  relatedPersonId?: string | null;
+  assignedNature?: string | null;
 }
 
 export interface MovementPeriodSummary {
@@ -214,8 +219,8 @@ export function parseMovementSourceFilter(
     if (parsed.success) return parsed.data;
   }
   return typeof legacyTab === "string"
-    ? legacyFilterAliases[legacyTab] ?? "all"
-    : "all";
+    ? legacyFilterAliases[legacyTab] ?? "bank"
+    : "bank";
 }
 
 export function normalizeMovementFilters(
@@ -294,6 +299,8 @@ const movementFilterParamOrder: Array<keyof MovementFilters> = [
   "card",
   "search",
   "category",
+  "nature",
+  "person",
   "origin",
   "status",
   "review",
@@ -417,6 +424,8 @@ export function buildMovementQueryKey(filters: MovementFilters) {
     normalized.card,
     normalized.search,
     normalized.category,
+    normalized.nature,
+    normalized.person,
     normalized.page,
   ].map(value => value ?? "").join("|");
 }
@@ -994,6 +1003,7 @@ export function matchesMovement(
     item.originalDescription,
     item.normalizedDescription,
     item.categoryName,
+    item.assignedNature ?? "",
     item.accountName,
     item.provider,
     item.amountBrl === null ? "" : formatCurrency(item.amountBrl),
@@ -1020,6 +1030,8 @@ export function matchesMovement(
     filters.account && item.accountId !== filters.account ||
     filters.card && (item.instrumentId ?? item.cardId) !== filters.card ||
     filters.category && item.categoryId !== filters.category ||
+    filters.nature && (item.assignedNature ?? item.financialNature) !== filters.nature ||
+    filters.person && item.relatedPersonId !== filters.person ||
     filters.status && item.status !== filters.status ||
     filters.origin && item.provider.toLowerCase() !== filters.origin.toLowerCase() &&
       item.source !== filters.origin ||

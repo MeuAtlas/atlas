@@ -95,6 +95,7 @@ export async function listPluggyLoans(itemId:string){
 }
 export const getPluggyLoans=listPluggyLoans;
 export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom}});
+export const getPluggyTransaction=(transactionId:string)=>pluggyRequest<PluggyTransaction>(`/transactions/${encodeURIComponent(transactionId)}`);
 export async function listPluggyBills(accountId:string){
  const rows:PluggyBill[]=[];
  for(let pageNumber=1;pageNumber<=100;pageNumber++){

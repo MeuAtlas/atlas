@@ -55,6 +55,7 @@ export type OpenInvoiceTotalAliases = {
   manualUpdatedAt?: string | null;
   calculatedTotal?: unknown;
   calculatedReliable?: boolean;
+  calculatedUpdatedAt?: string | null;
   lastReliableTotal?: unknown;
   lastReliableUpdatedAt?: string | null;
 };
@@ -92,7 +93,17 @@ export function resolveOpenInvoiceTotal(input: OpenInvoiceTotalAliases) {
   const manual = openInvoiceMoney(input.manualInvoiceTotal);
   const calculated = openInvoiceMoney(input.calculatedTotal);
   const lastReliable = openInvoiceMoney(input.lastReliableTotal);
-  const candidates: Array<{
+  const providerCandidate = {
+    amount: provider,
+    source: "provider_bill" as const,
+    reliable: input.providerReliable === true,
+    updatedAt: input.providerUpdatedAt ?? null,
+  };
+  if (providerCandidate.amount !== null && providerCandidate.reliable) {
+    return providerCandidate;
+  }
+
+  const manuallyConfirmedCandidates: Array<{
     amount: number | null;
     source: OpenInvoiceDisplayTotalSource;
     reliable: boolean;
@@ -117,33 +128,46 @@ export function resolveOpenInvoiceTotal(input: OpenInvoiceTotalAliases) {
       updatedAt: input.manualUpdatedAt ?? null,
     },
     {
-      amount: provider,
-      source: "provider_bill",
-      reliable: input.providerReliable === true,
-      updatedAt: input.providerUpdatedAt ?? null,
-    },
-    {
       amount: manual,
       source: "manual",
       reliable: true,
       updatedAt: input.manualUpdatedAt ?? null,
     },
-    {
+  ];
+  const manuallyConfirmed = manuallyConfirmedCandidates.find(candidate =>
+    candidate.amount !== null && candidate.reliable);
+  const estimate = {
+    amount: calculated,
+    source: "calculated" as const,
+    reliable: input.calculatedReliable !== false,
+    updatedAt: input.calculatedUpdatedAt ?? null,
+  };
+  if (
+    manuallyConfirmed?.amount !== null &&
+    manuallyConfirmed?.amount !== undefined &&
+    estimate.amount !== null &&
+    estimate.reliable
+  ) {
+    return estimate.amount > manuallyConfirmed.amount
+      ? estimate
+      : manuallyConfirmed;
+  }
+  if (
+    manuallyConfirmed?.amount !== null &&
+    manuallyConfirmed?.amount !== undefined
+  ) {
+    return manuallyConfirmed;
+  }
+  if (estimate.amount !== null && estimate.reliable) return estimate;
+  if (lastReliable !== null) {
+    return {
       amount: lastReliable,
-      source: "last_reliable",
+      source: "last_reliable" as const,
       reliable: true,
       updatedAt: input.lastReliableUpdatedAt ?? null,
-    },
-    {
-      amount: calculated,
-      source: "calculated",
-      reliable: input.calculatedReliable !== false,
-      updatedAt: input.lastReliableUpdatedAt ?? null,
-    },
-  ];
-  const selected = candidates.find(candidate =>
-    candidate.amount !== null && candidate.reliable);
-  return selected ?? {
+    };
+  }
+  return {
     amount: null,
     source: "unavailable" as const,
     reliable: false,
@@ -164,7 +188,9 @@ export function resolvedOpenInvoiceSourceLabel(input: {
   }
   if (input.source === "provider_bill") return "Pluggy";
   if (input.source === "manual") return "Atualizada manualmente";
-  if (input.source === "calculated") return "Calculada pelo Atlas";
+  if (input.source === "calculated") {
+    return "Estimativa pelas compras sincronizadas";
+  }
   if (input.source === "last_reliable") {
     return input.providerOrigin
       ? "Pluggy — último valor confiável"

@@ -161,7 +161,6 @@ function ReviewFilters({
   sort,
   onSort,
   counts,
-  onAdd,
 }: {
   search: string;
   onSearch: (value: string) => void;
@@ -175,7 +174,6 @@ function ReviewFilters({
   sort: ReviewSort;
   onSort: (value: ReviewSort) => void;
   counts: Record<ReviewSegment, number>;
-  onAdd: () => void;
 }) {
   const segments: Array<[ReviewSegment, string]> = [
     ["all", "Todos"],
@@ -243,9 +241,6 @@ function ReviewFilters({
             <option value="date">Data</option>
           </select>
         </label>
-        <button className="invoice-review-add" type="button" onClick={onAdd}>
-          Adicionar lançamento
-        </button>
       </div>
     </section>
   );
@@ -640,34 +635,6 @@ export function InvoiceImportReview({
       isIgnored: !entry.isIgnored,
       reviewStatus: entry.isIgnored ? "edited" : "ignored",
     });
-  const addManualEntry = () => {
-    const id = crypto.randomUUID();
-    const entry: ParsedInvoiceEntry = {
-      id,
-      transactionDate: review.parsed.cycleEndDate,
-      postingDate: null,
-      descriptionRaw: "Lançamento manual",
-      descriptionNormalized: "LANCAMENTO MANUAL",
-      merchantNormalized: "",
-      amountCents: 0,
-      currencyCode: "BRL",
-      entryType: "unknown",
-      cardLastFour: review.parsed.cardLastFour,
-      installment: null,
-      confidence: 1,
-      reviewStatus: "edited",
-      isIgnored: false,
-      sourceLineNumber: null,
-      note: null,
-    };
-    updateParsed({ entries: [...entries, entry] });
-    setSearch("");
-    setSegment("all");
-    setCard("all");
-    setType("all");
-    setExpandedId(id);
-  };
-
   const cards = useMemo(
     () => [...new Set(entries.map(entry => entry.cardLastFour).filter(
       (value): value is string => Boolean(value),
@@ -748,7 +715,6 @@ export function InvoiceImportReview({
         sort={sort}
         onSort={setSort}
         counts={counts}
-        onAdd={addManualEntry}
       />
       <section className="invoice-review-list" aria-label="Lançamentos extraídos do PDF">
         <div className="invoice-review-list-head" aria-hidden="true">
@@ -795,10 +761,7 @@ export function InvoiceImportReview({
             <p>{entries.length
               ? "Nenhum lançamento corresponde aos filtros."
               : "Nenhum lançamento foi identificado automaticamente."}</p>
-            <span>Ajuste os filtros ou adicione um lançamento manual.</span>
-            <button type="button" onClick={addManualEntry}>
-              Adicionar lançamento manualmente
-            </button>
+            <span>Ajuste os filtros ou importe outro documento para complementar a fatura.</span>
           </div>
         ) : null}
       </section>

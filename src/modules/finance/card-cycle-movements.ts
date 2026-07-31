@@ -110,6 +110,24 @@ function dayDistance(left: string | null, right: string | null) {
   ) / 86_400_000;
 }
 
+function hasConflictingInstallmentDuplicate(
+  left: CardCycleMovement,
+  right: CardCycleMovement,
+) {
+  return (
+    left.source === "pluggy" &&
+    right.source === "pluggy" &&
+    left.installmentTotal !== null &&
+    left.installmentTotal === right.installmentTotal &&
+    left.installmentTotal > 1 &&
+    left.installmentNumber !== null &&
+    right.installmentNumber !== null &&
+    left.installmentNumber !== right.installmentNumber &&
+    left.transactionDate !== null &&
+    left.transactionDate === right.transactionDate
+  );
+}
+
 function sameMovement(left: CardCycleMovement, right: CardCycleMovement) {
   if (
     left.invoiceEntryId &&
@@ -154,9 +172,15 @@ function sameMovement(left: CardCycleMovement, right: CardCycleMovement) {
         Math.abs(left.originalAmount - right.originalAmount) <= 0.01
       )
     ) ||
-    !merchantMatches ||
-    left.installmentNumber !== right.installmentNumber
+    !merchantMatches
   ) return false;
+  if (left.installmentNumber !== right.installmentNumber) {
+    // A single provider purchase must not produce two different installments
+    // on the same card and posting date. This is a known incomplete-identity
+    // shape from credit feeds; retain one monetary line instead of charging it
+    // twice while leaving genuinely distinct dates untouched.
+    return hasConflictingInstallmentDuplicate(left, right);
+  }
   if (
     (left.source === "projection" || right.source === "projection") &&
     left.competenceMonth &&

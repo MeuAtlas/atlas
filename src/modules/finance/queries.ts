@@ -11,9 +11,11 @@ import {
   encodeInvoiceHistoryCursor,
   HISTORICAL_INVOICE_STATUSES,
   normalizeHistoricalInvoice,
+  resolveHistoricalInvoiceTotal,
   sortHistoricalInvoices,
   type CreditCardInvoiceHistoryResult,
   type HistoricalInvoiceStatus,
+  type InvoiceHistoryAnalyticsEntry,
 } from "./invoice-history";
 import {
   normalizeAvailableCardCycles,
@@ -92,6 +94,56 @@ export async function getReliableCurrentInvoiceSnapshots(
     "Não foi possível carregar os últimos valores confiáveis das faturas.",
   );
   return (result.data??[]) as unknown as StoredCardInvoice[];
+}
+
+export async function getCreditCardInvoiceAnalyticsEntries(
+  supabase: Client,
+  userId: string,
+  workspaceId: string | null = null,
+): Promise<InvoiceHistoryAnalyticsEntry[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  let query = supabase
+    .from("card_invoices")
+    .select(
+      "id,card_id,due_date,status,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,total_source",
+    )
+    .in("status", [...HISTORICAL_INVOICE_STATUSES])
+    .lt("closing_date", today)
+    .order("due_date", { ascending: false })
+    .limit(60);
+  query = workspaceId
+    ? query.eq("workspace_id", workspaceId).eq("visibility", "workspace")
+    : query.eq("owner_id", userId).is("workspace_id", null);
+  const result = await query;
+  if (result.error) {
+    throwSupabaseError(
+      result.error,
+      "carregar análise histórica de faturas",
+      "Não foi possível calcular o histórico de consumo dos cartões.",
+    );
+  }
+  return (result.data ?? []).flatMap(row => {
+    const status = String(row.status) as HistoricalInvoiceStatus;
+    if (!HISTORICAL_INVOICE_STATUSES.includes(status)) return [];
+    const resolved = resolveHistoricalInvoiceTotal(
+      row as Pick<
+        StoredCardInvoice,
+        | "provider_invoice_total"
+        | "manual_invoice_total"
+        | "confirmed_invoice_total"
+        | "calculated_invoice_total"
+        | "total_source"
+      >,
+    );
+    return [{
+      id: String(row.id),
+      cardId: String(row.card_id),
+      dueDate: String(row.due_date),
+      status,
+      total: resolved.total,
+      totalSource: resolved.source,
+    }];
+  });
 }
 
 export async function getCardInvoiceHistory(
@@ -560,7 +612,7 @@ export async function getMovementsData(
       query = query.in("card_id", cycleCardIds);
       query = isOpenCycle
         ? query.or(
-          `invoice_id.eq.${selectedCycle.id},and(purchase_date.gte.${period.from},purchase_date.lte.${period.to}),and(competence_date.gte.${period.from},competence_date.lte.${period.to})`,
+          `invoice_id.eq.${selectedCycle.id},and(invoice_id.is.null,purchase_date.gte.${period.from},purchase_date.lte.${period.to}),and(invoice_id.is.null,competence_date.gte.${period.from},competence_date.lte.${period.to})`,
         )
         : query.or(
           `invoice_id.eq.${selectedCycle.id},and(invoice_id.is.null,competence_date.gte.${period.from},competence_date.lte.${period.to})`,
@@ -1079,6 +1131,7 @@ type OpenInvoiceCycleRecord = {
   due_date: string | null;
   status: string;
   source: string | null;
+  total_source: string | null;
   provider_bill_id: string | null;
   confirmed_open_total: number | string | null;
   confirmed_open_total_at: string | null;
@@ -1126,7 +1179,7 @@ export async function resolveOpenCardInvoice(
   let cycleQuery = supabase
     .from("card_invoices")
     .select(
-      "id,workspace_id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,status,source,provider_bill_id,confirmed_open_total,confirmed_open_total_at,confirmed_open_total_source,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,last_reliable_invoice_total,current_display_total,data_completeness,provider_status,last_complete_sync_at,last_sync_at,preservation_reason,paid_amount,provider_updated_at,updated_at",
+      "id,workspace_id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,status,source,total_source,provider_bill_id,confirmed_open_total,confirmed_open_total_at,confirmed_open_total_source,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,last_reliable_invoice_total,current_display_total,data_completeness,provider_status,last_complete_sync_at,last_sync_at,preservation_reason,paid_amount,provider_updated_at,updated_at",
     )
     .neq("status", "cancelled");
   cycleQuery = workspaceId
@@ -1270,6 +1323,8 @@ export async function resolveOpenCardInvoice(
     : null;
   const providerReliable = Boolean(
     cycle.provider_bill_id &&
+    cycle.source === "pluggy_bill" &&
+    cycle.total_source === "provider_bill" &&
     (
       cycle.data_completeness === "complete" ||
       cycle.provider_status === "available" ||
@@ -1290,6 +1345,7 @@ export async function resolveOpenCardInvoice(
     manualUpdatedAt: cycle.updated_at,
     calculatedTotal: detailedTotal,
     calculatedReliable: detailsCompleteness !== "unavailable",
+    calculatedUpdatedAt: cycle.last_sync_at ?? cycle.updated_at,
     lastReliableTotal:
       cycle.last_reliable_invoice_total ?? cycle.current_display_total,
     lastReliableUpdatedAt: cycle.last_complete_sync_at ?? cycle.updated_at,
@@ -1327,10 +1383,7 @@ export async function resolveOpenCardInvoice(
     projectedInstallmentsTotal,
     feesAndTaxesTotal,
     creditsAndRefundsTotal,
-    reconciliationDifference: openInvoiceDifference(
-      confirmedOpenTotal,
-      detailedTotal,
-    ),
+    reconciliationDifference: openInvoiceDifference(total.amount, detailedTotal),
     displayTotal: total.amount,
     displayTotalSource: total.source,
     dataCompleteness,

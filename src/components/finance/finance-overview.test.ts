@@ -74,20 +74,10 @@ test("visão geral não consulta patrimônio, investimentos ou empréstimos", ()
   assert.match(page, /buildFinanceDashboard/);
 });
 
-test("sheet oferece uma única origem para todos os tipos de movimentação", () => {
-  for (const label of [
-    "Receita",
-    "Despesa",
-    "Transferência",
-    "Conta a pagar",
-    "Valor a receber",
-    "Compra no cartão",
-    "Desconto em folha",
-  ]) {
-    assert.match(shell, new RegExp(label));
-  }
-  assert.match(shell, /aria-modal="true"/);
-  assert.match(shell, /event\.key === "Escape"/);
+test("shell não oferece criação manual de movimentação", () => {
+  assert.doesNotMatch(shell, /Nova movimentação/);
+  assert.doesNotMatch(shell, /AddMovementSheet/);
+  assert.doesNotMatch(shell, /finance-bottom-add/);
 });
 
 test("card principal usa movimentação da conta e o mesmo mês selecionado", () => {
@@ -157,7 +147,7 @@ test("seletor central mostra o módulo habilitado sem confundir Meu Atlas", () =
 
 test("menu financeiro é textual e saldo bancário não possui ícone", () => {
   assert.match(tabs, /Visão geral/);
-  assert.match(tabs, /Compromissos/);
+  assert.match(tabs, /Receitas e Despesas/);
   assert.doesNotMatch(tabs, /icon|<svg|<i/);
   assert.match(balance, /Saldo atual da conta/);
   assert.doesNotMatch(balance, /<svg|<i|Icon/);
@@ -187,7 +177,7 @@ test("topo da visão geral reúne saudação e título em uma única faixa", () 
   assert.match(filters, /<span>Período<\/span>/);
   assert.match(filters, />Aplicar<\/button>/);
   assert.match(shell, /const isOverview = pathname === "\/financeiro"/);
-  assert.match(shell, /\{!isOverview \? \(/);
+  assert.doesNotMatch(shell, /Nova movimentação/);
 });
 
 test("filtros ficam dentro do card de saldo sem repetir a identidade bancária", () => {

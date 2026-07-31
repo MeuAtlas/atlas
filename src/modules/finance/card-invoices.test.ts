@@ -10,6 +10,8 @@ import {
   getCurrentBillSummary,
   getCurrentInvoiceSummary,
   getEstimatedInvoiceDetails,
+  isPendingPurchaseCarriedIntoOpenCycle,
+  purchaseCompetenceDate,
   selectStoredInvoiceSnapshot,
 } from "./card-invoices";
 import type { CardPurchase, CreditCard, StoredCardInvoice } from "./types";
@@ -132,6 +134,79 @@ test("separa cartões e exclui ciclo anterior e cancelados", () => {
   assert.equal(invoices[0].invoiceTotal, 100);
   assert.equal(invoices[1].invoiceTotal, 70);
   assert.equal(invoices[0].availableLimit, 900);
+});
+
+test("fatura aberta nao reincorpora parcela vinculada a fatura anterior", () => {
+  const currentCard: CreditCard = {
+    ...card("a"),
+    closing_day: 3,
+    due_day: 10,
+  };
+  const invoice = buildCurrentCardInvoices(
+    [currentCard],
+    [
+      purchase({
+        id: "historic-installment",
+        card_id: "a",
+        invoice_id: "closed-invoice",
+        installment_amount: 124.91,
+        installment_number: 1,
+        installment_count: 8,
+        purchase_date: "2026-07-15",
+        competence_date: "2026-07-15",
+      }),
+      purchase({
+        id: "current-installment",
+        card_id: "a",
+        installment_amount: 124.91,
+        installment_number: 6,
+        installment_count: 8,
+        purchase_date: "2026-07-15",
+        competence_date: "2026-07-15",
+      }),
+    ],
+    new Date("2026-07-30T12:00:00Z"),
+  )[0];
+
+  assert.equal(invoice.purchaseCount, 1);
+  assert.equal(invoice.invoiceTotal, 124.91);
+  assert.equal(invoice.purchases[0]?.id, "current-installment");
+});
+
+test("estimativa aberta nao soma parcelas conflitantes da mesma compra Pluggy", () => {
+  const invoice = buildCurrentCardInvoices(
+    [{ ...card("a"), closing_day: 3, due_day: 10 }],
+    [
+      purchase({
+        id: "first-installment",
+        card_id: "a",
+        external_id: "provider-first",
+        description: "On Sportswear",
+        merchant: "ON SPORTSWEAR",
+        installment_amount: 124.91,
+        installment_number: 1,
+        installment_count: 8,
+        purchase_date: "2026-07-15",
+        competence_date: "2026-07-15",
+      }),
+      purchase({
+        id: "sixth-installment",
+        card_id: "a",
+        external_id: "provider-sixth",
+        description: "On Sportswear",
+        merchant: "ON SPORTSWEAR",
+        installment_amount: 124.91,
+        installment_number: 6,
+        installment_count: 8,
+        purchase_date: "2026-07-15",
+        competence_date: "2026-07-15",
+      }),
+    ],
+    new Date("2026-07-30T12:00:00Z"),
+  )[0];
+
+  assert.equal(invoice.purchaseCount, 1);
+  assert.equal(invoice.invoiceTotal, 124.91);
 });
 
 test("ausência de fechamento produz estado não configurado", () => {
@@ -298,6 +373,52 @@ test("reconcilia dois instrumentos, estorno e lançamentos sem identificação",
   assert.equal(invoice.generalAdjustmentsTotal,20);
   assert.equal(invoice.invoiceTotal,190);
   assert.equal(invoice.reconciliationStatus,"matched");
+});
+
+test("fatura vigente usa a data real da compra quando a previsao da Pluggy aponta para o primeiro dia do mes",()=>{
+  const currentCard={
+    ...card("santander"),
+    last_four_digits:"5718",
+    closing_day:3,
+    due_day:10,
+    credit_card_instruments:[
+      {id:"holder",credit_card_id:"santander",external_id:"holder",last_four_digits:"5718",card_kind:"physical" as const,display_name:"Titular",provider_status:"active",user_archived_at:null,source:"pluggy"},
+      {id:"additional",credit_card_id:"santander",external_id:"additional",last_four_digits:"0613",card_kind:"additional" as const,display_name:"Adicional",provider_status:"active",user_archived_at:null,source:"pluggy"},
+    ],
+  };
+  const rows=[
+    purchase({id:"holder",card_id:"santander",instrument_id:"holder",purchase_date:"2026-07-12",competence_date:"2026-07-01",bill_forecast_date:"2026-07-01",installment_amount:100}),
+    purchase({id:"additional-one",card_id:"santander",instrument_id:"additional",purchase_date:"2026-07-10",competence_date:"2026-07-01",bill_forecast_date:"2026-07-01",installment_amount:500}),
+    purchase({id:"additional-two",card_id:"santander",instrument_id:"additional",purchase_date:"2026-07-20",competence_date:"2026-07-01",bill_forecast_date:"2026-07-01",installment_amount:88.88}),
+  ];
+
+  assert.equal(purchaseCompetenceDate(rows[1]),"2026-07-10");
+  const invoice=buildCurrentCardInvoices(
+    [currentCard],
+    rows,
+    new Date("2026-07-28T12:00:00Z"),
+  )[0];
+  assert.deepEqual(
+    invoice.instrumentTotals.map(total=>[
+      total.lastFour,
+      total.netTotal,
+      total.purchaseCount,
+    ]),
+    [["5718",100,1],["0613",588.88,2]],
+  );
+});
+
+test("parcela projetada continua usando a competencia prevista",()=>{
+  const projected=purchase({
+    id:"projected",
+    card_id:"a",
+    source:"projection",
+    status:"projected",
+    purchase_date:"2026-07-10",
+    competence_date:"2026-08-01",
+    bill_forecast_date:"2026-08-01",
+  });
+  assert.equal(purchaseCompetenceDate(projected),"2026-08-01");
 });
 
 test("Bill.totalAmount é a fatura oficial e a diferença permanece explícita",()=>{
@@ -482,6 +603,70 @@ test("versão POSTED substitui a PENDING equivalente sem duplicar", () => {
     deduplicateCardPurchases(rows).map((item) => item.id),
     ["posted-version"],
   );
+});
+
+test("compra pendente no corte permanece provisoriamente na fatura aberta", () => {
+  const santander = {
+    ...card("mastercard"),
+    closing_day: 3,
+    due_day: 10,
+  };
+  const pendingAtCutoff = purchase({
+    id: "pending-at-cutoff",
+    card_id: "mastercard",
+    status: "pending",
+    purchase_date: "2026-07-03",
+    competence_date: "2026-07-01",
+    installment_amount: 40,
+    provider_bill_id: null,
+    invoice_reference: null,
+  });
+  const current = buildCurrentCardInvoices(
+    [santander],
+    [pendingAtCutoff],
+    new Date("2026-07-30T15:00:00Z"),
+  )[0];
+
+  assert.equal(current.cycle?.cycleStart, "2026-07-04");
+  assert.equal(
+    isPendingPurchaseCarriedIntoOpenCycle(pendingAtCutoff, current.cycle!),
+    true,
+  );
+  assert.deepEqual(current.purchases.map((item) => item.id), [
+    "pending-at-cutoff",
+  ]);
+  assert.equal(current.calculatedInvoiceTotal, 40);
+  assert.equal(current.pendingTransactionsTotal, 40);
+});
+
+test("referência definitiva impede carregar compra pendente para o ciclo seguinte", () => {
+  const santander = {
+    ...card("mastercard"),
+    closing_day: 3,
+    due_day: 10,
+  };
+  const pendingWithBill = purchase({
+    id: "pending-with-bill",
+    card_id: "mastercard",
+    status: "pending",
+    purchase_date: "2026-07-03",
+    competence_date: "2026-07-03",
+    installment_amount: 40,
+    provider_bill_id: "previous-provider-bill",
+    invoice_reference: "previous-provider-bill",
+  });
+  const current = buildCurrentCardInvoices(
+    [santander],
+    [pendingWithBill],
+    new Date("2026-07-30T15:00:00Z"),
+  )[0];
+
+  assert.equal(
+    isPendingPurchaseCarriedIntoOpenCycle(pendingWithBill, current.cycle!),
+    false,
+  );
+  assert.equal(current.purchases.length, 0);
+  assert.equal(current.calculatedInvoiceTotal, 0);
 });
 
 test("status diferencia fechamento, vencimento e pagamento", () => {

@@ -28,7 +28,15 @@ export default async function Page() {
       .order("created_at", { ascending: false }),
   );
 
-  const [health, history, creditProducts, pending, syncDiagnostics] =
+  const [
+    health,
+    history,
+    creditProducts,
+    pending,
+    syncDiagnostics,
+    resourceHistory,
+    automaticSync,
+  ] =
     await Promise.all([
       withQueryFallback(
         "provider_incidents",
@@ -47,7 +55,7 @@ export default async function Page() {
         supabase
           .from("financial_sync_runs")
           .select(
-            "id,bank_connection_id,status,started_at,accounts_count,cards_count,transactions_count,investments_count,loans_count",
+            "id,bank_connection_id,status,trigger_type,started_at,completed_at,accounts_count,cards_count,transactions_count,investments_count,loans_count,resources_succeeded,resources_failed,resources_preserved,records_inserted,records_updated,records_preserved,warning_codes",
           )
           .eq("owner_id", user.id)
           .order("started_at", { ascending: false })
@@ -85,6 +93,28 @@ export default async function Page() {
           .limit(12),
         [],
       ),
+      withQueryFallback(
+        "financial_resource_sync_status",
+        supabase
+          .from("financial_resource_sync_status")
+          .select(
+            "id,bank_connection_id,sync_run_id,resource_type,entity_type,provider_entity_id,local_entity_id,status,data_freshness,last_attempt_at,last_successful_sync_at,records_received,records_inserted,records_updated,records_unchanged,records_preserved,error_code,warning_codes,retryable,next_retry_at,metadata",
+          )
+          .eq("owner_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(200),
+        [],
+      ),
+      withQueryFallback(
+        "automatic_pluggy_sync",
+        supabase
+          .from("bank_connections")
+          .select("id,automatic_sync_enabled")
+          .eq("owner_id", user.id)
+          .eq("provider", "pluggy")
+          .neq("status", "disabled"),
+        [],
+      ),
     ]);
 
   const diagnostics = new Map<
@@ -120,6 +150,12 @@ export default async function Page() {
   const healthByConnection = new Map(
     health.data.map((row) => [String(row.id), row]),
   );
+  const automaticSyncByConnection = new Map(
+    automaticSync.data.map(row => [
+      String(row.id),
+      Boolean(row.automatic_sync_enabled),
+    ]),
+  );
 
   const connections = connectionRows.map((row) => {
     const providerHealth = healthByConnection.get(String(row.id));
@@ -128,6 +164,8 @@ export default async function Page() {
       connector_name: row.connector_name ? String(row.connector_name) : null,
       status: String(row.status),
       sync_status: String(row.sync_status),
+      automatic_sync_enabled:
+        automaticSyncByConnection.get(String(row.id)) ?? false,
       last_provider_update_at: row.last_provider_update_at
         ? String(row.last_provider_update_at)
         : null,
@@ -162,6 +200,38 @@ export default async function Page() {
         instruments: 0,
         pending: 0,
       },
+      resourceStatuses: resourceHistory.data
+        .filter((resource) => String(resource.bank_connection_id) === String(row.id))
+        .map((resource) => ({
+          id: String(resource.id),
+          syncRunId: String(resource.sync_run_id),
+          resourceType: String(resource.resource_type),
+          entityType: resource.entity_type ? String(resource.entity_type) : null,
+          providerEntityId: String(resource.provider_entity_id),
+          status: String(resource.status),
+          dataFreshness: String(resource.data_freshness),
+          lastAttemptAt: String(resource.last_attempt_at),
+          lastSuccessfulSyncAt: resource.last_successful_sync_at
+            ? String(resource.last_successful_sync_at)
+            : null,
+          received: Number(resource.records_received),
+          inserted: Number(resource.records_inserted),
+          updated: Number(resource.records_updated),
+          unchanged: Number(resource.records_unchanged),
+          preserved: Number(resource.records_preserved),
+          errorCode: resource.error_code ? String(resource.error_code) : null,
+          warningCodes: Array.isArray(resource.warning_codes)
+            ? resource.warning_codes.map(String)
+            : [],
+          retryable: Boolean(resource.retryable),
+          nextRetryAt: resource.next_retry_at
+            ? String(resource.next_retry_at)
+            : null,
+          metadata:
+            resource.metadata && typeof resource.metadata === "object"
+              ? (resource.metadata as Record<string, unknown>)
+              : {},
+        })),
     };
   });
 
@@ -169,12 +239,23 @@ export default async function Page() {
     id: String(row.id),
     bank_connection_id: String(row.bank_connection_id),
     status: String(row.status),
+    trigger_type: String(row.trigger_type ?? "manual"),
     started_at: String(row.started_at),
+    completed_at: row.completed_at ? String(row.completed_at) : null,
     accounts_count: Number(row.accounts_count),
     cards_count: Number(row.cards_count),
     transactions_count: Number(row.transactions_count),
     investments_count: Number(row.investments_count),
     loans_count: Number(row.loans_count),
+    resources_succeeded: Number(row.resources_succeeded ?? 0),
+    resources_failed: Number(row.resources_failed ?? 0),
+    resources_preserved: Number(row.resources_preserved ?? 0),
+    records_inserted: Number(row.records_inserted ?? 0),
+    records_updated: Number(row.records_updated ?? 0),
+    records_preserved: Number(row.records_preserved ?? 0),
+    warning_codes: Array.isArray(row.warning_codes)
+      ? row.warning_codes.map(String)
+      : [],
   }));
 
   const cardDiagnostics = syncDiagnostics.data.map((row) => ({
@@ -217,6 +298,8 @@ export default async function Page() {
         history: Boolean(history.warning),
         instruments: Boolean(creditProducts.warning || pending.warning),
         cardDiagnostics: Boolean(syncDiagnostics.warning),
+        resourceHistory: Boolean(resourceHistory.warning),
+        automaticSync: Boolean(automaticSync.warning),
       }}
     />
   );

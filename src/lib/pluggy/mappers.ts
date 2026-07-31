@@ -2,13 +2,60 @@ import type { JsonRecord,PluggyAccount,PluggyBill,PluggyInvestment,PluggyLoan,Pl
 import { classifyBankTransaction } from "./bank-classifier";
 import { normalizeProviderTransactionDate } from "./provider-transaction-date";
 import { normalizeForeignCardMovement } from "@/modules/finance/foreign-card-movement";
+import {
+ hashFinancialIdentifier,
+ maskFinancialIdentifier,
+ normalizeBrazilianTaxNumber,
+ pixCounterpartyNameFromDescription,
+} from "@/modules/finance/financial-counterparty";
 const text=(value:unknown,fallback="")=>typeof value==="string"&&value.trim()?value.trim():fallback;
 const number=(value:unknown)=>typeof value==="number"&&Number.isFinite(value)?value:0;
 const nullableNumber=(value:unknown)=>typeof value==="number"&&Number.isFinite(value)?value:null;
 const isoDate=(value:unknown)=>{const raw=text(value);const date=raw?new Date(raw):new Date();return Number.isNaN(date.valueOf())?new Date().toISOString().slice(0,10):date.toISOString().slice(0,10)};
 const lower=(...values:unknown[])=>values.map(value=>text(value).toLowerCase()).join(" ");
 const record=(value:unknown):JsonRecord=>value&&typeof value==="object"&&!Array.isArray(value)?value as JsonRecord:{};
-const safeTransactionMetadata=(transaction:PluggyTransaction,accountType?:string)=>{const payment=record(transaction.paymentData);return {...safeMetadata({...transaction,accountType}),paymentDataKeys:Object.keys(payment).sort(),hasPaymentData:Object.keys(payment).length>0}};
+const normalizedCounterpartyName=(value:unknown)=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]+/g," ").trim()||null;
+function safeCounterpartyMetadata(transaction:PluggyTransaction,payment:JsonRecord){
+ const incoming=String(transaction.type??"").toUpperCase()==="CREDIT";
+ const candidates=incoming
+  ? [record(payment.payer),record(payment.sender),record(payment.origin),record(payment.source)]
+  : [record(payment.receiver),record(payment.recipient),record(payment.beneficiary),record(payment.destination)];
+ const selected=candidates.find(candidate=>Object.keys(candidate).length)??payment;
+ const bank=record(selected.bank);
+ const account=record(selected.account);
+ const displayName=text(
+  selected.name,
+  text(
+   selected.holderName,
+   text(
+    selected.receiverName,
+    text(selected.payerName,pixCounterpartyNameFromDescription(transaction.description)??""),
+   ),
+  ),
+ )||null;
+ const rawTaxNumber=selected.taxNumber??selected.document??selected.cpfCnpj??selected.cpf;
+ const taxNumber=normalizeBrazilianTaxNumber(rawTaxNumber) ??
+  normalizeBrazilianTaxNumber(transaction.description);
+ const pixKey=selected.pixKey??selected.key??selected.pix_key;
+ const accountNumber=selected.accountNumber??account.number??selected.account;
+ const branch=selected.branch??selected.agency??account.branch;
+ const providerCounterpartyId=text(selected.id,text(selected.providerId))||null;
+ if(!displayName&&!taxNumber&&!pixKey&&!accountNumber&&!providerCounterpartyId)return null;
+ return {
+  displayName,
+  normalizedName:normalizedCounterpartyName(displayName),
+  providerCounterpartyId,
+  taxNumberHash:hashFinancialIdentifier(taxNumber),
+  maskedTaxNumber:maskFinancialIdentifier(taxNumber),
+  pixKeyHash:hashFinancialIdentifier(pixKey),
+  maskedPixKey:maskFinancialIdentifier(pixKey),
+  bankCode:text(selected.bankCode,text(bank.code))||null,
+  bankName:text(selected.bankName,text(bank.name))||null,
+  branchMasked:maskFinancialIdentifier(branch),
+  accountMasked:maskFinancialIdentifier(accountNumber),
+ };
+}
+const safeTransactionMetadata=(transaction:PluggyTransaction,accountType?:string)=>{const payment=record(transaction.paymentData);return {...safeMetadata({...transaction,accountType}),paymentDataKeys:Object.keys(payment).sort(),hasPaymentData:Object.keys(payment).length>0,counterparty:safeCounterpartyMetadata(transaction,payment)}};
 const digits4=(value:unknown)=>{const digits=text(value).replace(/\D/g,"");return digits.length>=4?digits.slice(-4):null};
 const positiveInteger=(value:unknown)=>typeof value==="number"&&Number.isInteger(value)&&value>0?value:null;
 export type InstallmentEvidence={isInstallment:boolean;number:number|null;count:number|null;totalPurchaseAmount:number|null;source:"provider_structured"|"provider_description"|"unknown";confidence:"confirmed"|"inferred"|"unknown"};
@@ -120,7 +167,7 @@ export function classifyTransaction(transaction:PluggyTransaction,isCreditCard=f
  return {transaction_type:income?"income":"expense",transaction_role:"cash_flow",financial_origin:"bank_account",cash_flow_kind:suspectedTransfer?"transfer_suspected":income?"income":"expense",suspected_transfer:suspectedTransfer,review_status:suspectedTransfer?"pending":"reviewed"} as const
 }
 export function mapTransaction(transaction:PluggyTransaction,ownerId:string,connectionId:string,target:{accountId?:string;cardId?:string;isCreditCard?:boolean;accountType?:string}){const classification=classifyBankTransaction(transaction);const dates=normalizeProviderTransactionDate(transaction);return {owner_id:ownerId,bank_connection_id:connectionId,account_id:target.accountId,credit_card_id:null,invoice_id:null,description:text(transaction.description,"Movimentacao importada").slice(0,160),amount:Math.abs(number(transaction.amount)),competence_date:dates.localDate,realized_at:transaction.status==="PENDING"?null:dates.bankPostedAt,provider_posted_at:dates.providerPostedAt,bank_posted_at:dates.bankPostedAt,effective_at:dates.effectiveAt,user_effective_at:null,date_source:dates.dateSource,date_confidence:dates.dateConfidence,date_override_reason:null,status:transaction.status==="PENDING"?"pending":"realized",source:"pluggy",source_type:"bank",external_id:transaction.id,provider_account_id:transaction.accountId,provider_category:text(transaction.category)||null,provider_type:text(transaction.type)||null,operation_type:text(transaction.operationType)||null,operation_type_additional_info:text(transaction.operationTypeAdditionalInfo)||null,provider_balance:nullableNumber(transaction.balance),original_currency:text(transaction.currencyCode,"BRL").slice(0,3),original_amount:number(transaction.amount),merchant:text(transaction.merchant?.name)||null,provider_metadata:safeTransactionMetadata(transaction,target.accountType),manually_confirmed:false,manual_override_at:null,manual_override_by:null,...classification}}
-export function mapCardPurchase(transaction:PluggyTransaction,ownerId:string,connectionId:string,cardId:string){const metadata=record(transaction.creditCardMetadata);const classification=classifyTransaction(transaction,true);const isForeignIof=/\bIOF\b.*(?:EXTERIOR|INTERNACIONAL)/i.test(text(transaction.description));const postedDate=isoDate(transaction.date);const purchaseDate=isoDate(metadata.purchaseDate??transaction.date);const installment=mapInstallmentEvidence(transaction);const providerAmountBrl=transaction.amountInAccountCurrency??transaction.convertedAmount??transaction.localAmount??metadata.amountInAccountCurrency??metadata.convertedAmount??metadata.localAmount;const foreign=normalizeForeignCardMovement({amount:transaction.amount,providerAmountBrl,currencyCode:transaction.currencyCode,source:"pluggy"});const installmentAmount=Math.abs(foreign.amountBrl??number(transaction.amount));const totalPurchaseAmount=foreign.isForeignTransaction?null:installment.totalPurchaseAmount;const billId=text(metadata.billId);const forecast=text(metadata.billForecastDate);const competenceDate=/^\d{4}-\d{2}/.test(forecast)?`${forecast.slice(0,7)}-01`:postedDate;return {owner_id:ownerId,workspace_id:null,card_id:cardId,invoice_id:null,provider_bill_id:billId||null,category_id:null,description:text(transaction.description,"Compra importada").slice(0,160),total_amount:totalPurchaseAmount??installmentAmount,total_purchase_amount:totalPurchaseAmount,is_installment:installment.isInstallment,installment_source:installment.source,installment_confidence:installment.confidence,installment_plan_id:null,installment_manually_confirmed:false,purchase_date:purchaseDate,posting_date:postedDate,competence_date:competenceDate,installment_number:installment.number,installment_count:installment.count,installment_amount:installmentAmount,amount_brl:foreign.amountBrl,visibility:"private",source:"pluggy",external_id:transaction.id,bank_connection_id:connectionId,source_type:"card",financial_origin:classification.financial_origin,transaction_role:isForeignIof?"foreign_transaction_tax":classification.transaction_role,entry_type:isForeignIof?"tax":null,status:transaction.status==="PENDING"?"pending":"realized",review_status:classification.transaction_role==="invoice_payment"?"pending":"reviewed",invoice_reference:billId||null,bill_forecast_date:/^\d{4}-\d{2}/.test(forecast)?`${forecast.slice(0,7)}-01`:null,provider_category:text(transaction.category)||null,merchant:text(transaction.merchant?.name)||null,currency:text(transaction.currencyCode,"BRL").slice(0,3),provider_signed_amount:number(transaction.amount),original_amount:foreign.originalAmount,original_currency_code:foreign.originalCurrencyCode,exchange_rate:foreign.exchangeRate,foreign_iof_amount:foreign.iofAmountBrl,conversion_source:foreign.conversionSource,conversion_confidence:providerAmountBrl===undefined||providerAmountBrl===null?null:1,converted_at:foreign.amountBrl!==null&&foreign.isForeignTransaction?transaction.date??new Date().toISOString():null,provider_metadata:safeMetadata({...transaction,...metadata}),last_sync_at:new Date().toISOString()}}
+export function mapCardPurchase(transaction:PluggyTransaction,ownerId:string,connectionId:string,cardId:string){const metadata=record(transaction.creditCardMetadata);const classification=classifyTransaction(transaction,true);const isForeignIof=/\bIOF\b.*(?:EXTERIOR|INTERNACIONAL)/i.test(text(transaction.description));const postedDate=isoDate(transaction.date);const purchaseDate=isoDate(metadata.purchaseDate??transaction.date);const installment=mapInstallmentEvidence(transaction);const providerAmountBrl=transaction.amountInAccountCurrency??transaction.convertedAmount??transaction.localAmount??metadata.amountInAccountCurrency??metadata.convertedAmount??metadata.localAmount;const foreign=normalizeForeignCardMovement({amount:transaction.amount,providerAmountBrl,currencyCode:transaction.currencyCode,source:"pluggy"});const installmentAmount=Math.abs(foreign.amountBrl??number(transaction.amount));const totalPurchaseAmount=foreign.isForeignTransaction?null:installment.totalPurchaseAmount;const billId=text(metadata.billId);const forecast=text(metadata.billForecastDate);return {owner_id:ownerId,workspace_id:null,card_id:cardId,invoice_id:null,provider_bill_id:billId||null,category_id:null,description:text(transaction.description,"Compra importada").slice(0,160),total_amount:totalPurchaseAmount??installmentAmount,total_purchase_amount:totalPurchaseAmount,is_installment:installment.isInstallment,installment_source:installment.source,installment_confidence:installment.confidence,installment_plan_id:null,installment_manually_confirmed:false,purchase_date:purchaseDate,posting_date:postedDate,competence_date:purchaseDate,installment_number:installment.number,installment_count:installment.count,installment_amount:installmentAmount,amount_brl:foreign.amountBrl,visibility:"private",source:"pluggy",external_id:transaction.id,bank_connection_id:connectionId,source_type:"card",financial_origin:classification.financial_origin,transaction_role:isForeignIof?"foreign_transaction_tax":classification.transaction_role,entry_type:isForeignIof?"tax":null,status:transaction.status==="PENDING"?"pending":"realized",review_status:classification.transaction_role==="invoice_payment"?"pending":"reviewed",invoice_reference:billId||null,bill_forecast_date:/^\d{4}-\d{2}/.test(forecast)?`${forecast.slice(0,7)}-01`:null,provider_category:text(transaction.category)||null,merchant:text(transaction.merchant?.name)||null,currency:text(transaction.currencyCode,"BRL").slice(0,3),provider_signed_amount:number(transaction.amount),original_amount:foreign.originalAmount,original_currency_code:foreign.originalCurrencyCode,exchange_rate:foreign.exchangeRate,foreign_iof_amount:foreign.iofAmountBrl,conversion_source:foreign.conversionSource,conversion_confidence:providerAmountBrl===undefined||providerAmountBrl===null?null:1,converted_at:foreign.amountBrl!==null&&foreign.isForeignTransaction?transaction.date??new Date().toISOString():null,provider_metadata:safeMetadata({...transaction,...metadata}),last_sync_at:new Date().toISOString()}}
 export function mapInvestment(item:PluggyInvestment,ownerId:string,connectionId:string){return {owner_id:ownerId,bank_connection_id:connectionId,source:"pluggy",external_id:item.id,name:text(item.name,"Investimento"),investment_type:text(item.type,"OTHER"),institution_name:null,currency:text(item.currencyCode,"BRL").slice(0,3),balance:number(item.balance??item.amount??item.value),quantity:number(item.quantity),unit_value:number(item.unitValue),provider_code:text(item.code)||null,due_date:item.dueDate?isoDate(item.dueDate):null,provider_metadata:safeMetadata(item),last_sync_at:new Date().toISOString()}}
 const payrollTerms=["consignado","payroll","payroll loan","salary loan","desconto em folha"];
 export function isPayrollLoan(item:Pick<PluggyLoan,"type"|"productName">){const clue=lower(item.type,item.productName).replaceAll("_"," ");return clue.includes("consigna")||payrollTerms.some(term=>clue.includes(term))}

@@ -64,6 +64,8 @@ export type MonthlyFinancialResult = {
   monthlyResult: number;
   expectedRevenue: number;
   expectedExpenses: number;
+  payrollDeductions: number;
+  analyticalExpenses: number;
   entries: MonthlyResultEntry[];
   expectedEntries: MonthlyResultEntry[];
 };
@@ -478,13 +480,22 @@ export function calculateMonthlyFinancialResult({
     .filter((entry) => entry.kind === "revenue")
     .reduce((total, entry) => total + entry.amount, 0);
   const realizedExpenses = entries
-    .filter((entry) => entry.kind !== "revenue")
+    .filter((entry) =>
+      entry.kind !== "revenue" && entry.sourceKind !== "payroll"
+    )
+    .reduce((total, entry) => total + entry.amount, 0);
+  const payrollDeductions = entries
+    .filter(entry =>
+      entry.kind !== "revenue" && entry.sourceKind === "payroll"
+    )
     .reduce((total, entry) => total + entry.amount, 0);
   const expectedRevenue = expectedEntries
     .filter((entry) => entry.kind === "revenue")
     .reduce((total, entry) => total + entry.amount, 0);
   const expectedExpenses = expectedEntries
-    .filter((entry) => entry.kind !== "revenue")
+    .filter((entry) =>
+      entry.kind !== "revenue" && entry.sourceKind !== "payroll"
+    )
     .reduce((total, entry) => total + entry.amount, 0);
 
   return {
@@ -494,6 +505,8 @@ export function calculateMonthlyFinancialResult({
     monthlyResult: realizedRevenue - realizedExpenses,
     expectedRevenue,
     expectedExpenses,
+    payrollDeductions,
+    analyticalExpenses: realizedExpenses + payrollDeductions,
     entries,
     expectedEntries,
   };

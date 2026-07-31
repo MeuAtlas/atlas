@@ -6,11 +6,11 @@ import {
   resolveOpenInvoiceTotal,
 } from "./open-card-invoice";
 
-test("caso 7082,45 permanece confirmado com detalhe parcial", () => {
+test("caso 7082,45 usa estimativa maior mesmo com detalhe parcial", () => {
   const total = resolveOpenInvoiceTotal({
     confirmedOpenTotal: 7082.45,
-    calculatedTotal: 6942.14,
-    calculatedReliable: false,
+    calculatedTotal: 7111.37,
+    calculatedReliable: true,
     lastReliableTotal: 6900,
   });
   assert.deepEqual(
@@ -18,14 +18,14 @@ test("caso 7082,45 permanece confirmado com detalhe parcial", () => {
       cards: total.amount,
       movements: total.amount,
       overview: total.amount,
-      difference: openInvoiceDifference(total.amount, 6942.14),
+      difference: openInvoiceDifference(total.amount, 7111.37),
       detailsCompleteness: "partial",
     },
     {
-      cards: 7082.45,
-      movements: 7082.45,
-      overview: 7082.45,
-      difference: 140.31,
+      cards: 7111.37,
+      movements: 7111.37,
+      overview: 7111.37,
+      difference: 0,
       detailsCompleteness: "partial",
     },
   );
@@ -69,7 +69,7 @@ test("componentes não apagam o total quando o detalhe está parcial", () => {
     "utf8",
   );
   assert.match(compact, /resolvedInvoice\.displayTotal/);
-  assert.match(compact, /O total confirmado permanece disponível/);
+  assert.match(compact, /Estimativa baseada nas compras sincronizadas/);
   assert.match(movements, /resolvedOpenInvoice/);
   assert.match(movements, /Detalhamento parcial/);
 });
