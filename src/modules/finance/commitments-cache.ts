@@ -37,8 +37,46 @@ export const planningCacheTag = (workspaceId: string) =>
   `finance:planning:${workspaceId}`;
 export const entitiesCacheTag = (workspaceId: string) =>
   `finance:entities:${workspaceId}`;
-export const overviewCacheTag = (workspaceId: string) =>
-  `finance:overview:${workspaceId}`;
+export const accountsCacheTag = (workspaceId: string) =>
+  `finance:accounts:${workspaceId}`;
+export const transactionsCacheTag = (workspaceId: string) =>
+  `finance:transactions:${workspaceId}`;
+export const cardsCacheTag = (workspaceId: string) =>
+  `finance:cards:${workspaceId}`;
+export const billsCacheTag = (workspaceId: string) =>
+  `finance:bills:${workspaceId}`;
+export const overviewCacheTag = (
+  workspaceId: string,
+  accountId?: string | null,
+  month?: string,
+) => accountId && month
+  ? `finance:overview:${workspaceId}:${accountId}:${month.slice(0, 7)}`
+  : `finance:overview:${workspaceId}`;
+export const currentOverviewCacheTag = (
+  workspaceId: string,
+  accountId?: string | null,
+  month?: string,
+) => accountId && month
+  ? `finance:overview:current:${workspaceId}:${accountId}:${month.slice(0, 7)}`
+  : `finance:overview:current:${workspaceId}`;
+export const nextOverviewCacheTag = (
+  workspaceId: string,
+  accountId?: string | null,
+  month?: string,
+) => accountId && month
+  ? `finance:overview:next:${workspaceId}:${accountId}:${month.slice(0, 7)}`
+  : `finance:overview:next:${workspaceId}`;
+export const cashFlowCacheTag = (
+  workspaceId: string,
+  accountId?: string | null,
+  month?: string,
+) => accountId && month
+  ? `finance:cashflow:${workspaceId}:${accountId}:${month.slice(0, 7)}`
+  : `finance:cashflow:${workspaceId}`;
+export const projectionCacheTag = (workspaceId: string, month?: string) =>
+  month
+    ? `finance:projection:${workspaceId}:${month.slice(0, 7)}`
+    : `finance:projection:${workspaceId}`;
 export const reportsCacheTag = (workspaceId: string) =>
   `finance:reports:${workspaceId}`;
 
@@ -57,7 +95,15 @@ export function invalidateCommitmentsCache(
     reimbursementsCacheTag(workspaceId),
     planningCacheTag(workspaceId),
     entitiesCacheTag(workspaceId),
+    accountsCacheTag(workspaceId),
+    transactionsCacheTag(workspaceId),
+    cardsCacheTag(workspaceId),
+    billsCacheTag(workspaceId),
     overviewCacheTag(workspaceId),
+    currentOverviewCacheTag(workspaceId),
+    nextOverviewCacheTag(workspaceId),
+    cashFlowCacheTag(workspaceId),
+    projectionCacheTag(workspaceId),
     reportsCacheTag(workspaceId),
     ...(options.month
       ? [

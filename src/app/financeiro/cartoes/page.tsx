@@ -13,11 +13,11 @@ import { Money, ValueVisibility } from "@/components/finance/value-visibility";
 import {
   archiveCard,
   archiveCardInstrument,
-  createCard,
   restoreCard,
   restoreCardInstrument,
   updateCardDates,
   updateCardInstrument,
+  updateCardInstrumentPaymentResponsibility,
 } from "@/modules/finance/actions";
 import { requireFinanceAccess } from "@/modules/finance/access";
 import { buildCurrentCardInvoices } from "@/modules/finance/card-invoices";
@@ -87,10 +87,12 @@ export default async function Page({
       })()
     : undefined;
   const { supabase, user } = await requireFinanceAccess();
-  const [data,storedInvoices]=await Promise.all([
+  const [data,storedInvoices,peopleResult]=await Promise.all([
     getFinanceData(supabase,user.id),
     getReliableCurrentInvoiceSnapshots(supabase,user.id),
+    supabase.from("financial_people").select("id,name").eq("created_by",user.id).eq("is_active",true).is("archived_at",null).order("name"),
   ]);
+  const people=peopleResult.data??[];
   const activeCards = data.cards.filter((card) => card.status === "active");
   const archivedCards = data.cards.filter(
     (card) =>
@@ -189,6 +191,10 @@ export default async function Page({
       {query.toast === "restored" ? (
         <p className="finance-toast success" role="status">
           Cartão desarquivado com sucesso.
+        </p>
+      ) : query.toast === "responsibility-updated" ? (
+        <p className="finance-toast success" role="status">
+          Responsabilidade de pagamento atualizada.
         </p>
       ) : query.toast === "archived" ? (
         <p className="finance-toast success" role="status">
@@ -293,117 +299,149 @@ export default async function Page({
       ) : null}
 
       {view === "manage" || view === "archived" ? (
-        <section className="finance-panel card-admin-list">
-          <header>
-            <h2>{view === "archived" ? "Cartões arquivados" : "Gerenciar cartões"}</h2>
-            <span>{visibleCards.length}</span>
+        <section className="finance-panel card-manager-panel">
+          <header className="card-manager-heading">
+            <span>
+              <small>{view === "archived" ? "HISTÓRICO" : "CARTÕES CONECTADOS"}</small>
+              <h2>{view === "archived" ? "Cartões arquivados" : "Gerenciar cartões"}</h2>
+              <p>
+                {view === "archived"
+                  ? "Restaure um cartão para voltar a usá-lo nas faturas."
+                  : "Os cartões são importados automaticamente pela Pluggy. Aqui você define apenas quem paga cada cartão."}
+              </p>
+            </span>
+            <i>{visibleCards.length} {visibleCards.length === 1 ? "conta" : "contas"}</i>
           </header>
+          {view === "manage" ? (
+            <p className="card-manager-info">
+              Quando outra pessoa é selecionada, o Atlas desconta as compras desse cartão somente da sua previsão. A fatura do banco continua integral.
+            </p>
+          ) : null}
           {visibleCards.length ? (
-            visibleCards.map((card) => (
-              <article key={card.id}>
-                <span>
-                  <b>{card.name} · {card.last_four_digits || "••••"}</b>
-                  <small>
-                    {card.source === "pluggy" ? "Pluggy" : "Manual"} ·{" "}
-                    {card.status === "active" ? "Ativo" : "Arquivado"}
-                  </small>
-                </span>
-                {card.credit_card_instruments
+            <div className="card-manager-list">
+              {visibleCards.map((card) => {
+                const visibleInstruments = card.credit_card_instruments
                   ?.filter((instrument) =>
                     view === "archived"
                       ? Boolean(instrument.user_archived_at)
                       : !instrument.user_archived_at,
-                  )
-                  .map((instrument) => {
+                  ) ?? [];
+                return (
+                  <article className="card-manager-account" key={card.id}>
+                    <header className="card-manager-account-head">
+                      <span>
+                        <b>{card.name}</b>
+                        <small>
+                          {card.brand || "Cartão de crédito"} · final {card.last_four_digits || "••••"} · {card.source === "pluggy" ? "Pluggy" : "Manual"}
+                        </small>
+                      </span>
+                      {view === "manage" || card.status === "archived" ? (
+                        <div className="card-manager-account-action">
+                          <CardStatusForm
+                            action={card.status === "active" ? archiveCard : restoreCard}
+                            cardId={card.id}
+                            currentView={view}
+                            mode={card.status === "active" ? "archive" : "restore"}
+                          />
+                        </div>
+                      ) : null}
+                    </header>
+                    {visibleInstruments.length ? (
+                      <div className="card-manager-instruments">
+                        {visibleInstruments.map((instrument) => {
                     const instrumentTotal = invoices
                       .find((invoice) => invoice.card.id === card.id)
                       ?.instrumentTotals.find(
                         (total) => total.instrumentId === instrument.id,
                       );
+                    const purchaseCount = instrumentTotal?.purchaseCount ?? 0;
+                    const kindLabel = instrument.card_kind === "physical"
+                      ? "Físico"
+                      : instrument.card_kind === "virtual"
+                        ? "Virtual"
+                        : instrument.card_kind === "online"
+                          ? "Online"
+                          : instrument.card_kind === "additional"
+                            ? "Adicional"
+                            : "Tipo não identificado";
                     return (
-                      <div className="instrument-admin" key={instrument.id}>
-                        <small>
-                          {instrument.card_kind === "unknown"
-                            ? "Tipo não identificado"
-                            : instrument.card_kind === "physical"
-                              ? "Físico"
-                              : instrument.card_kind === "virtual"
-                                ? "Virtual"
-                                : instrument.card_kind === "online"
-                                  ? "Online"
-                                  : "Adicional"}{" "}
-                          · {instrument.last_four_digits || "••••"} ·{" "}
-                          {instrumentTotal?.purchaseCount ?? 0} compras
-                        </small>
-                        <strong><Money value={instrumentTotal?.netTotal ?? 0} /></strong>
-                        <form action={updateCardInstrument} className="instrument-edit-form">
+                      <div className="card-manager-instrument" key={instrument.id}>
+                        <div className="card-manager-instrument-main">
+                          <span>
+                            <b>
+                              {instrument.display_name?.trim().toLocaleLowerCase("pt-BR") === "cartão"
+                                ? `Cartão final ${instrument.last_four_digits || "••••"}`
+                                : instrument.display_name || `Cartão final ${instrument.last_four_digits || "••••"}`}
+                            </b>
+                            <small>{kindLabel} · final {instrument.last_four_digits || "••••"} · {purchaseCount ? `${purchaseCount} ${purchaseCount === 1 ? "compra" : "compras"}` : "sem compras nesta fatura"}</small>
+                          </span>
+                          <strong><Money value={instrumentTotal?.netTotal ?? 0} /></strong>
+                        </div>
+                        <form action={updateCardInstrumentPaymentResponsibility} className="instrument-responsibility-form">
                           <input type="hidden" name="id" value={instrument.id} />
-                          <input name="display_name" defaultValue={instrument.display_name} aria-label="Nome do cartão" />
-                          <select name="card_kind" defaultValue={instrument.card_kind} aria-label="Tipo do cartão">
-                            <option value="unknown">Outro</option>
-                            <option value="physical">Físico</option>
-                            <option value="virtual">Virtual</option>
-                            <option value="online">Online</option>
-                            <option value="additional">Adicional</option>
-                          </select>
+                          <label>
+                            Responsável pelo pagamento
+                            <select name="payment_responsible_person_id" defaultValue={instrument.payment_responsible_person_id??""}>
+                              <option value="">Eu pago</option>
+                              {people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}
+                            </select>
+                          </label>
                           <button>Salvar</button>
                         </form>
-                        <CardStatusForm
-                          action={
-                            instrument.user_archived_at
-                              ? restoreCardInstrument
-                              : archiveCardInstrument
-                          }
-                          cardId={instrument.id}
-                          currentView={view}
-                          mode={instrument.user_archived_at ? "restore" : "archive"}
-                        />
+                        <details className="card-manager-more">
+                          <summary>Mais opções</summary>
+                          <div>
+                            <form action={updateCardInstrument} className="instrument-edit-form">
+                              <input type="hidden" name="id" value={instrument.id} />
+                              <label>
+                                Nome exibido
+                                <input name="display_name" defaultValue={instrument.display_name} aria-label="Nome do cartão" />
+                              </label>
+                              <label>
+                                Tipo
+                                <select name="card_kind" defaultValue={instrument.card_kind} aria-label="Tipo do cartão">
+                                  <option value="unknown">Outro</option>
+                                  <option value="physical">Físico</option>
+                                  <option value="virtual">Virtual</option>
+                                  <option value="online">Online</option>
+                                  <option value="additional">Adicional</option>
+                                </select>
+                              </label>
+                              <button>Salvar ajustes</button>
+                            </form>
+                            <div className="card-manager-instrument-action">
+                              <CardStatusForm
+                                action={instrument.user_archived_at ? restoreCardInstrument : archiveCardInstrument}
+                                cardId={instrument.id}
+                                currentView={view}
+                                mode={instrument.user_archived_at ? "restore" : "archive"}
+                              />
+                            </div>
+                          </div>
+                        </details>
                       </div>
                     );
-                  })}
-                <CardStatusForm
-                  action={card.status === "active" ? archiveCard : restoreCard}
-                  cardId={card.id}
-                  currentView={view}
-                  mode={card.status === "active" ? "archive" : "restore"}
-                />
-              </article>
-            ))
+                        })}
+                      </div>
+                    ) : (
+                      <p className="card-manager-empty-account">
+                        {view === "archived" ? "Nenhum cartão adicional arquivado nesta conta." : "Nenhum cartão disponível nesta conta."}
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
           ) : (
             <EmptyState
               title={view === "archived" ? "Nenhum cartão arquivado" : "Nenhum cartão nesta visualização"}
               description={
                 view === "archived"
                   ? "Quando você arquivar um cartão, ele aparecerá aqui."
-                  : "Cadastre um cartão para começar."
+                  : "Conecte ou sincronize sua instituição pela Pluggy para importar os cartões."
               }
             />
           )}
-        </section>
-      ) : null}
-
-      {view === "manage" ? (
-        <section id="novo" className="finance-panel">
-          <header><h2>Novo cartão</h2></header>
-          <form action={createCard} className="finance-form">
-            <label>Nome<input name="name" required /></label>
-            <label>Instituição<input name="institution_name" /></label>
-            <label>Bandeira<input name="brand" /></label>
-            <label>Últimos 4 dígitos<input name="last_four_digits" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} /></label>
-            <label>Limite<input name="credit_limit" inputMode="decimal" required /></label>
-            <label>Fechamento<input name="closing_day" type="number" min="1" max="31" required /></label>
-            <label>Vencimento<input name="due_day" type="number" min="1" max="31" required /></label>
-            <label>
-              Conta de pagamento
-              <select name="linked_account_id">
-                <option value="">Não vinculada</option>
-                {data.accounts.map((account) => (
-                  <option value={account.id} key={account.id}>{account.name}</option>
-                ))}
-              </select>
-            </label>
-            <SubmitButton>Criar cartão</SubmitButton>
-          </form>
         </section>
       ) : null}
     </ValueVisibility>

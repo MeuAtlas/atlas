@@ -46,6 +46,8 @@ export function CurrentInvoiceCard({
     invoice.isPartial;
   const manualDate=cycle?card.card_invoice_confirmations?.find(item=>item.reference_month.slice(0,7)===cycle.referenceMonth)?.informed_at:null;
   const sourceDate=billSummary.amountSource==="provider_bill"||partial?card.bank_connections?.last_complete_sync_at:billSummary.amountSource==="manual_bank_confirmation"?manualDate:card.last_sync_at;
+  const displayedTotal=resolvedInvoice?resolvedInvoice.displayTotal:billSummary.amount;
+  const ownerPayableTotal=displayedTotal===null?null:Math.max(0,displayedTotal-invoice.thirdPartyResponsibleTotal);
   const risk =
     invoice.usedPercent > 90
       ? "danger"
@@ -92,6 +94,7 @@ export function CurrentInvoiceCard({
             {(resolvedInvoice?.updatedAt ?? sourceDate)?<span>Fonte atualizada em {formatDate(resolvedInvoice?.updatedAt ?? sourceDate ?? null)}</span>:null}
             {(resolvedInvoice?.detailedTotal ?? invoice.calculatedInvoiceTotal) !== null ? <span>Movimentações conciliadas: <Money value={resolvedInvoice?.detailedTotal ?? invoice.calculatedInvoiceTotal}/></span> : null}
             {(resolvedInvoice?.reconciliationDifference ?? invoice.reconciliationDifference) !== null && Math.abs((resolvedInvoice?.reconciliationDifference ?? invoice.reconciliationDifference)!) > 0.01 ? <span className="invoice-difference">Diferença ainda não detalhada: <Money value={Math.abs((resolvedInvoice?.reconciliationDifference ?? invoice.reconciliationDifference)!)}/></span> : null}
+            {invoice.thirdPartyResponsibleTotal>0&&ownerPayableTotal!==null?<><span>Responsabilidade de outras pessoas: − <Money value={invoice.thirdPartyResponsibleTotal}/></span><span><b>Sua parte estimada: <Money value={ownerPayableTotal}/></b></span></>:null}
           </div>
           <div className="invoice-dates">
             <span>
@@ -140,7 +143,7 @@ export function CurrentInvoiceCard({
                             : "Online"}{" "}
                     · {total.lastFour || "••••"}</span>
                     <strong><Money value={total.netTotal}/></strong>
-                    <small>{total.purchaseCount} compras</small>
+                    <small>{total.purchaseCount} compras{total.responsiblePersonName?` · paga por ${total.responsiblePersonName}`:""}</small>
                   </span>
                 ))}
               {invoice.unassignedCount ? <span><span>Sem cartão identificado</span><strong><Money value={invoice.unassignedTotal}/></strong><small>{invoice.unassignedCount} lançamentos</small></span>:null}

@@ -59,6 +59,7 @@ export function CurrentInvoiceCompactCard({
   const displayAmount = resolvedInvoice
     ? resolvedInvoice.displayTotal
     : summary.displayAmount;
+  const ownerPayableAmount=displayAmount===null?null:Math.max(0,displayAmount-invoice.thirdPartyResponsibleTotal);
   const lastUpdatedAt = resolvedInvoice?.updatedAt ?? summary.lastUpdatedAt;
   const instrumentTotals = invoice.instrumentTotals.filter((total) => {
     const instrument = invoice.card.credit_card_instruments?.find(
@@ -121,6 +122,14 @@ export function CurrentInvoiceCompactCard({
             </span>
           </div>
 
+          {invoice.thirdPartyResponsibleTotal>0&&ownerPayableAmount!==null?(
+            <div className="invoice-responsibility-summary">
+              <span><small>Total da fatura do banco</small><strong><Money value={displayAmount!}/></strong></span>
+              <span><small>Responsabilidade de outras pessoas</small><strong>− <Money value={invoice.thirdPartyResponsibleTotal}/></strong></span>
+              <span><small>Sua parte estimada</small><strong><Money value={ownerPayableAmount}/></strong></span>
+            </div>
+          ):null}
+
           {instrumentTotals.length ? (
             <div className="invoice-instrument-breakdown">
               <small>Consumo identificado por cartão</small>
@@ -144,6 +153,7 @@ export function CurrentInvoiceCompactCard({
                       <small>
                         {total.purchaseCount}{" "}
                         {total.purchaseCount === 1 ? "compra" : "compras"}
+                        {total.responsiblePersonName?` · paga por ${total.responsiblePersonName}`:""}
                       </small>
                     </span>
                     <strong><Money value={total.netTotal} /></strong>

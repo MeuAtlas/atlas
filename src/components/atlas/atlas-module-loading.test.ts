@@ -64,7 +64,7 @@ test("cada variante produz um skeleton estrutural próprio", () => {
   }
 });
 
-test("loadings de páginas reutilizam exclusivamente o componente central", () => {
+test("loadings reutilizam o componente central, salvo dashboard executivo estrutural", () => {
   const expected = {
     overview: "Preparando sua visão financeira",
     transactions: "Carregando movimentações",
@@ -77,6 +77,12 @@ test("loadings de páginas reutilizam exclusivamente o componente central", () =
   } as const;
   for (const [type, path] of Object.entries(loadingFiles)) {
     const source = readFileSync(join(root, path), "utf8");
+    if (type === "overview") {
+      assert.match(source, /fov-loading/);
+      assert.match(source, /length: 4/);
+      assert.doesNotMatch(source, /AtlasModuleLoading/);
+      continue;
+    }
     assert.match(source, /AtlasModuleLoading/);
     assert.match(source, new RegExp(`skeletonType="${type}"`));
     assert.match(source, new RegExp(expected[type as keyof typeof expected]));

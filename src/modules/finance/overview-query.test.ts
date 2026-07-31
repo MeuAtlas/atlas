@@ -32,12 +32,12 @@ test("overview limita histórico pelo início inclusivo e mantém fallback de co
   );
 });
 
-test("visão geral e detalhe usam a mesma seleção compatível de compras", () => {
+test("visão geral, projeção e detalhe usam a mesma seleção compatível de compras", () => {
   assert.match(source, /export const CARD_PURCHASE_SELECT/);
   assert.equal(
     source.match(/from\("card_purchases"\)\.select\(CARD_PURCHASE_SELECT\)/g)
       ?.length,
-    2,
+    3,
   );
   const selection = source.slice(
     source.indexOf("export const CARD_PURCHASE_SELECT"),

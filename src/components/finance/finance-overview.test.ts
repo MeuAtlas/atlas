@@ -22,6 +22,10 @@ const overview = readFileSync(
   join(root, "src/components/finance/finance-overview.tsx"),
   "utf8",
 );
+const expenseDetails = readFileSync(
+  join(root, "src/components/finance/next-month-expense-details.tsx"),
+  "utf8",
+);
 const analysis = readFileSync(
   join(root, "src/components/finance/account-movement-analysis.tsx"),
   "utf8",
@@ -68,10 +72,9 @@ test("ocultação de valores persiste e remove gráficos e tooltips", () => {
   assert.doesNotMatch(visibility, /title=|data-value/);
 });
 
-test("visão geral não consulta patrimônio, investimentos ou empréstimos", () => {
+test("visão geral usa uma agregação central sem consultar patrimônio na rota", () => {
   assert.doesNotMatch(page, /investments|loans|Patrimônio|patrimônio/);
-  assert.match(page, /getFinanceOverviewData/);
-  assert.match(page, /buildFinanceDashboard/);
+  assert.match(page, /getFinanceOverviewDashboard/);
 });
 
 test("shell não oferece criação manual de movimentação", () => {
@@ -153,47 +156,39 @@ test("menu financeiro é textual e saldo bancário não possui ícone", () => {
   assert.doesNotMatch(balance, /<svg|<i|Icon/);
 });
 
-test("saldo e análise mensal são blocos independentes", () => {
-  assert.match(overview, /CurrentAccountBalanceCard/);
-  assert.match(overview, /AccountMovementAnalysis/);
-  assert.match(css, /\.account-analysis-grid\{display:grid;grid-template-columns/);
-  assert.match(css, /\.account-analysis-grid \.overview-metrics\{display:grid;grid-template-columns:1fr/);
+test("posição e fluxo mensal são blocos executivos independentes", () => {
+  assert.match(overview, /className="fov-position-grid"/);
+  assert.match(overview, /className="fov-flow-layout"/);
+  assert.match(overview, /AccountMovementChart/);
+  assert.match(css, /\.fov-position-grid\{display:grid;grid-template-columns:repeat\(4/);
 });
 
-test("topo da visão geral reúne saudação e título em uma única faixa", () => {
-  assert.match(overview, /className="overview-hero"/);
-  assert.match(
-    overview,
-    /className="overview-hero-greeting"[\s\S]*VISÃO GERAL[\s\S]*className="overview-hero-title"/,
-  );
-  assert.match(overview, /<h1 id="finance-page-title">Financeiro<\/h1>/);
-  assert.match(overview, /Visão clara da sua vida financeira/);
-  assert.doesNotMatch(overview, /className="overview-greeting"/);
-  assert.match(
-    css,
-    /\.overview-hero>header\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/,
-  );
+test("topo reúne saudação, competência e filtros compactos", () => {
+  assert.match(overview, /className="fov-header"/);
+  assert.match(overview, /VISÃO GERAL/);
+  assert.match(overview, /Sua posição financeira em/);
+  assert.doesNotMatch(overview, /<h1[^>]*>Financeiro<\/h1>/);
   assert.match(filters, /<span>Conta<\/span>/);
   assert.match(filters, /<span>Período<\/span>/);
   assert.match(filters, />Aplicar<\/button>/);
-  assert.match(shell, /const isOverview = pathname === "\/financeiro"/);
+  assert.match(css, /\.fov-header\{display:flex;align-items:end;justify-content:space-between/);
   assert.doesNotMatch(shell, /Nova movimentação/);
 });
 
-test("filtros ficam dentro do card de saldo sem repetir a identidade bancária", () => {
-  assert.match(
-    overview,
-    /<CurrentAccountBalanceCard[\s\S]*filters=\{[\s\S]*<FinanceAccountFilters/,
-  );
-  assert.match(balance, /className="current-account-balance-filters"/);
-  assert.doesNotMatch(
-    balance,
-    /Conta selecionada|Conta corrente|MeuPluggy|Pluggy|current-account-identity/,
-  );
-  assert.doesNotMatch(balance, /<svg|<i|Icon/);
-  assert.match(
-    css,
-    /\.current-account-balance-filters \.overview-period\{display:grid;grid-template-columns:/,
-  );
-  assert.match(css, /@media\(max-width:520px\)\{[\s\S]*\.overview-hero>header\{grid-template-columns:1fr/);
+test("filtros ficam integrados ao cabeçalho e empilham no mobile", () => {
+  assert.match(overview, /className="fov-header"[\s\S]*<FinanceAccountFilters/);
+  assert.match(css, /\.fov-header \.overview-period\{display:grid;grid-template-columns:/);
+  assert.match(css, /@media\(max-width:520px\)[\s\S]*\.fov-header \.overview-period\{grid-template-columns:1fr/);
+});
+
+test("despesas previstas explicam compromissos, faturas e exclusões em modal", () => {
+  assert.match(overview, /NextMonthExpenseDetails/);
+  assert.match(expenseDetails, /aria-haspopup="dialog"/);
+  assert.match(expenseDetails, />\s*Detalhes\s*</);
+  assert.match(expenseDetails, /Compromissos fora do cartão/);
+  assert.match(expenseDetails, /Faturas com vencimento no mês/);
+  assert.match(expenseDetails, /Já incluídos nas faturas/);
+  assert.match(expenseDetails, /Descontos em folha/);
+  assert.match(expenseDetails, /não são somados novamente/);
+  assert.match(css, /\.fov-expense-equation\{/);
 });

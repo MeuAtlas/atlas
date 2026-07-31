@@ -13,11 +13,13 @@ export function FinanceAccountFilters({
   accountId,
   month,
   workspace,
+  maximumMonth,
 }: {
   accounts: FinancialAccount[];
   accountId?: string;
   month: string;
   workspace: string;
+  maximumMonth?: string;
 }) {
   return (
     <form method="get" action="/financeiro" className="overview-period">
@@ -47,6 +49,7 @@ export function FinanceAccountFilters({
           type="month"
           name="month"
           defaultValue={month}
+          max={maximumMonth}
           aria-label="Mês da visão geral financeira"
         />
       </label>

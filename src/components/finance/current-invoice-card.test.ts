@@ -80,9 +80,11 @@ test("visão geral abre detalhes no próprio contexto", () => {
 });
 
 test("seção aponta para faturas atuais e tem vazio compacto", () => {
-  assert.match(overview, /\/financeiro\/cartoes\?view=current/);
-  assert.match(overview, /Nenhuma fatura aberta/);
-  assert.match(overview, /Os cartões ativos aparecerão aqui/);
+  assert.match(overview, /href="\/financeiro\/cartoes"/);
+  assert.match(overview, /Nenhuma fatura relacionada a este período/);
+  assert.match(overview, /Nenhuma fatura prevista para este mês/);
+  assert.match(overview, /fov-empty compact/);
+  assert.doesNotMatch(overview, /Os cartões ativos aparecerão aqui/);
   assert.doesNotMatch(
     overview,
     /Faturas vigentes[\s\S]*?overview-section-warning[\s\S]*?Próximos compromissos/,

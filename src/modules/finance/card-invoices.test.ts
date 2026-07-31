@@ -375,6 +375,24 @@ test("reconcilia dois instrumentos, estorno e lançamentos sem identificação",
   assert.equal(invoice.reconciliationStatus,"matched");
 });
 
+test("separa a parte do titular da parte paga por outra pessoa sem alterar a fatura bruta",()=>{
+  const responsible={id:"person-jessica",name:"Jéssica Jully"};
+  const withResponsibility={...officialCard("a",300),credit_card_instruments:[
+    {id:"holder",credit_card_id:"a",external_id:"holder",last_four_digits:"5718",card_kind:"physical" as const,display_name:"Titular",provider_status:"active",user_archived_at:null,source:"pluggy",payment_responsible_person_id:null,payment_responsible_person:null},
+    {id:"additional-one",credit_card_id:"a",external_id:"additional-one",last_four_digits:"0613",card_kind:"additional" as const,display_name:"Adicional",provider_status:"active",user_archived_at:null,source:"pluggy",payment_responsible_person_id:responsible.id,payment_responsible_person:responsible},
+    {id:"additional-two",credit_card_id:"a",external_id:"additional-two",last_four_digits:"5991",card_kind:"additional" as const,display_name:"Adicional",provider_status:"active",user_archived_at:null,source:"pluggy",payment_responsible_person_id:responsible.id,payment_responsible_person:responsible},
+  ]};
+  const invoice=buildCurrentCardInvoices([withResponsibility],[
+    purchase({id:"holder",card_id:"a",instrument_id:"holder",installment_amount:100}),
+    purchase({id:"additional-one",card_id:"a",instrument_id:"additional-one",installment_amount:75}),
+    purchase({id:"additional-two",card_id:"a",instrument_id:"additional-two",installment_amount:50}),
+    purchase({id:"unassigned",card_id:"a",instrument_id:null,installment_amount:75}),
+  ],new Date("2026-07-23T12:00:00Z"))[0];
+  assert.equal(invoice.invoiceTotal,300);
+  assert.equal(invoice.thirdPartyResponsibleTotal,125);
+  assert.equal(invoice.ownerResponsibleTotal,175);
+});
+
 test("fatura vigente usa a data real da compra quando a previsao da Pluggy aponta para o primeiro dia do mes",()=>{
   const currentCard={
     ...card("santander"),

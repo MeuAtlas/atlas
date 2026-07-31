@@ -52,7 +52,9 @@ export interface CurrentCardInvoice {
   availableLimit: number|null;
   usedPercent: number;
   isStale: boolean;
-  instrumentTotals: Array<{instrumentId:string;lastFour:string|null;cardKind:string;displayName:string;grossTotal:number;creditsTotal:number;adjustmentsTotal:number;netTotal:number;purchaseCount:number}>;
+  instrumentTotals: Array<{instrumentId:string;lastFour:string|null;cardKind:string;displayName:string;grossTotal:number;creditsTotal:number;adjustmentsTotal:number;netTotal:number;purchaseCount:number;responsiblePersonId:string|null;responsiblePersonName:string|null}>;
+  thirdPartyResponsibleTotal:number;
+  ownerResponsibleTotal:number;
   instrumentsTotal:number;
   unassignedTotal:number;
   unassignedCount:number;
@@ -865,7 +867,7 @@ export function buildCurrentCardInvoices(
           return { purchase, reason };
         }),
     ];
-    const instrumentTotals=(card.credit_card_instruments??[]).map(instrument=>{const rows=cardPurchases.filter(purchase=>purchase.instrument_id===instrument.id);const values=calculateInvoiceAmounts(rows);return {instrumentId:instrument.id,lastFour:instrument.last_four_digits,cardKind:instrument.card_kind,displayName:instrument.display_name,grossTotal:values.purchasesTotal,creditsTotal:values.creditsTotal,adjustmentsTotal:values.adjustmentsTotal,netTotal:values.invoiceTotal,purchaseCount:values.purchaseCount}});
+    const instrumentTotals=(card.credit_card_instruments??[]).map(instrument=>{const rows=cardPurchases.filter(purchase=>purchase.instrument_id===instrument.id);const values=calculateInvoiceAmounts(rows);return {instrumentId:instrument.id,lastFour:instrument.last_four_digits,cardKind:instrument.card_kind,displayName:instrument.display_name,grossTotal:values.purchasesTotal,creditsTotal:values.creditsTotal,adjustmentsTotal:values.adjustmentsTotal,netTotal:values.invoiceTotal,purchaseCount:values.purchaseCount,responsiblePersonId:instrument.payment_responsible_person_id??null,responsiblePersonName:instrument.payment_responsible_person?.name??null}});
     const instrumentsTotal=instrumentTotals.reduce((sum,item)=>sum+item.netTotal,0);
     const unassigned=cardPurchases.filter(purchase=>!purchase.instrument_id);
     const unassignedConsumption=unassigned.filter(purchase=>purchase.transaction_role==="consumption"&&purchase.status!=="cancelled");
@@ -912,6 +914,10 @@ export function buildCurrentCardInvoices(
     const officialInvoiceTotal=providerInvoiceTotal??manualInvoiceTotal??
       confirmedInvoiceTotal??(reliableTotalUsed?reliableStoredTotal:null)??
       totals.invoiceTotal;
+    const thirdPartyResponsibleTotal=Math.max(0,instrumentTotals
+      .filter(item=>item.responsiblePersonId)
+      .reduce((sum,item)=>sum+item.netTotal,0));
+    const ownerResponsibleTotal=Math.max(0,officialInvoiceTotal-thirdPartyResponsibleTotal);
     const difference =
       totalSource==="calculated_transactions" ? null : officialInvoiceTotal - totals.invoiceTotal;
     const reconciliationStatus =
@@ -1009,6 +1015,8 @@ export function buildCurrentCardInvoices(
             48 * 60 * 60 * 1000,
       ),
       instrumentTotals,
+      thirdPartyResponsibleTotal,
+      ownerResponsibleTotal,
       instrumentsTotal,
       unassignedTotal,
       unassignedCount:unassignedConsumption.length,

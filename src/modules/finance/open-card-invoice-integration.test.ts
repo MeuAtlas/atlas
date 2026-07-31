@@ -40,7 +40,10 @@ test("as três páginas chamam o mesmo resolvedor", () => {
     "src/app/financeiro/movimentacoes/page.tsx",
     "utf8",
   );
-  const overview = readFileSync("src/app/financeiro/page.tsx", "utf8");
+  const overview = [
+    readFileSync("src/app/financeiro/page.tsx", "utf8"),
+    readFileSync("src/modules/finance/finance-overview-query.ts", "utf8"),
+  ].join("\n");
   for (const source of [cards, movements, overview]) {
     assert.match(source, /resolveOpenCardInvoice/);
   }
