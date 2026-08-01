@@ -80,11 +80,10 @@ test("transformação recorrente gera projeções sem confirmação técnica", (
   assert.match(actions, /bank_direction === "inflow" \? "income" : "expense"/);
 });
 
-test("Planejamento usa o serviço consolidado e exibe todas as origens", () => {
-  assert.match(planning, /getMonthlyFinancialCommitments/);
-  for (const label of ["Recorrentes", "Parcelas", "Empréstimos", "Folha", "Únicos"]) {
-    assert.match(planning, new RegExp(label));
-  }
+test("Planejamento usa o dashboard central sem consultas independentes na interface", () => {
+  assert.match(planning, /getPlanningDashboard/);
+  assert.match(planning, /PlanningDashboardView/);
+  assert.doesNotMatch(planning, /getMonthlyFinancialCommitments/);
 });
 
 test("migration ativa RLS, índices e constraints de escopo", () => {

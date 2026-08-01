@@ -88,6 +88,11 @@ test("loadings reutilizam o componente central, salvo dashboard executivo estrut
       assert.doesNotMatch(source, /AtlasModuleLoading/);
       continue;
     }
+    if (type === "planning") {
+      assert.match(source, /PlanningSkeleton/);
+      assert.doesNotMatch(source, /AtlasModuleLoading/);
+      continue;
+    }
     assert.match(source, /AtlasModuleLoading/);
     assert.match(source, new RegExp(`skeletonType="${type}"`));
     assert.match(source, new RegExp(expected[type as keyof typeof expected]));
