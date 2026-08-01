@@ -1,4 +1,5 @@
 import { Money, ValueVisibility } from "@/components/finance/value-visibility";
+import { ClientSearchForm } from "@/components/navigation/client-navigation";
 import { requireFinanceAccess } from "@/modules/finance/access";
 import { getPersonFinancialSummary } from "@/modules/finance/commitments-query";
 import { getPersonPixSummary } from "@/modules/finance/person-reimbursements-query";
@@ -69,7 +70,7 @@ export default async function ReportsPage({
           <div><p className="eyebrow">Análise financeira</p><h1>Relatórios</h1>
             <p>Compare receitas e despesas previstas com os valores realizados.</p></div>
         </header>
-        <form className="finance-panel report-filters">
+        <ClientSearchForm action="/financeiro/relatorios" className="finance-panel report-filters">
           <label>Espaço<select name="workspace" defaultValue={workspace?.id ?? ""}>
             {(workspaces.data ?? []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select></label>
@@ -92,7 +93,7 @@ export default async function ReportsPage({
           <label>De<input name="from" type="date" defaultValue={params.from ?? fromDefault} /></label>
           <label>Até<input name="to" type="date" defaultValue={params.to ?? toDefault} /></label>
           <button className="finance-button">Aplicar filtros</button>
-        </form>
+        </ClientSearchForm>
         {flowSummary ? (
           <section className="commitment-summary-grid report-summary">
             <article><span>Receitas esperadas</span><strong className="positive"><Money value={flowSummary.overview.expectedIncomeCents / 100} /></strong></article>

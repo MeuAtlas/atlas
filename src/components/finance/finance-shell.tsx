@@ -35,18 +35,19 @@ export function FinanceShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const name = profile.preferred_name || profile.full_name || "Perfil";
-  const isOverview = pathname === "/financeiro";
-  const withFinanceParams = (href: string) => {
-    const query = searchParams.toString();
-    return query ? `${href}?${query}` : href;
-  };
+  const financeContext = new URLSearchParams();
+  for (const name of ["workspace", "month", "account"]) {
+    const value = searchParams.get(name);
+    if (value) financeContext.set(name, value);
+  }
+  const financeQuery = financeContext.toString();
 
   return (
     <main className="finance-app">
       <AtlasAppBackground />
       <div className="finance-scroll">
         <header className="finance-topbar">
-          <Link href="/dashboard" className="finance-wordmark" aria-label="Atlas">
+          <Link href="/dashboard" prefetch={false} className="finance-wordmark" aria-label="Atlas">
             <AtlasLogo size={42} priority />
           </Link>
           <ModuleSwitcher modules={modules} currentSlug="financeiro" />
@@ -67,7 +68,7 @@ export function FinanceShell({
         <div className="finance-navigation">
           <FinanceTabs
             activeRoute={pathname}
-            query={searchParams.toString()}
+            query={financeQuery}
           />
         </div>
         <FinanceWorkspaceProvider workspaces={workspaces}>
@@ -75,31 +76,6 @@ export function FinanceShell({
         </FinanceWorkspaceProvider>
       </div>
 
-      <nav
-        className={`finance-bottom${isOverview ? " finance-bottom-overview" : ""}`}
-        aria-label="Navegação global do Atlas"
-      >
-        <Link href="/dashboard">
-          <i aria-hidden="true">⌂</i>
-          <span>Início</span>
-        </Link>
-        <Link
-          href={withFinanceParams("/financeiro")}
-          className="active"
-          aria-current="page"
-        >
-          <i aria-hidden="true">▥</i>
-          <span>Financeiro</span>
-        </Link>
-        <Link href="/dashboard?modulo=agenda">
-          <i aria-hidden="true">□</i>
-          <span>Agenda</span>
-        </Link>
-        <Link href="/settings/family">
-          <i aria-hidden="true">○</i>
-          <span>Perfil</span>
-        </Link>
-      </nav>
     </main>
   );
 }

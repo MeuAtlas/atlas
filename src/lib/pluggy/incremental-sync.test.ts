@@ -183,10 +183,10 @@ test("interface traduz status e detalha recursos preservados", () => {
     "src/app/financeiro/integracoes/actions.ts",
     "utf8",
   );
-  assert.match(panel, /Parcialmente concluída/);
+  assert.match(panel, /Atualização parcial/);
   assert.match(panel, /Detalhes da sincronização/);
-  assert.match(panel, /Dados preservados/);
-  assert.match(panel, /Tentar este recurso/);
+  assert.match(panel, /Preservado/);
+  assert.match(panel, /Tentar novamente/);
   assert.doesNotMatch(panel, /<b>\{run\.status\}<\/b>/);
   assert.match(actions, /resourceTypes:\[resource\]/);
   assert.match(actions, /últimos dados confiáveis/);

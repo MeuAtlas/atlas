@@ -5,12 +5,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { invalidateOpenInvoiceCache } from "@/modules/finance/open-invoice-cache";
 import type { PluggySyncSummary } from "./incremental-sync";
 import { pathsForUpdatedPluggyResources } from "./scheduled-sync";
+import { invalidateIntegrationsCache } from "@/modules/finance/integrations-cache";
 
 export async function invalidatePluggySyncCaches(input: {
   supabase: SupabaseClient;
   ownerId: string;
+  workspaceId?: string | null;
+  integrationId?: string;
   summary: PluggySyncSummary;
 }) {
+  invalidateIntegrationsCache(
+    input.workspaceId ?? input.ownerId,
+    input.integrationId,
+  );
   for (const path of pathsForUpdatedPluggyResources(input.summary)) {
     revalidatePath(path);
   }

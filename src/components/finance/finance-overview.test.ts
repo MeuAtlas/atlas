@@ -46,23 +46,49 @@ const moduleSwitcher = readFileSync(
   join(root, "src/components/atlas/module-switcher.tsx"),
   "utf8",
 );
+const dashboard = readFileSync(
+  join(root, "src/app/dashboard/page.tsx"),
+  "utf8",
+);
+const privateShell = readFileSync(
+  join(root, "src/components/atlas/private-shell.tsx"),
+  "utf8",
+);
+const financeAccess = readFileSync(
+  join(root, "src/modules/finance/access.ts"),
+  "utf8",
+);
 
-test("dock móvel é global e não duplica as abas financeiras", () => {
-  const dock = shell.match(
-    /<nav[\s\S]*?className=\{`finance-bottom[\s\S]*?<\/nav>/,
-  )?.[0];
-  assert.ok(dock);
-  assert.match(dock, />Início</);
-  assert.match(dock, />Financeiro</);
-  assert.match(dock, />Agenda</);
-  assert.match(dock, />Perfil</);
-  assert.doesNotMatch(dock, /Movimentações|Contas|Cartões|Visão geral/);
+test("responsivo não renderiza rodapé flutuante", () => {
+  assert.doesNotMatch(shell, /finance-bottom/);
+  assert.doesNotMatch(shell, /Navegação global do Atlas/);
 });
 
-test("desktop oculta dock e mobile usa safe-area", () => {
-  assert.match(css, /\.finance-bottom\{display:none\}/);
-  assert.match(css, /env\(safe-area-inset-bottom\)/);
-  assert.match(css, /@media\(max-width:800px\)/);
+test("navegação financeira não cria links para a própria rota", () => {
+  assert.match(tabs, /if \(active\)[\s\S]*?<span/);
+  assert.doesNotMatch(shell, /searchParams\.toString\(\)/);
+  assert.match(shell, /\["workspace", "month", "account"\]/);
+});
+
+test("shells dinâmicos não pré-carregam dashboard e financeiro em ciclo", () => {
+  assert.match(shell, /href="\/dashboard" prefetch=\{false\}/);
+  assert.match(tabs, /prefetch=\{false\}/);
+  assert.match(dashboard, /href=\{m\.route\} prefetch=\{false\}/);
+  assert.match(privateShell, /href="\/dashboard" prefetch=\{false\}/);
+  assert.match(moduleSwitcher, /prefetch=\{false\}/);
+  assert.doesNotMatch(overview, /<Link(?![^>]*prefetch=\{false\})[^>]*>/);
+});
+
+test("layout e pagina financeira compartilham uma unica validacao de acesso", () => {
+  assert.match(financeAccess, /import \{ cache \} from "react"/);
+  assert.match(
+    financeAccess,
+    /export const requireFinanceAccess = cache\(loadFinanceAccess\)/,
+  );
+});
+
+test("mobile não reserva espaço para rodapé removido", () => {
+  assert.match(css, /@media\(max-width:800px\)\{\.finance-app\{padding-bottom:0\}\}/);
 });
 
 test("ocultação de valores persiste e remove gráficos e tooltips", () => {

@@ -143,7 +143,7 @@ function InvoiceRows({ invoices, timeZone, empty }: {
   empty: string;
 }) {
   return invoices.length ? invoices.map(invoice => (
-    <Link href={invoice.href} className="fov-invoice-row" key={invoice.id}>
+    <Link href={invoice.href} prefetch={false} className="fov-invoice-row" key={invoice.id}>
       <span><b>{invoice.name}{invoice.lastFour ? ` · ${invoice.lastFour}` : ""}</b><small>{invoice.closingDate ? `Fecha em ${dateLabel(invoice.closingDate, timeZone)}` : "Fechamento indisponível"}{invoice.dueDate ? ` · vence em ${dateLabel(invoice.dueDate, timeZone)}` : ""}</small></span>
       <strong>{invoice.amount === null ? "Valor indisponível" : <Money value={invoice.amount} />}</strong>
       <FinanceDataFreshnessBadge partial={invoice.partial} />
@@ -175,7 +175,7 @@ function CurrentMonthInvoicesPanel({ invoices, timeZone, month }: {
   timeZone: string;
   month: string;
 }) {
-  return <article className="finance-panel fov-list-panel"><header><div><h2>Faturas do mês</h2><small>Ciclos relacionados a {monthLabel(month)}.</small></div><Link href="/financeiro/cartoes">Ver cartões</Link></header><InvoiceRows invoices={invoices} timeZone={timeZone} empty="Nenhuma fatura relacionada a este período." /></article>;
+  return <article className="finance-panel fov-list-panel"><header><div><h2>Faturas do mês</h2><small>Ciclos relacionados a {monthLabel(month)}.</small></div><Link href="/financeiro/cartoes" prefetch={false}>Ver cartões</Link></header><InvoiceRows invoices={invoices} timeZone={timeZone} empty="Nenhuma fatura relacionada a este período." /></article>;
 }
 
 function CurrentMonthCommitmentsPanel({ commitments, timeZone, month }: {
@@ -183,22 +183,22 @@ function CurrentMonthCommitmentsPanel({ commitments, timeZone, month }: {
   timeZone: string;
   month: string;
 }) {
-  return <article className="finance-panel fov-list-panel"><header><div><h2>Compromissos do mês</h2><small>Pagos, pendentes e atrasados em {monthLabel(month)}.</small></div><Link href={`/financeiro/receitas-despesas?month=${month}`}>Ver detalhes</Link></header><CommitmentRows commitments={commitments} timeZone={timeZone} empty="Nenhum compromisso neste período." /></article>;
+  return <article className="finance-panel fov-list-panel"><header><div><h2>Compromissos do mês</h2><small>Pagos, pendentes e atrasados em {monthLabel(month)}.</small></div><Link href={`/financeiro/receitas-despesas?month=${month}`} prefetch={false}>Ver detalhes</Link></header><CommitmentRows commitments={commitments} timeZone={timeZone} empty="Nenhum compromisso neste período." /></article>;
 }
 
 function CurrentMonthSpendingPanel({ period }: { period: FinanceOverviewDashboard["selectedPeriod"] }) {
-  return <article className="finance-panel fov-spending"><header><h2>Para onde foi o dinheiro</h2>{period.uncategorizedCount ? <Link href="/financeiro/movimentacoes?review=pending">⚠ {period.uncategorizedCount} sem categoria</Link> : null}</header>{period.spendingDistribution.length ? period.spendingDistribution.slice(0, 5).map(item => <div className="fov-spending-row" key={item.key}><b>{item.label}</b><i><span style={{ width: `${Math.min(item.percentage, 100)}%` }} /></i><strong><Money value={item.amount} /></strong><small>{item.percentage.toFixed(1).replace(".", ",")}%</small></div>) : <div className="fov-empty compact">Categorize suas movimentações para visualizar a distribuição.</div>}</article>;
+  return <article className="finance-panel fov-spending"><header><h2>Para onde foi o dinheiro</h2>{period.uncategorizedCount ? <Link href="/financeiro/movimentacoes?review=pending" prefetch={false}>⚠ {period.uncategorizedCount} sem categoria</Link> : null}</header>{period.spendingDistribution.length ? period.spendingDistribution.slice(0, 5).map(item => <div className="fov-spending-row" key={item.key}><b>{item.label}</b><i><span style={{ width: `${Math.min(item.percentage, 100)}%` }} /></i><strong><Money value={item.amount} /></strong><small>{item.percentage.toFixed(1).replace(".", ",")}%</small></div>) : <div className="fov-empty compact">Categorize suas movimentações para visualizar a distribuição.</div>}</article>;
 }
 
 function CurrentMonthMovementsPanel({ period, month }: {
   period: FinanceOverviewDashboard["selectedPeriod"];
   month: string;
 }) {
-  return <article className="finance-panel fov-main-movements"><header><h2>Principais movimentos do mês</h2></header><div><section><h3>Entradas</h3>{period.mainMovements.inflows.map(item => <span key={item.id}><b>{item.title}</b><strong><Money value={item.amount} /></strong></span>)}<Link href={`/financeiro/movimentacoes?type=bank&period=custom&month=${month}`}>Ver todas as entradas</Link></section><section><h3>Saídas</h3>{period.mainMovements.outflows.map(item => <span key={item.id}><b>{item.title}</b><strong><Money value={item.amount} /></strong></span>)}<Link href={`/financeiro/movimentacoes?type=bank&period=custom&month=${month}`}>Ver todas as saídas</Link></section></div></article>;
+  return <article className="finance-panel fov-main-movements"><header><h2>Principais movimentos do mês</h2></header><div><section><h3>Entradas</h3>{period.mainMovements.inflows.map(item => <span key={item.id}><b>{item.title}</b><strong><Money value={item.amount} /></strong></span>)}<Link href={`/financeiro/movimentacoes?type=bank&period=custom&month=${month}`} prefetch={false}>Ver todas as entradas</Link></section><section><h3>Saídas</h3>{period.mainMovements.outflows.map(item => <span key={item.id}><b>{item.title}</b><strong><Money value={item.amount} /></strong></span>)}<Link href={`/financeiro/movimentacoes?type=bank&period=custom&month=${month}`} prefetch={false}>Ver todas as saídas</Link></section></div></article>;
 }
 
 function AttentionPanel({ title, items }: { title: string; items: FinanceAttentionItem[] }) {
-  return <section className="finance-panel fov-attention"><header><h2>{title}</h2></header><div>{items.length ? items.map(item => <article className={item.severity} key={item.id}><i aria-hidden="true">!</i><b>{item.title}</b><Link href={item.href}>{item.actionLabel}</Link></article>) : <p>Nenhuma situação financeira exige ação neste período.</p>}</div></section>;
+  return <section className="finance-panel fov-attention"><header><h2>{title}</h2></header><div>{items.length ? items.map(item => <article className={item.severity} key={item.id}><i aria-hidden="true">!</i><b>{item.title}</b><Link href={item.href} prefetch={false}>{item.actionLabel}</Link></article>) : <p>Nenhuma situação financeira exige ação neste período.</p>}</div></section>;
 }
 
 function ProjectionCard({ title, value, detail, kind, action }: {
@@ -252,7 +252,7 @@ function NextMonthSection({ period, followingPeriods, timeZone }: {
   timeZone: string;
 }) {
   const shortMonth = monthLabel(period.month).split(" de ")[0];
-  return <section className="fov-period-section fov-next-period"><header className="fov-period-heading"><div><span>PREVISÃO</span><h2>{monthLabel(period.month)} — previsão</h2><p>O que já está previsto para o próximo mês.</p></div></header><NextMonthProjectionGrid period={period} timeZone={timeZone} /><section className="fov-two-column"><NextMonthIncomePanel period={period} timeZone={timeZone} /><NextMonthExpensesPanel period={period} timeZone={timeZone} /></section><section className="fov-two-column"><article className="finance-panel fov-list-panel"><header><h2>Próximos compromissos de {shortMonth}</h2><Link href={`/financeiro/receitas-despesas?month=${period.month}`}>Ver Receitas e Despesas</Link></header><CommitmentRows commitments={period.upcomingCommitments} timeZone={timeZone} empty="Nenhum compromisso próximo." /></article><article className="finance-panel fov-list-panel"><header><h2>Faturas previstas para {shortMonth}</h2><Link href="/financeiro/cartoes">Ver cartões</Link></header><InvoiceRows invoices={period.upcomingInvoices} timeZone={timeZone} empty="Nenhuma fatura prevista para este mês." /></article></section><AttentionPanel title={`Atenção para ${shortMonth}`} items={period.attentionItems} /><FollowingMonthsSummary periods={followingPeriods} /></section>;
+  return <section className="fov-period-section fov-next-period"><header className="fov-period-heading"><div><span>PREVISÃO</span><h2>{monthLabel(period.month)} — previsão</h2><p>O que já está previsto para o próximo mês.</p></div></header><NextMonthProjectionGrid period={period} timeZone={timeZone} /><section className="fov-two-column"><NextMonthIncomePanel period={period} timeZone={timeZone} /><NextMonthExpensesPanel period={period} timeZone={timeZone} /></section><section className="fov-two-column"><article className="finance-panel fov-list-panel"><header><h2>Próximos compromissos de {shortMonth}</h2><Link href={`/financeiro/receitas-despesas?month=${period.month}`} prefetch={false}>Ver Receitas e Despesas</Link></header><CommitmentRows commitments={period.upcomingCommitments} timeZone={timeZone} empty="Nenhum compromisso próximo." /></article><article className="finance-panel fov-list-panel"><header><h2>Faturas previstas para {shortMonth}</h2><Link href="/financeiro/cartoes" prefetch={false}>Ver cartões</Link></header><InvoiceRows invoices={period.upcomingInvoices} timeZone={timeZone} empty="Nenhuma fatura prevista para este mês." /></article></section><AttentionPanel title={`Atenção para ${shortMonth}`} items={period.attentionItems} /><FollowingMonthsSummary periods={followingPeriods} /></section>;
 }
 
 export function FinanceOverview({

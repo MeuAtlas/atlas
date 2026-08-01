@@ -89,6 +89,8 @@ export function createScheduledPluggyDependencies(): ScheduledPluggySyncDependen
       invalidatePluggySyncCaches({
         supabase,
         ownerId: integration.ownerId,
+        workspaceId: integration.workspaceId,
+        integrationId: integration.id,
         summary,
       }),
   };

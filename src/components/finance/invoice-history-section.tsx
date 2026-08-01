@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ClientSearchForm, useClientNavigation } from "@/components/navigation/client-navigation";
 import { Money } from "./value-visibility";
 import { formatDate } from "@/modules/finance/format";
 import type {
@@ -173,6 +175,7 @@ function PreviousInvoiceDetailsDrawer({
   invoice: CreditCardInvoiceHistoryItem;
   onClose: () => void;
 }) {
+  const navigate = useClientNavigation();
   const closeRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const [reprocessing, setReprocessing] = useState(false);
@@ -186,7 +189,7 @@ function PreviousInvoiceDetailsDrawer({
       setDocumentError(body.error?.message ?? "Não foi possível reprocessar o documento.");
       setReprocessing(false); return;
     }
-    window.location.assign(`/financeiro/cartoes/importar-fatura?document=${invoice.documentId}`);
+    navigate(`/financeiro/cartoes/importar-fatura?document=${invoice.documentId}`);
   }
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -375,6 +378,7 @@ export function InvoiceHistorySection({
   error?: boolean;
   initialInvoiceId?: string;
 }) {
+  const router = useRouter();
   const [filterOpen, setFilterOpen] = useState(false);
   const [selected, setSelected] = useState<CreditCardInvoiceHistoryItem | null>(
     () => result.invoices.find(item => item.id === initialInvoiceId) ?? null,
@@ -414,7 +418,7 @@ export function InvoiceHistorySection({
         </button>
       </header>
 
-      <form className={`invoice-history-filters${filterOpen ? " open" : ""}`}>
+      <ClientSearchForm action="/financeiro/cartoes" className={`invoice-history-filters${filterOpen ? " open" : ""}`}>
         <div className="invoice-filter-sheet-header">
           <b>Filtrar faturas</b>
           <button type="button" onClick={() => setFilterOpen(false)} aria-label="Fechar filtros">×</button>
@@ -464,13 +468,13 @@ export function InvoiceHistorySection({
         </label>
         <button type="submit">Aplicar filtros</button>
         <Link href="/financeiro/cartoes?view=history">Limpar</Link>
-      </form>
+      </ClientSearchForm>
 
       {error ? (
         <div className="invoice-history-error" role="alert">
           <h3>Não foi possível carregar as faturas anteriores.</h3>
           <span>
-            <button type="button" onClick={() => window.location.reload()}>Tentar novamente</button>
+            <button type="button" onClick={() => router.refresh()}>Tentar novamente</button>
             <Link href="/financeiro/cartoes?view=current">Voltar para fatura atual</Link>
           </span>
         </div>

@@ -32,6 +32,7 @@ export type IncomeExpenseListItem = {
   estimationMethod: "fixed" | "historical_median" | "manual";
   aggregationMode: "single_occurrence" | "monthly_total";
   contextType: "personal" | "household" | "work" | "travel";
+  budgetPriority?: "essential" | "adjustable" | "optional" | "unknown";
   status: string;
   expectedAmountCents: number;
   realizedAmountCents: number;
@@ -82,6 +83,7 @@ type CommitmentRow = {
   estimation_method: string | null;
   aggregation_mode: string | null;
   context_type: string | null;
+  budget_priority: string | null;
   status: string;
   expected_amount: number | null;
   historical_median_amount: number | null;
@@ -172,6 +174,7 @@ export async function getIncomeExpenseOverview(
         "estimation_method",
         "aggregation_mode",
         "context_type",
+        "budget_priority",
         "status",
         "expected_amount",
         "historical_median_amount",
@@ -295,6 +298,8 @@ export async function getIncomeExpenseOverview(
         IncomeExpenseListItem["aggregationMode"],
       contextType: String(row.context_type ?? "personal") as
         IncomeExpenseListItem["contextType"],
+      budgetPriority: String(row.budget_priority ?? "unknown") as
+        IncomeExpenseListItem["budgetPriority"],
       status: String(row.status),
       expectedAmountCents,
       realizedAmountCents,

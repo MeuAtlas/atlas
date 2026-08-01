@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { ArrowIcon, BackIcon, EyeIcon, EyeOffIcon, KeyIcon, LockIcon, MailIcon, ShieldIcon } from "@/components/atlas/icons";
 import { createClient } from "@/lib/supabase/client";
@@ -19,19 +19,19 @@ function validateEmail(email: string) {
   if (!emailPattern.test(email)) return "Digite um e-mail válido.";
 }
 
-function friendlyAuthError(message: string) {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("invalid login credentials") || normalized.includes("email not confirmed")) {
-    return "E-mail ou senha incorretos.";
+function initialNotice(error: string | null) {
+  if (error === "invalid_recovery_link") {
+    return "Este link expirou ou não é válido. Solicite novas instruções.";
   }
-  if (normalized.includes("rate limit") || normalized.includes("too many")) {
+  if (error === "invalid_credentials") return "E-mail ou senha incorretos.";
+  if (error === "rate_limited") {
     return "Muitas tentativas. Aguarde um momento e tente novamente.";
   }
-  return "Não foi possível entrar agora. Tente novamente.";
+  if (error === "unavailable") return "Não foi possível entrar agora. Tente novamente.";
+  return "";
 }
 
 export function LoginCard() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
@@ -39,11 +39,7 @@ export function LoginCard() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [notice, setNotice] = useState(() =>
-    searchParams.get("error") === "invalid_recovery_link"
-      ? "Este link expirou ou não é válido. Solicite novas instruções."
-      : "",
-  );
+  const [notice, setNotice] = useState(() => initialNotice(searchParams.get("error")));
   const [submitting, setSubmitting] = useState(false);
 
   function clearFeedback(field?: keyof FieldErrors) {
@@ -51,9 +47,11 @@ export function LoginCard() {
     if (field) setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submitting) return;
+  function handleLogin(event: FormEvent<HTMLFormElement>) {
+    if (submitting) {
+      event.preventDefault();
+      return;
+    }
 
     const normalizedEmail = email.trim().toLowerCase();
     const nextErrors: FieldErrors = {
@@ -62,28 +60,12 @@ export function LoginCard() {
     };
     setErrors(nextErrors);
     setNotice("");
-    if (nextErrors.email || nextErrors.password) return;
+    if (nextErrors.email || nextErrors.password) {
+      event.preventDefault();
+      return;
+    }
 
     setSubmitting(true);
-
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
-
-      if (error) {
-        setNotice(friendlyAuthError(error.message));
-        setSubmitting(false);
-        return;
-      }
-
-      router.replace("/auth/continue");
-    } catch {
-      setNotice("Não foi possível entrar agora. Verifique sua conexão e tente novamente.");
-      setSubmitting(false);
-    }
   }
 
   async function handleRecovery(event: FormEvent<HTMLFormElement>) {
@@ -134,9 +116,9 @@ export function LoginCard() {
           </button>
         </form>
         ) : (
-        <form onSubmit={handleLogin} noValidate>
-          <FormField id="email" type="email" label="E-mail" placeholder="Digite seu e-mail" autoComplete="email" value={email} error={errors.email} disabled={submitting} icon={<MailIcon className="size-5" />} onChange={(event) => { setEmail(event.target.value); clearFeedback("email"); }} />
-          <FormField id="password" type={showPassword ? "text" : "password"} label="Senha" placeholder="Digite sua senha" autoComplete="current-password" value={password} error={errors.password} disabled={submitting} icon={<LockIcon className="size-5" />} onChange={(event) => { setPassword(event.target.value); clearFeedback("password"); }} trailing={
+        <form action="/auth/login" method="post" onSubmit={handleLogin} noValidate>
+          <FormField id="email" name="email" type="email" label="E-mail" placeholder="Digite seu e-mail" autoComplete="email" value={email} error={errors.email} disabled={submitting} icon={<MailIcon className="size-5" />} onChange={(event) => { setEmail(event.target.value); clearFeedback("email"); }} />
+          <FormField id="password" name="password" type={showPassword ? "text" : "password"} label="Senha" placeholder="Digite sua senha" autoComplete="current-password" value={password} error={errors.password} disabled={submitting} icon={<LockIcon className="size-5" />} onChange={(event) => { setPassword(event.target.value); clearFeedback("password"); }} trailing={
             <button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute right-1.5 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-lg text-[var(--atlas-muted)] transition hover:bg-[var(--atlas-blue-soft)] hover:text-[var(--atlas-text)]" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} title={showPassword ? "Ocultar senha" : "Mostrar senha"}>
               {showPassword ? <EyeOffIcon className="size-5" /> : <EyeIcon className="size-5" />}
             </button>

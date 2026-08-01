@@ -25,7 +25,7 @@ export default function InvoiceImportErrorBoundary({
         <button type="button" className="finance-button" onClick={reset}>
           Tentar novamente
         </button>
-        <button type="button" onClick={() => window.location.reload()}>
+        <button type="button" onClick={reset}>
           Reprocessar documento
         </button>
         <Link href="/financeiro/cartoes">Voltar para Cartões</Link>

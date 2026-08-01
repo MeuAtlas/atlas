@@ -16,6 +16,7 @@ import {
   type MovementPeriodSummary,
   type MovementSourceFilter,
 } from "@/modules/finance/movement-filters";
+import { useNavigationTransition } from "@/components/navigation/navigation-feedback";
 import type { AvailableCardCycle } from "@/modules/finance/card-cycles";
 import type {
   InstallmentsDataStatus,
@@ -432,7 +433,7 @@ function MovementFiltersForm({
   people: Option[];
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useNavigationTransition();
   const [period, setPeriod] = useState(filters.period || "this-month");
   const type = (filters.type || "bank") as MovementSourceFilter;
   const defaultCycle = cardCycles.find(cycle => cycle.isCurrent)?.cycleId ??

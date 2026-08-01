@@ -17,13 +17,14 @@ export function PrivateShell({
       <AtlasAppBackground />
       <div className="atlas-private-scroll">
         <header className="relative z-10 flex items-center justify-between gap-4">
-          <Link href="/dashboard" aria-label="Atlas — início">
+          <Link href="/dashboard" prefetch={false} aria-label="Atlas — início">
             <AtlasLogo size={42} priority />
           </Link>
           <div className="flex items-center gap-3">
             {isSuperAdmin ? (
               <Link
                 href="/admin"
+                prefetch={false}
                 className="atlas-button-label rounded-xl border border-[var(--atlas-border)] bg-[var(--atlas-surface)] px-3 py-2 text-[var(--atlas-text)] shadow-sm backdrop-blur-md transition hover:border-[var(--atlas-blue)]/40 hover:bg-[var(--atlas-blue-soft)] sm:px-4"
               >
                 Administração

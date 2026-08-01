@@ -15,6 +15,7 @@ import {
   AtlasModalHeader,
 } from "@/components/ui/atlas-modal";
 import { SimpleCommitmentModal } from "@/components/finance/commitments/simple-commitment-modal";
+import { useClientNavigation } from "@/components/navigation/client-navigation";
 import { IncomeExpenseDashboardView } from "./income-expense-dashboard";
 import type { CommitmentsOverview } from "@/modules/finance/commitments-query";
 import type {
@@ -748,6 +749,7 @@ export function IncomeExpensesWorkspace({
   referenceTransactions: ReferenceTransaction[];
 }) {
   const router = useRouter();
+  const navigate = useClientNavigation();
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState("");
   const month = data.month.slice(0, 7);
@@ -769,13 +771,13 @@ export function IncomeExpensesWorkspace({
           <label>
             <span>Espaço</span>
             <select value={data.workspaceId} onChange={event =>
-              window.location.assign(`/financeiro/receitas-despesas?workspace=${event.target.value}&month=${month}&tab=${activeTab}`)
+              navigate(`/financeiro/receitas-despesas?workspace=${event.target.value}&month=${month}&tab=${activeTab}`)
             }>{workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           </label>
           <label>
             <span>Mês</span>
             <input type="month" value={month} onChange={event =>
-              window.location.assign(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${event.target.value}&tab=${activeTab}`)
+              navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${event.target.value}&tab=${activeTab}`)
             } />
           </label>
           <button className="finance-button" onClick={() => setModal("choose")}>Adicionar</button>

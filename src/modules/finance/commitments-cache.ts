@@ -33,8 +33,28 @@ export const reimbursementsCacheTag = (workspaceId: string) =>
   `finance:reimbursements:${workspaceId}`;
 export const personPixCacheTag = (workspaceId: string, personId: string) =>
   `finance:pix:${workspaceId}:${personId}`;
-export const planningCacheTag = (workspaceId: string) =>
-  `finance:planning:${workspaceId}`;
+export const planningCacheTag = (
+  workspaceId: string,
+  startMonth?: string,
+  horizon?: number,
+) => startMonth && horizon
+  ? `finance:planning:${workspaceId}:${startMonth.slice(0, 7)}:${horizon}`
+  : `finance:planning:${workspaceId}`;
+export const planningDependencyTags = (
+  workspaceId: string,
+  startMonth: string,
+  horizon: number,
+) => [
+  planningCacheTag(workspaceId),
+  planningCacheTag(workspaceId, startMonth, horizon),
+  incomeCacheTag(workspaceId),
+  expensesCacheTag(workspaceId),
+  cardsCacheTag(workspaceId),
+  billsCacheTag(workspaceId),
+  commitmentsCacheTag(workspaceId),
+  peopleCacheTag(workspaceId),
+  accountsCacheTag(workspaceId),
+];
 export const entitiesCacheTag = (workspaceId: string) =>
   `finance:entities:${workspaceId}`;
 export const accountsCacheTag = (workspaceId: string) =>

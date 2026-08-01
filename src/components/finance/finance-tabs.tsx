@@ -34,12 +34,18 @@ export function FinanceTabs({
             ? activeRoute === path
             : activeRoute.startsWith(path));
         const href = `${path}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`;
+        if (active) {
+          return (
+            <span key={item.label} className="active" aria-current="page">
+              {item.label}
+            </span>
+          );
+        }
         return (
           <Link
             href={href}
             key={item.label}
-            className={active ? "active" : undefined}
-            aria-current={active ? "page" : undefined}
+            prefetch={false}
           >
             {item.label}
           </Link>

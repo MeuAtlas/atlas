@@ -1,12 +1,5 @@
-import { AtlasModuleLoading } from "@/components/atlas/atlas-module-loading";
+import { PlanningSkeleton } from "@/components/finance/planning-skeleton";
 
 export default function Loading() {
-  return (
-    <AtlasModuleLoading
-      title="Calculando projeções"
-      description="Organizando os próximos meses."
-      variant="finance"
-      skeletonType="planning"
-    />
-  );
+  return <PlanningSkeleton />;
 }

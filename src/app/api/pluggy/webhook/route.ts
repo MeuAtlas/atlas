@@ -4,6 +4,8 @@ import {syncPluggyItem} from "@/lib/pluggy/sync";
 import {maskId} from "@/lib/pluggy/diagnostics";
 import {normalizeIntegrationError} from "@/lib/pluggy/errors";
 import {createAdminClient} from "@/lib/supabase/admin";
+import {invalidatePluggySyncCaches} from "@/lib/pluggy/sync-cache";
+import {invalidateIntegrationsCache} from "@/modules/finance/integrations-cache";
 
 export const runtime="nodejs";
 export const maxDuration=60;
@@ -55,7 +57,7 @@ export async function POST(request:Request){
     return;
    }
    const connection=await supabase.from("bank_connections")
-    .select("id,owner_id").eq("provider","pluggy")
+    .select("id,owner_id,workspace_id").eq("provider","pluggy")
     .eq("provider_connection_id",itemId).eq("status","active").maybeSingle();
    if(connection.error||!connection.data)throw new Error("connection_not_found");
    await supabase.from("pluggy_webhook_events").update({
@@ -68,12 +70,23 @@ export async function POST(request:Request){
      user_message:"A conexão não está mais disponível na Pluggy.",
      is_complete:false,stale_since:new Date().toISOString(),
     }).eq("id",connection.data.id);
+    invalidateIntegrationsCache(
+     connection.data.workspace_id?String(connection.data.workspace_id):String(connection.data.owner_id),
+     String(connection.data.id),
+    );
    }else{
-    await syncPluggyItem(
+    const synced=await syncPluggyItem(
      supabase as Parameters<typeof syncPluggyItem>[0],
      String(connection.data.owner_id),String(connection.data.id),false,
      {triggerType:"webhook"},
     );
+    await invalidatePluggySyncCaches({
+     supabase,
+     ownerId:String(connection.data.owner_id),
+     workspaceId:connection.data.workspace_id?String(connection.data.workspace_id):null,
+     integrationId:String(connection.data.id),
+     summary:synced.summary,
+    });
    }
    await supabase.from("pluggy_webhook_events").update({
     status:"completed",processed_at:new Date().toISOString(),

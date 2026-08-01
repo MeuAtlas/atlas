@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { throwSupabaseError } from "@/lib/errors";
 import { getAuthContext } from "@/lib/auth/session";
 import type { AtlasModule, Workspace } from "@/types/atlas";
 
-export async function requireFinanceAccess() {
+async function loadFinanceAccess() {
   const context = await getAuthContext();
   if (!context.user || !context.profile) redirect("/login");
   if (!context.profile.onboarding_completed) redirect("/onboarding");
@@ -34,6 +35,13 @@ export async function requireFinanceAccess() {
   if (!grantResult.data?.enabled) redirect("/dashboard?module=disabled");
   return context;
 }
+
+/**
+ * Layouts and pages in the same Finance render share one authenticated client
+ * and one permission check. Besides removing duplicate database work, this
+ * prevents concurrent auth refreshes on slower mobile connections.
+ */
+export const requireFinanceAccess = cache(loadFinanceAccess);
 
 export async function getWorkspaces() {
   const { supabase } = await requireFinanceAccess();

@@ -90,8 +90,7 @@ export function InvoiceImportFlow({
 
   function openCanonicalDocument(documentId: string) {
     const path = invoiceImportCanonicalPath(documentId);
-    router.push(path);
-    router.refresh();
+    router.push(path, { scroll: false });
   }
 
   function handleApiResult(body: {
@@ -176,9 +175,7 @@ export function InvoiceImportFlow({
     const next = body.resolution as ExistingInvoiceDocumentResolution;
     setExisting(next);
     if (next.action === "continue_review") {
-      window.location.assign(
-        invoiceImportCanonicalPath(next.documentId),
-      );
+      router.push(invoiceImportCanonicalPath(next.documentId), { scroll: false });
     }
   }
 
@@ -422,8 +419,9 @@ export function InvoiceImportFlow({
             {existing.action === "continue_review" ? (
               <button type="button" className="finance-button" onClick={() => {
                 if (review) setPhase("review");
-                else window.location.assign(
+                else router.push(
                   invoiceImportCanonicalPath(existing.documentId),
+                  { scroll: false },
                 );
               }}>
                 Continuar revisão

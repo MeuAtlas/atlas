@@ -1,12 +1,5 @@
-import { AtlasModuleLoading } from "@/components/atlas/atlas-module-loading";
+import { IntegrationsSkeleton } from "@/components/finance/integrations-skeleton";
 
 export default function Loading() {
-  return (
-    <AtlasModuleLoading
-      title="Verificando integrações"
-      description="Consultando o status das conexões."
-      variant="finance"
-      skeletonType="integrations"
-    />
-  );
+  return <IntegrationsSkeleton />;
 }

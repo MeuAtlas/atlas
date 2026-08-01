@@ -36,6 +36,7 @@ import {
 } from "./confirm-action";
 import { PersonDetails } from "./person-details";
 import { PersonForm, personRelationOptions } from "./person-form";
+import { useClientNavigation } from "@/components/navigation/client-navigation";
 
 type Option = { id: string; name: string };
 type PersonRow = CommitmentsOverview["people"][number];
@@ -187,6 +188,7 @@ export function CommitmentsWorkspace({
   personSpends: Record<string, PersonSpendForPeriod>;
 }) {
   const router = useRouter();
+  const navigate = useClientNavigation();
   const [modal, setModal] = useState<ModalState>(null);
   const [personFilter, setPersonFilter] = useState("");
   const [recurringFilter, setRecurringFilter] =
@@ -315,7 +317,7 @@ export function CommitmentsWorkspace({
           <select
             value={overview.workspaceId}
             onChange={event => {
-              window.location.assign(
+              navigate(
                 `/financeiro/compromissos?workspace=${event.target.value}&month=${month}&tab=${activeTab}`,
               );
             }}
@@ -331,7 +333,7 @@ export function CommitmentsWorkspace({
             type="month"
             value={month}
             onChange={event => {
-              window.location.assign(
+              navigate(
                 `/financeiro/compromissos?workspace=${overview.workspaceId}&month=${event.target.value}&tab=${activeTab}`,
               );
             }}

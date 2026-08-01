@@ -116,7 +116,7 @@ export function ProviderHealthAlerts({
             actions={
               <>
                 <Retry connectionId={connection.id} />
-                <Link href="/financeiro/integracoes">Ver detalhes</Link>
+                <Link href="/financeiro/integracoes" prefetch={false}>Ver detalhes</Link>
               </>
             }
           />

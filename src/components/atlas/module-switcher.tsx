@@ -62,6 +62,7 @@ export function ModuleSwitcher({
               <Link
                 key={module.id}
                 href={moduleHref(module)}
+                prefetch={false}
                 role="menuitem"
                 aria-current={active ? "page" : undefined}
                 className={active ? "active" : undefined}

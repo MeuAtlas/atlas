@@ -1,4 +1,5 @@
 import type { FinancialAccount } from "@/modules/finance/types";
+import { ClientSearchForm } from "@/components/navigation/client-navigation";
 
 function accountLabel(account: FinancialAccount) {
   const identity =
@@ -22,7 +23,7 @@ export function FinanceAccountFilters({
   maximumMonth?: string;
 }) {
   return (
-    <form method="get" action="/financeiro" className="overview-period">
+    <ClientSearchForm action="/financeiro" className="overview-period">
       <input type="hidden" name="workspace" value={workspace} />
       <label>
         <span>Conta</span>
@@ -54,6 +55,6 @@ export function FinanceAccountFilters({
         />
       </label>
       <button type="submit">Aplicar</button>
-    </form>
+    </ClientSearchForm>
   );
 }
