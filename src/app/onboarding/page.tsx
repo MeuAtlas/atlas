@@ -14,7 +14,7 @@ export default async function OnboardingPage() {
   return (
     <PrivateShell>
       <section className="atlas-card-enter relative z-[1] mx-auto my-8 w-full max-w-xl self-center rounded-[var(--atlas-radius)] border border-[var(--atlas-border)] bg-[var(--atlas-surface)] p-6 shadow-[var(--atlas-shadow)] backdrop-blur-xl sm:p-10">
-        <p className="text-xs font-semibold uppercase tracking-[.18em] text-[var(--atlas-blue)]">Primeiro acesso</p>
+        <p className="atlas-label text-[var(--atlas-blue)]">Primeiro acesso</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-.04em] text-[var(--atlas-text)]">Prepare seu Atlas pessoal</h1>
         <p className="mt-3 text-sm leading-6 text-[var(--atlas-muted)]">Estas informações pertencem somente ao seu perfil. Você poderá configurar uma família depois, sem compartilhar automaticamente seus dados.</p>
         <OnboardingForm profile={profile} />

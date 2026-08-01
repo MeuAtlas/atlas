@@ -8,6 +8,7 @@ import {
   AtlasModalClose,
   AtlasModalHeader,
 } from "@/components/ui/atlas-modal";
+import { AtlasText } from "@/components/ui/atlas-text";
 import { Money } from "./value-visibility";
 import type {
   FinanceOverviewCommitment,
@@ -47,8 +48,11 @@ function DetailRow({ title, detail, value, muted = false }: {
 }) {
   return (
     <div className={`fov-expense-detail-row${muted ? " muted" : ""}`}>
-      <span><b>{title}</b><small>{detail}</small></span>
-      <strong><Money value={value} /></strong>
+      <span>
+        <AtlasText as="b" variant="itemTitle">{title}</AtlasText>
+        <AtlasText as="small" variant="secondary">{detail}</AtlasText>
+      </span>
+      <AtlasText as="strong" variant="financialValueSmall"><Money value={value} /></AtlasText>
     </div>
   );
 }
@@ -94,34 +98,36 @@ export function NextMonthExpenseDetails({
       >
         <AtlasModalHeader>
           <div>
-            <p className="eyebrow">COMPOSIÇÃO DA PREVISÃO</p>
-            <h2>Despesas previstas de {monthLabel(month).split(" de ")[0]}</h2>
-            <p className="atlas-modal-subtitle">
-              Entenda exatamente de onde vem o total e como o Atlas evita duplicidades.
-            </p>
+            <AtlasText as="p" variant="label">COMPOSIÇÃO DA PREVISÃO</AtlasText>
+            <AtlasText as="h2" variant="modalTitle">
+              Despesas previstas de {monthLabel(month).split(" de ")[0]}
+            </AtlasText>
+            <AtlasText as="p" variant="body" className="atlas-modal-subtitle">
+              Veja os valores considerados na previsão e os itens apenas informativos.
+            </AtlasText>
           </div>
           <AtlasModalClose />
         </AtlasModalHeader>
 
         <AtlasModalBody className="fov-expense-details-body">
           <section className="fov-expense-equation" aria-label="Resumo do cálculo">
-            <div><span>Compromissos</span><strong><Money value={projection.expectedCommitments} /></strong></div>
+            <div><AtlasText as="span" variant="secondary">Compromissos</AtlasText><AtlasText as="strong" variant="financialValueSmall"><Money value={projection.expectedCommitments} /></AtlasText></div>
             <i aria-hidden="true">+</i>
-            <div><span>Faturas</span><strong><Money value={projection.expectedCardInvoices} /></strong></div>
+            <div><AtlasText as="span" variant="secondary">Faturas</AtlasText><AtlasText as="strong" variant="financialValueSmall"><Money value={projection.expectedCardInvoices} /></AtlasText></div>
             <i aria-hidden="true">=</i>
-            <div className="total"><span>Total previsto</span><strong><Money value={projection.expectedExpenses} /></strong></div>
+            <div className="total"><AtlasText as="span" variant="secondary">Total previsto</AtlasText><AtlasText as="strong" variant="financialValueSmall"><Money value={projection.expectedExpenses} /></AtlasText></div>
           </section>
 
-          <p className="fov-expense-explanation">
+          <AtlasText as="p" variant="body" className="fov-expense-explanation">
             Este valor representa o que deve sair da conta em {monthLabel(month)}. Compromissos pagos
             no cartão aparecem dentro da fatura e não são somados novamente. Compras de cartões atribuídos
             a outra pessoa são preservadas no total do banco, mas descontadas da sua parte prevista.
-          </p>
+          </AtlasText>
 
           <section className="fov-expense-detail-section">
             <header>
-              <div><span>SAÍDA DIRETA</span><h3>Compromissos fora do cartão</h3></div>
-              <strong><Money value={projection.expectedCommitments} /></strong>
+              <div><AtlasText variant="label">SAÍDA DIRETA</AtlasText><AtlasText as="h3" variant="sectionTitle">Compromissos fora do cartão</AtlasText></div>
+              <AtlasText as="strong" variant="financialValueSmall"><Money value={projection.expectedCommitments} /></AtlasText>
             </header>
             <div className="fov-expense-detail-list">
               {directCommitments.map(item => (
@@ -138,8 +144,8 @@ export function NextMonthExpenseDetails({
 
           <section className="fov-expense-detail-section">
             <header>
-              <div><span>SAÍDA PELA FATURA</span><h3>Faturas com vencimento no mês</h3></div>
-              <strong><Money value={projection.expectedCardInvoices} /></strong>
+              <div><AtlasText variant="label">SAÍDA PELA FATURA</AtlasText><AtlasText as="h3" variant="sectionTitle">Faturas com vencimento no mês</AtlasText></div>
+              <AtlasText as="strong" variant="financialValueSmall"><Money value={projection.expectedCardInvoices} /></AtlasText>
             </header>
             <div className="fov-expense-detail-list">
               {invoices.length ? invoices.map(invoice => (
@@ -163,15 +169,15 @@ export function NextMonthExpenseDetails({
           {cardCommitments.length ? (
             <section className="fov-expense-detail-section protected">
               <header>
-                <div><span>SEM DUPLICIDADE</span><h3>Já incluídos nas faturas</h3></div>
+                <div><AtlasText variant="label">SEM DUPLICIDADE</AtlasText><AtlasText as="h3" variant="sectionTitle">Já incluídos nas faturas</AtlasText></div>
               </header>
-              <p>Estes compromissos ajudam a explicar a fatura, mas não são acrescentados novamente ao total.</p>
+              <AtlasText as="p" variant="body">Estes compromissos ajudam a explicar a fatura, mas não são acrescentados novamente ao total.</AtlasText>
               <div className="fov-expense-detail-list">
                 {cardCommitments.map(item => (
                   <DetailRow
                     key={item.id}
                     title={item.title}
-                    detail={`${item.context || "Sem contexto"} · ${dateLabel(item.expectedDate, timeZone)} · Já considerado na fatura`}
+                    detail={`${item.context || "Sem contexto"} · ${dateLabel(item.expectedDate, timeZone)}`}
                     value={item.amount}
                     muted
                   />
@@ -183,16 +189,16 @@ export function NextMonthExpenseDetails({
           {payrollDeductions.length ? (
             <section className="fov-expense-detail-section excluded">
               <header>
-                <div><span>FORA DESTE CÁLCULO</span><h3>Descontos em folha</h3></div>
-                <strong><Money value={payrollTotal} /></strong>
+                <div><AtlasText variant="label">FORA DESTE CÁLCULO</AtlasText><AtlasText as="h3" variant="sectionTitle">Descontos em folha</AtlasText></div>
+                <AtlasText as="strong" variant="financialValueSmall"><Money value={payrollTotal} /></AtlasText>
               </header>
-              <p>Já foram retirados antes do salário líquido entrar na conta e, por isso, não reduzem o caixa novamente.</p>
+              <AtlasText as="p" variant="body">Já descontados antes do salário líquido entrar na conta.</AtlasText>
               <div className="fov-expense-detail-list">
                 {payrollDeductions.map(item => (
                   <DetailRow
                     key={item.id}
                     title={item.title}
-                    detail={`${item.context || "Desconto em folha"} · Não somado às despesas previstas`}
+                    detail={item.context || "Desconto em folha"}
                     value={item.amount}
                     muted
                   />

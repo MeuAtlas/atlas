@@ -190,5 +190,14 @@ test("despesas previstas explicam compromissos, faturas e exclusões em modal", 
   assert.match(expenseDetails, /Já incluídos nas faturas/);
   assert.match(expenseDetails, /Descontos em folha/);
   assert.match(expenseDetails, /não são somados novamente/);
+  assert.match(expenseDetails, /Veja os valores considerados na previsão e os itens apenas informativos/);
+  assert.match(expenseDetails, /variant="modalTitle"/);
+  assert.match(expenseDetails, /variant="financialValueSmall"/);
+  assert.match(expenseDetails, /Já descontados antes do salário líquido entrar na conta/);
+  assert.doesNotMatch(expenseDetails, /Não somado às despesas previstas/);
+  assert.doesNotMatch(expenseDetails, /Já considerado na fatura/);
   assert.match(css, /\.fov-expense-equation\{/);
+  assert.match(css, /\.fov-expense-detail-row b \{ font-size: 16px/);
+  assert.match(css, /\.fov-expense-detail-row small \{ font-size: 15px !important/);
+  assert.match(css, /\.atlas-modal-close \{ width: 44px; height: 44px/);
 });

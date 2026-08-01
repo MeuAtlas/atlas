@@ -33,7 +33,7 @@ export default async function FamilySettingsPage() {
   return (
     <PrivateShell>
       <section className="atlas-card-enter relative z-[1] mx-auto my-12 w-full max-w-2xl self-center rounded-[var(--atlas-radius)] border border-[var(--atlas-border)] bg-[var(--atlas-surface)] p-7 shadow-[var(--atlas-shadow)] backdrop-blur-xl sm:p-11">
-        <p className="text-xs font-semibold uppercase tracking-[.18em] text-[var(--atlas-blue)]">Configurações</p>
+        <p className="atlas-label text-[var(--atlas-blue)]">Configurações</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-.04em] text-[var(--atlas-text)]">Família</h1>
         {family && membership ? (
           <div className="mt-7 rounded-2xl border border-[var(--atlas-border)] bg-[var(--atlas-surface-solid)] p-5">

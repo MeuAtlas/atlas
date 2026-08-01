@@ -102,12 +102,12 @@ function MonthlyCashFlowChart({ dashboard }: { dashboard: IncomeExpenseDashboard
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="var(--atlas-border)" vertical={false} strokeDasharray="3 5" />
-              <XAxis dataKey="day" tickLine={false} axisLine={false} minTickGap={24} tick={{ fill: "var(--atlas-muted)", fontSize: 10 }} />
-              <YAxis tickFormatter={value => compactMoney(Number(value))} tickLine={false} axisLine={false} width={64} tick={{ fill: "var(--atlas-muted)", fontSize: 9 }} />
+              <XAxis dataKey="day" tickLine={false} axisLine={false} minTickGap={24} tick={{ fill: "var(--atlas-muted)", fontSize: 12 }} />
+              <YAxis tickFormatter={value => compactMoney(Number(value))} tickLine={false} axisLine={false} width={64} tick={{ fill: "var(--atlas-muted)", fontSize: 12 }} />
               <Tooltip
                 formatter={(value, name) => [money(Number(value ?? 0)), name === "cumulativeIncome" ? "Receitas" : "Despesas"]}
                 labelFormatter={label => `Dia ${label}`}
-                contentStyle={{ background: "var(--atlas-surface-solid)", border: "1px solid var(--atlas-border)", borderRadius: 10, fontSize: 11 }}
+                contentStyle={{ background: "var(--atlas-surface-solid)", border: "1px solid var(--atlas-border)", borderRadius: 10, fontSize: 14 }}
               />
               <Area type="monotone" dataKey="cumulativeIncome" stroke="#4ed6a0" fill="url(#incomeFill)" strokeWidth={2.2} />
               <Area type="monotone" dataKey="cumulativeExpenses" stroke="#ff6f7d" fill="url(#expenseFill)" strokeWidth={2.2} />

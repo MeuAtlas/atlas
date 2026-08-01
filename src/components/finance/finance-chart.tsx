@@ -75,7 +75,7 @@ export function FinanceChart({
             dataKey="date"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "var(--atlas-chart-axis)", fontSize: 11 }}
+            tick={{ fill: "var(--atlas-chart-axis)", fontSize: 12 }}
           />
           <YAxis hide />
           <Tooltip

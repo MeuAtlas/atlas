@@ -90,7 +90,7 @@ export function AccountMovementChart({
               dataKey="label"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "var(--atlas-chart-axis)", fontSize: 10 }}
+              tick={{ fill: "var(--atlas-chart-axis)", fontSize: 12 }}
               tickFormatter={(label) =>
                 ["01", "05", "10", "15", "20", "25", lastLabel].includes(
                   String(label),
@@ -104,7 +104,7 @@ export function AccountMovementChart({
               axisLine={false}
               tickLine={false}
               width={66}
-              tick={{ fill: "var(--atlas-chart-axis)", fontSize: 10 }}
+              tick={{ fill: "var(--atlas-chart-axis)", fontSize: 12 }}
               tickFormatter={compactCurrency}
             />
             <Tooltip
@@ -168,12 +168,12 @@ export function CashFlowOverviewChart({ data }: { data: CashFlowPoint[] }) {
             dataKey="label"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "var(--atlas-chart-axis)", fontSize: 11 }}
+            tick={{ fill: "var(--atlas-chart-axis)", fontSize: 12 }}
           />
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "var(--atlas-chart-axis)", fontSize: 10 }}
+            tick={{ fill: "var(--atlas-chart-axis)", fontSize: 12 }}
             tickFormatter={compactCurrency}
           />
           <Tooltip
@@ -186,7 +186,7 @@ export function CashFlowOverviewChart({ data }: { data: CashFlowPoint[] }) {
               boxShadow: "var(--atlas-shadow)",
             }}
           />
-          <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+          <Legend iconType="circle" wrapperStyle={{ fontSize: 13 }} />
           <Bar
             dataKey="income"
             name="Receitas"

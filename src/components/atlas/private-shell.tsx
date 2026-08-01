@@ -24,7 +24,7 @@ export function PrivateShell({
             {isSuperAdmin ? (
               <Link
                 href="/admin"
-                className="rounded-xl border border-[var(--atlas-border)] bg-[var(--atlas-surface)] px-3 py-2 text-xs font-semibold text-[var(--atlas-text)] shadow-sm backdrop-blur-md transition hover:border-[var(--atlas-blue)]/40 hover:bg-[var(--atlas-blue-soft)] sm:px-4 sm:text-sm"
+                className="atlas-button-label rounded-xl border border-[var(--atlas-border)] bg-[var(--atlas-surface)] px-3 py-2 text-[var(--atlas-text)] shadow-sm backdrop-blur-md transition hover:border-[var(--atlas-blue)]/40 hover:bg-[var(--atlas-blue-soft)] sm:px-4"
               >
                 Administração
               </Link>

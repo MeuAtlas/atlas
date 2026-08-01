@@ -66,7 +66,7 @@ export function UpdatePasswordCard() {
           {loading ? <><span className="size-4 animate-spin rounded-full border-2 border-white/35 border-t-white" /> Atualizando…</> : <>Salvar nova senha <ArrowIcon className="size-[18px]" /></>}
         </button>
       </form>
-      <div className="mt-7 flex items-center justify-center gap-2 border-t border-[var(--atlas-border)] pt-5 text-xs text-[var(--atlas-muted)]"><ShieldIcon className="size-4 text-[var(--atlas-blue)]" /> Link de recuperação protegido</div>
+      <div className="atlas-caption mt-7 flex items-center justify-center gap-2 border-t border-[var(--atlas-border)] pt-5"><ShieldIcon className="size-4 text-[var(--atlas-blue)]" /> Link de recuperação protegido</div>
     </section>
   );
 }
