@@ -38,7 +38,8 @@ export function FinanceShell({
   const financeContext = new URLSearchParams();
   for (const name of ["workspace", "month", "account"]) {
     const value = searchParams.get(name);
-    if (value) financeContext.set(name, value);
+    const validWorkspace = name !== "workspace" || workspaces.some((workspace) => workspace.id === value);
+    if (value && validWorkspace) financeContext.set(name, value);
   }
   const financeQuery = financeContext.toString();
 

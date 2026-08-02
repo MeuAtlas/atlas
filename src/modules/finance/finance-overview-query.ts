@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  calculateBankCashFlowForAccounts,
   getBankAccountMonthlyMovement,
   isTransactionalBankAccount,
 } from "./account-movement";
@@ -48,13 +49,16 @@ export async function getFinanceOverviewDashboard(input: {
     ? maximumPeriod
     : requestedPeriod;
   const activeWorkspace = await getActiveFinanceWorkspaceContext(input.workspaceId);
+  const financialDataWorkspaceId = activeWorkspace.includeOwnerPrivateData
+    ? null
+    : activeWorkspace.workspaceId;
   const [data,projectionCards,storedInvoices]=await Promise.all([
     getFinanceOverviewData(input.supabase, input.userId, {
       period,
-      workspaceId: input.workspaceId,
+      workspaceId: financialDataWorkspaceId,
     }),
-    getFinanceProjectionCardData(input.supabase,input.userId),
-    getReliableCurrentInvoiceSnapshots(input.supabase,input.userId),
+    getFinanceProjectionCardData(input.supabase,input.userId,financialDataWorkspaceId),
+    getReliableCurrentInvoiceSnapshots(input.supabase,input.userId,financialDataWorkspaceId),
   ]);
   const accounts = data.accounts.filter(isTransactionalBankAccount);
   const selectedAccount = accounts.find(account => account.id === input.selectedAccountId)
@@ -63,17 +67,31 @@ export async function getFinanceOverviewDashboard(input: {
     ? data.connections.find(connection => connection.id === selectedAccount.bank_connection_id) ?? null
     : null;
   const futurePeriods = [1, 2, 3].map(offset => shiftFinanceMonth(period, offset));
-  const [movementTransactions, previousMovementTransactions, currentFlow, ...futureFlows] = await Promise.all([
+  const subsequentPeriod = {
+    ...period,
+    startDate: period.endExclusiveDate,
+    startInstant: period.endExclusiveInstant,
+    endExclusiveDate: maximumPeriod.endExclusiveDate,
+    endExclusiveInstant: maximumPeriod.endExclusiveInstant,
+  };
+  const [movementTransactions, previousMovementTransactions, subsequentMovementTransactions, currentFlow, ...futureFlows] = await Promise.all([
     selectedAccount
       ? getBankAccountMonthlyTransactions(input.supabase, input.userId, {
-          accountId: selectedAccount.id, period, workspaceId: input.workspaceId,
+          accountId: selectedAccount.id, period, workspaceId: financialDataWorkspaceId,
         })
       : Promise.resolve([]),
     selectedAccount
       ? getBankAccountMonthlyTransactions(input.supabase, input.userId, {
           accountId: selectedAccount.id,
           period: shiftFinanceMonth(period, -1),
-          workspaceId: input.workspaceId,
+          workspaceId: financialDataWorkspaceId,
+        })
+      : Promise.resolve([]),
+    selectedAccount && period.endExclusiveDate < maximumPeriod.endExclusiveDate
+      ? getBankAccountMonthlyTransactions(input.supabase, input.userId, {
+          accountId: selectedAccount.id,
+          period: subsequentPeriod,
+          workspaceId: financialDataWorkspaceId,
         })
       : Promise.resolve([]),
     getIncomeExpenseOverview(input.supabase, {
@@ -92,6 +110,16 @@ export async function getFinanceOverviewDashboard(input: {
         connection: selectedConnection,
       })
     : null;
+  const subsequentCashFlow = selectedAccount
+    ? calculateBankCashFlowForAccounts({
+        accountIds: [selectedAccount.id],
+        transactions: subsequentMovementTransactions,
+        period: subsequentPeriod,
+      })
+    : null;
+  const selectedPeriodClosingBalance = selectedAccount
+    ? selectedAccount.current_balance - (subsequentCashFlow?.netMovement ?? 0)
+    : 0;
   const invoiceReferenceDate = invoiceReferenceDateForMonth({
     year: period.year, month: period.month, now, timeZone: input.timeZone,
   });
@@ -104,7 +132,7 @@ export async function getFinanceOverviewDashboard(input: {
   const resolvedInvoices = new Map(
     (await Promise.all(invoices.map(async invoice => {
       const resolved = await resolveOpenCardInvoice(input.supabase, input.userId, {
-        workspaceId: input.workspaceId,
+        workspaceId: financialDataWorkspaceId,
         cardAccountId: invoice.card.id,
         referenceDate: invoiceReferenceDate,
       });
@@ -121,7 +149,7 @@ export async function getFinanceOverviewDashboard(input: {
     {
       selectedMonth: period.key,
       timeZone: input.timeZone,
-      scope: { workspaceId: input.workspaceId },
+      scope: { workspaceId: financialDataWorkspaceId },
     },
   );
   return {
@@ -133,6 +161,7 @@ export async function getFinanceOverviewDashboard(input: {
       selectedMonth: period.key,
       nextMonth: futurePeriods[0]!.key,
       movement: accountMovement,
+      closingBalance: selectedPeriodClosingBalance,
       invoices,
       resolvedInvoices,
       currentFlow,

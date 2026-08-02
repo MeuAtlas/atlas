@@ -7,6 +7,10 @@ const source = readFileSync(
   join(process.cwd(), "src/modules/finance/queries.ts"),
   "utf8",
 );
+const overviewSource = readFileSync(
+  join(process.cwd(), "src/modules/finance/finance-overview-query.ts"),
+  "utf8",
+);
 
 test("overview consulta competência, classificação e alvos necessários", () => {
   for (const field of [
@@ -51,6 +55,21 @@ test("queries separam owner privado de workspace compartilhado", () => {
   assert.match(
     source,
     /\.eq\("workspace_id",workspaceId\)\.eq\("visibility","workspace"\)/,
+  );
+});
+
+test("workspace pessoal traduz o escopo para os dados bancários privados", () => {
+  assert.match(
+    overviewSource,
+    /activeWorkspace\.includeOwnerPrivateData[\s\S]*\? null[\s\S]*: activeWorkspace\.workspaceId/,
+  );
+  assert.match(
+    overviewSource,
+    /getFinanceOverviewData[\s\S]*workspaceId: financialDataWorkspaceId/,
+  );
+  assert.match(
+    overviewSource,
+    /getBankAccountMonthlyTransactions[\s\S]*workspaceId: financialDataWorkspaceId/,
   );
 });
 

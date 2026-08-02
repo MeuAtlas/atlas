@@ -102,11 +102,24 @@ function flow(month: string, income: number, expenses: number, items: IncomeExpe
 test("saldo positivo permanece separado do resultado mensal negativo", () => {
   const summary = getCurrentMonthFinanceSummary({ selectedMonth: "2026-07", movement });
   assert.equal(summary.currentBalance, 8_090.76);
+  assert.equal(summary.openingBalance, 13_612.16);
+  assert.equal(summary.closingBalance, 8_090.76);
   assert.equal(summary.currentMonthInflows, 48_923.92);
   assert.equal(summary.currentMonthOutflows, 54_445.32);
   assert.equal(summary.currentMonthResult, -5_521.40);
   assert.equal(summary.currentMonthInflowsCount, 2);
   assert.equal(summary.currentMonthOutflowsCount, 2);
+  assert.equal(summary.openingBalance + summary.currentMonthResult, summary.closingBalance);
+});
+
+test("saldo histórico desconta movimentos posteriores do saldo atual", () => {
+  const summary = getCurrentMonthFinanceSummary({
+    selectedMonth: "2026-07",
+    movement,
+    closingBalance: 7_500,
+  });
+  assert.equal(summary.openingBalance, 13_021.40);
+  assert.equal(summary.closingBalance, 7_500);
 });
 
 test("resumo realizado recebe somente mês selecionado e movimentação bancária", () => {
@@ -218,13 +231,13 @@ test("alertas do mês vigente são acionáveis e não usam projeção futura", (
   assert.ok(items.every(item => !item.id.startsWith("next-")));
 });
 
-test("interface separa realizado e previsão com quatro cards em cada seção", () => {
+test("interface reconcilia o realizado em cinco cards e mantém quatro previsões", () => {
   const source = readFileSync("src/components/finance/finance-overview.tsx", "utf8");
   assert.match(source, /CurrentMonthSection/);
   assert.match(source, /NextMonthSection/);
-  assert.match(source, /— realizado/);
+  assert.match(source, /— Realizado/);
   assert.match(source, /— previsão/);
-  assert.equal(source.match(/<CurrentMonthSummaryCard/g)?.length, 4);
+  assert.equal(source.match(/<CurrentMonthSummaryCard/g)?.length, 5);
   assert.equal(source.match(/<ProjectionCard/g)?.length, 4);
   assert.doesNotMatch(source, /Ainda previsto|Livre para gastar ou guardar/);
   assert.match(source, /Sobra prevista sem somar o saldo atual/);

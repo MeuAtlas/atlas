@@ -285,6 +285,58 @@ function dedupeTransactions(transactions: FinancialTransaction[]) {
   return [...selected.values()];
 }
 
+/** Consolidated physical cash flow for a set of bank accounts. */
+export function calculateBankCashFlowForAccounts({
+  accountIds,
+  transactions,
+  period,
+}: {
+  accountIds: string[];
+  transactions: FinancialTransaction[];
+  period: FinanceMonthPeriod;
+}) {
+  const selectedAccounts = new Set(accountIds);
+  const entries = [] as Array<{
+    id: string;
+    date: string;
+    amount: number;
+    effect: "inflow" | "outflow";
+  }>;
+
+  for (const transaction of dedupeTransactions(transactions)) {
+    const originSelected = Boolean(
+      transaction.account_id && selectedAccounts.has(transaction.account_id),
+    );
+    const destinationSelected = Boolean(
+      transaction.destination_account_id &&
+      selectedAccounts.has(transaction.destination_account_id),
+    );
+    const isTransfer = transaction.transaction_role === "transfer" ||
+      transaction.transaction_type === "transfer";
+    if (isTransfer && originSelected && destinationSelected) continue;
+
+    const accountId = originSelected
+      ? transaction.account_id
+      : destinationSelected
+        ? transaction.destination_account_id
+        : null;
+    if (!accountId) continue;
+
+    const direction = classifyBankAccountMovement(transaction, accountId);
+    if (direction !== "inflow" && direction !== "outflow") continue;
+    const date = bankMovementDate(transaction, period.timeZone);
+    if (!date || date < period.startDate || date >= period.endExclusiveDate) continue;
+    entries.push({
+      id: transaction.id,
+      date,
+      amount: Math.abs(Number(transaction.amount) || 0),
+      effect: direction,
+    });
+  }
+
+  return calculateBankAccountCashFlow(entries);
+}
+
 function movementItem(
   transaction: FinancialTransaction,
   direction: "inflow" | "outflow",

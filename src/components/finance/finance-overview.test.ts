@@ -147,15 +147,26 @@ test("ajudas do card usam details semanticamente válido e responsivo", () => {
   assert.match(css, /background:var\(--atlas-tooltip-background\)/);
 });
 
-test("gráfico da conta tem duas linhas, série cumulativa e modo diário", () => {
+test("gráfico da conta apresenta entradas, saídas e terceira série contextual", () => {
   assert.match(charts, /name="Entradas"/);
   assert.match(charts, /name="Saídas"/);
+  assert.match(charts, /showsCashBalance \? "Saldo em caixa" : "Resultado"/);
   assert.match(charts, /cumulativeInflow/);
   assert.match(charts, /cumulativeOutflow/);
   assert.match(charts, /dailyInflow/);
   assert.match(charts, /dailyOutflow/);
+  assert.match(charts, /cumulativeResult/);
+  assert.match(charts, /dailyResult/);
   assert.match(charts, />\s*Acumulado\s*</);
   assert.match(charts, />\s*Por dia\s*</);
+});
+
+test("linha de caixa da visão geral parte do saldo inicial e acompanha o saldo final", () => {
+  assert.match(overview, /openingBalance=\{summary\.openingBalance\}/);
+  assert.match(charts, /cashBalance: \(openingBalance \?\? 0\) \+ point\.cumulativeInflow - point\.cumulativeOutflow/);
+  assert.match(charts, /label: "Início"/);
+  assert.match(charts, /cashBalance: openingBalance/);
+  assert.match(charts, /name=\{showsCashBalance \? "Saldo em caixa" : "Resultado"\}/);
 });
 
 test("workspace permanece no escopo da consulta sem aparecer como filtro", () => {
@@ -186,7 +197,15 @@ test("posição e fluxo mensal são blocos executivos independentes", () => {
   assert.match(overview, /className="fov-position-grid"/);
   assert.match(overview, /className="fov-flow-layout"/);
   assert.match(overview, /AccountMovementChart/);
-  assert.match(css, /\.fov-position-grid\{display:grid;grid-template-columns:repeat\(4/);
+  assert.match(css, /\.fov-position-grid\{grid-template-columns:repeat\(5/);
+  assert.match(overview, /title="Saldo inicial"/);
+  assert.match(overview, /title="Saldo final"/);
+  assert.match(overview, /Destaques do mês/);
+  assert.match(overview, /Ver todos os lançamentos/);
+  assert.match(overview, /showComplete/);
+  assert.match(overview, /movementsQuery\.set\("account", selectedAccountId\)/);
+  assert.match(css, /\.fov-position-card\{display:flex;/);
+  assert.match(css, /\.fov-highlights-panel\{/);
 });
 
 test("topo reúne saudação, competência e filtros compactos", () => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  calculateBankCashFlowForAccounts,
   calculateBankAccountMonthlyMovement,
   classifyBankAccountMovement,
   isTransactionalBankAccount,
@@ -442,4 +443,32 @@ test("retorno central inclui comparação do mês anterior sem contaminar julho"
   assert.equal(result.totalInflow, 500);
   assert.equal(result.previousMonthInflow, 300);
   assert.equal(result.previousMonthOutflow, 125);
+});
+
+test("caixa consolidado inclui fatura paga e neutraliza transferência interna", () => {
+  const result = calculateBankCashFlowForAccounts({
+    accountIds: ["santander", "nubank"],
+    period: july,
+    transactions: [
+      tx({ amount: 1_000, original_amount: 1_000 }),
+      tx({
+        amount: 500,
+        original_amount: -500,
+        transaction_type: "transfer",
+        transaction_role: "invoice_payment",
+        financial_origin: "invoice",
+      }),
+      tx({
+        amount: 250,
+        original_amount: -250,
+        transaction_type: "transfer",
+        transaction_role: "transfer",
+        destination_account_id: "nubank",
+        financial_origin: "transfer",
+      }),
+    ],
+  });
+  assert.equal(result.totalInflows, 1_000);
+  assert.equal(result.totalOutflows, 500);
+  assert.equal(result.netMovement, 500);
 });

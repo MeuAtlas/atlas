@@ -58,10 +58,18 @@ export async function getActiveFinanceWorkspaceContext(
   }
 
   const membershipRole = String(active.role) as "owner" | "admin" | "editor";
+  const workspaceValue = Array.isArray(active.workspaces)
+    ? active.workspaces[0]
+    : active.workspaces;
+  const includeOwnerPrivateData = workspaceValue?.type === "personal" &&
+    workspaceValue.owner_id === access.user.id;
   return {
     ...access,
     userId: access.user.id,
     workspaceId: String(active.workspace_id),
+    workspaceType: workspaceValue?.type ?? "personal",
+    workspaceOwnerId: workspaceValue?.owner_id ?? access.user.id,
+    includeOwnerPrivateData,
     membershipRole,
     permissions: {
       canRead: true as const,

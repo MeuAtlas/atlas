@@ -95,7 +95,7 @@ test("14. desconto em folha é informativo e não reduz o livre", () => {
   assert.equal(getPlanningNextMonthSummary({ month: "2026-08", items }).estimatedFreeAmount, 3407.15);
 });
 test("15. parcela não soma novamente quando há fatura", () => {
-  const items = resolveCanonicalPlanningItems({ flow: flow(), invoices: [invoice(7389.22)], monthlyCommitments: { competenceMonth: "2026-08", recurringTotalCents: 0, installmentTotalCents: 100000, loanTotalCents: 0, payrollTotalCents: 0, oneTimeTotalCents: 0, totalCommittedCents: 100000, confirmedTotalCents: 100000, projectedTotalCents: 0, sourceCounts: {} } });
+  const items = resolveCanonicalPlanningItems({ flow: flow(), invoices: [invoice(7389.22)], monthlyCommitments: { competenceMonth: "2026-08", recurringTotalCents: 0, installmentTotalCents: 100000, loanTotalCents: 0, payrollTotalCents: 0, oneTimeTotalCents: 0, totalCommittedCents: 100000, confirmedTotalCents: 100000, projectedTotalCents: 0, sourceCounts: {}, peopleBreakdown: {}, categoryBreakdown: {}, expectedIncomeCents: 0, realizedIncomeCents: 0, remainingExpectedIncomeCents: 0, projectedMonthIncomeCents: 0, projectedBalanceCents: 0 } });
   assert.equal(items.some(value => value.kind === "installment"), false);
 });
 test("16. compromisso pago antecipado não entra", () => assert.equal(resolveCanonicalPlanningItems({ flow: flow("2026-08", [expense(100, { occurrenceStatus: "paid" })]) }).length, 0));

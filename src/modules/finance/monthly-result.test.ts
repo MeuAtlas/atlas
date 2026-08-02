@@ -253,6 +253,38 @@ test("escopo privado não mistura workspace e compartilhado usa somente o worksp
   );
 });
 
+test("workspace pessoal inclui dados privados legados somente do proprietário", () => {
+  const ownerId = "owner";
+  const privateOwnerIncome = transaction({
+    owner_id: ownerId,
+    transaction_type: "income",
+    amount: 400,
+  });
+  const otherOwnerIncome = transaction({
+    owner_id: "other",
+    transaction_type: "income",
+    amount: 900,
+  });
+  const workspaceIncome = transaction({
+    owner_id: ownerId,
+    transaction_type: "income",
+    amount: 250,
+    visibility: "workspace",
+    workspace_id: "personal-workspace",
+  });
+  const result = calculateMonthlyFinancialResult({
+    transactions: [privateOwnerIncome, otherOwnerIncome, workspaceIncome],
+    purchases: [],
+    period: july,
+    scope: {
+      workspaceId: "personal-workspace",
+      ownerId,
+      includeOwnerPrivateData: true,
+    },
+  });
+  assert.equal(result.realizedRevenue, 650);
+});
+
 test("períodos cobrem 28, 29, 30 e 31 dias com fim exclusivo", () => {
   assert.equal(
     getFinanceMonthPeriod({ year: 2025, month: 2 }).endExclusiveDate,

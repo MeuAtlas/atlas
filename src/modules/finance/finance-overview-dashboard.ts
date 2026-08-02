@@ -14,6 +14,8 @@ import type { ResolvedOpenCardInvoice } from "./open-card-invoice";
 export type CurrentMonthFinanceSummary = {
   selectedMonth: string;
   currentBalance: number;
+  openingBalance: number;
+  closingBalance: number;
   currentBalanceUpdatedAt: string | null;
   currentBalanceFreshness: "complete" | "partial" | "stale" | "unavailable";
   currentMonthInflows: number;
@@ -171,14 +173,18 @@ const terminalStatuses = new Set([
 export function getCurrentMonthFinanceSummary(input: {
   selectedMonth: string;
   movement: BankAccountMonthlyMovement | null;
+  closingBalance?: number;
 }): CurrentMonthFinanceSummary {
   const previousMonthResult = input.movement
     ? input.movement.previousMonthInflow - input.movement.previousMonthOutflow
     : 0;
   const currentMonthResult = input.movement?.netMovement ?? 0;
+  const closingBalance = roundMoney(input.closingBalance ?? input.movement?.currentBalance ?? 0);
   return {
     selectedMonth: input.selectedMonth.slice(0, 7),
     currentBalance: input.movement?.currentBalance ?? 0,
+    openingBalance: roundMoney(closingBalance - currentMonthResult),
+    closingBalance,
     currentBalanceUpdatedAt: input.movement?.lastSyncAt ?? null,
     currentBalanceFreshness: input.movement?.dataCompleteness ?? "unavailable",
     currentMonthInflows: input.movement?.totalInflow ?? 0,
@@ -501,6 +507,7 @@ export function buildFinanceOverviewDashboard(input: {
   selectedMonth: string;
   nextMonth: string;
   movement: BankAccountMonthlyMovement | null;
+  closingBalance?: number;
   invoices: CurrentCardInvoice[];
   resolvedInvoices: Map<string, ResolvedOpenCardInvoice>;
   currentFlow: IncomeExpensePageData;
@@ -517,6 +524,7 @@ export function buildFinanceOverviewDashboard(input: {
   const currentSummary = getCurrentMonthFinanceSummary({
     selectedMonth: input.selectedMonth,
     movement: input.movement,
+    closingBalance: input.closingBalance,
   });
   const currentItems = [
     ...input.currentFlow.incomes,

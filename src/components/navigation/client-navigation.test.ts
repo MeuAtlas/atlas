@@ -24,6 +24,7 @@ test("internal query navigation preserves the shared shell and scroll", () => {
 
 test("data navigation blurs and blocks the page with accessible feedback", () => {
   assert.match(layout, /NavigationFeedbackProvider/);
+  assert.match(standard, /from "@\/components\/navigation\/navigation-feedback"/);
   assert.match(standard, /useNavigationTransition/);
   assert.match(feedback, /role="status"/);
   assert.match(feedback, /aria-label="Atualizando dados"/);

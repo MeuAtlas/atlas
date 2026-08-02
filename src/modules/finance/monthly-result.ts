@@ -27,6 +27,8 @@ export type FinanceMonthPeriod = {
 
 export type FinanceCalculationScope = {
   workspaceId?: string | null;
+  ownerId?: string | null;
+  includeOwnerPrivateData?: boolean;
 };
 
 export type MonthlyResultEntry = {
@@ -81,6 +83,7 @@ type DateCandidate = {
 };
 
 type ScopedRow = {
+  owner_id?: string | null;
   workspace_id?: string | null;
   visibility?: string | null;
 };
@@ -235,9 +238,17 @@ export function isInFinanceScope(
   scope: FinanceCalculationScope = {},
 ) {
   if (scope.workspaceId) {
-    return (
+    const belongsToWorkspace = (
       row.workspace_id === scope.workspaceId && row.visibility === "workspace"
     );
+    const isOwnerPrivateData = Boolean(
+      scope.includeOwnerPrivateData &&
+      scope.ownerId &&
+      row.owner_id === scope.ownerId &&
+      !row.workspace_id &&
+      row.visibility !== "workspace",
+    );
+    return belongsToWorkspace || isOwnerPrivateData;
   }
   return !row.workspace_id && row.visibility !== "workspace";
 }
@@ -285,6 +296,14 @@ function hasTarget(transaction: FinancialTransaction) {
 function transactionKind(
   transaction: FinancialTransaction,
 ): MonthlyResultEntry["kind"] | null {
+  if (
+    transaction.transaction_role === "transfer" ||
+    transaction.transaction_role === "invoice_payment" ||
+    transaction.transaction_role === "adjustment" ||
+    EXCLUDED_CASH_FLOW_KINDS.has(transaction.cash_flow_kind ?? "")
+  ) {
+    return null;
+  }
   if (transaction.financial_role === "revenue") return "revenue";
   if (
     transaction.financial_role === "expense" ||
@@ -302,14 +321,6 @@ function transactionKind(
       "investment_principal",
       "pending_review",
     ].includes(transaction.financial_role)
-  ) {
-    return null;
-  }
-  if (
-    transaction.transaction_role === "transfer" ||
-    transaction.transaction_role === "invoice_payment" ||
-    transaction.transaction_role === "adjustment" ||
-    EXCLUDED_CASH_FLOW_KINDS.has(transaction.cash_flow_kind ?? "")
   ) {
     return null;
   }

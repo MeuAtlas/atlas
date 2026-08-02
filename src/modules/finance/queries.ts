@@ -84,10 +84,15 @@ export const CARD_PURCHASE_SELECT =
 export async function getReliableCurrentInvoiceSnapshots(
   supabase:Client,
   userId:string,
+  workspaceId:string|null=null,
 ){
-  const result=await supabase.from("card_invoices").select(
+  let query=supabase.from("card_invoices").select(
     "id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,total_amount,paid_amount,paid_at,outstanding_amount,purchase_count,status,external_id,provider_bill_id,provider_account_id,provider_invoice_total,calculated_invoice_total,manual_invoice_total,confirmed_invoice_total,last_reliable_invoice_total,current_display_total,last_reliable_purchase_count,data_completeness,last_sync_at,last_complete_sync_at,stale_since,provider_status,preservation_reason,minimum_payment_amount,provider_bill_status,payment_status,total_source,reconciliation_difference,reconciliation_status,provider_updated_at,updated_at,invoice_breakdown,credit_card_bill_payments(id,provider_payment_id,value_type,payment_date,payment_mode,amount,currency_code,linked_bank_transaction_id),credit_card_bill_finance_charges(id,provider_charge_id,charge_type,amount,currency_code,additional_info)",
-  ).eq("owner_id",userId).order("reference_month",{ascending:false}).limit(24);
+  );
+  query=workspaceId
+    ? query.eq("workspace_id",workspaceId).eq("visibility","workspace")
+    : query.eq("owner_id",userId);
+  const result=await query.order("reference_month",{ascending:false}).limit(24);
   if(result.error)throwSupabaseError(
     result.error,
     "carregar snapshots confiáveis de fatura",
@@ -366,10 +371,19 @@ export async function getFinanceOverviewData(
  return {accounts:accounts as FinancialAccount[],transactions:transactions as unknown as FinancialTransaction[],cardPurchases:cardPurchases.data as unknown as CardPurchase[],cards:cardRows,connections:connectionRows,warnings:{cardPurchases:Boolean(cardPurchases.warning),cards:Boolean(cards.warning),connections:Boolean(connections.warning)}};
 }
 
-export async function getFinanceProjectionCardData(supabase:Client,userId:string){
+export async function getFinanceProjectionCardData(supabase:Client,userId:string,workspaceId:string|null=null){
+ let purchasesQuery=supabase.from("card_purchases").select(CARD_PURCHASE_SELECT);
+ let cardsQuery=supabase.from("credit_cards").select("id,external_id,workspace_id,bank_connection_id,name,institution_name,last_four_digits,brand,credit_limit,used_limit,current_balance,provider_status,provider_invoice_total,account_credit_balance,provider_bill_id,provider_bill_closing_date,provider_bill_due_date,provider_cycle_start_date,dates_source,closing_day,due_day,status,user_archived_at,visibility,linked_account_id,last_sync_at,source,credit_card_instruments(id,credit_card_id,external_id,last_four_digits,card_kind,display_name,provider_status,user_archived_at,source,payment_responsible_person_id,payment_responsible_person:financial_people!credit_card_instruments_payment_responsible_person_id_fkey(id,name)),card_invoice_confirmations(id,card_id,reference_month,official_amount,source,informed_at,note)");
+ if(workspaceId){
+  purchasesQuery=purchasesQuery.eq("workspace_id",workspaceId).eq("visibility","workspace");
+  cardsQuery=cardsQuery.eq("workspace_id",workspaceId).eq("visibility","workspace");
+ }else{
+  purchasesQuery=purchasesQuery.eq("owner_id",userId);
+  cardsQuery=cardsQuery.eq("owner_id",userId);
+ }
  const [purchases,cards]=await Promise.all([
-  withQueryFallback("projection_card_purchases",supabase.from("card_purchases").select(CARD_PURCHASE_SELECT).eq("owner_id",userId).order("purchase_date",{ascending:false}).limit(2000),[]),
-  withQueryFallback("projection_credit_cards",supabase.from("credit_cards").select("id,external_id,workspace_id,bank_connection_id,name,institution_name,last_four_digits,brand,credit_limit,used_limit,current_balance,provider_status,provider_invoice_total,account_credit_balance,provider_bill_id,provider_bill_closing_date,provider_bill_due_date,provider_cycle_start_date,dates_source,closing_day,due_day,status,user_archived_at,visibility,linked_account_id,last_sync_at,source,credit_card_instruments(id,credit_card_id,external_id,last_four_digits,card_kind,display_name,provider_status,user_archived_at,source,payment_responsible_person_id,payment_responsible_person:financial_people!credit_card_instruments_payment_responsible_person_id_fkey(id,name)),card_invoice_confirmations(id,card_id,reference_month,official_amount,source,informed_at,note)").eq("owner_id",userId).order("created_at"),[]),
+  withQueryFallback("projection_card_purchases",purchasesQuery.order("purchase_date",{ascending:false}).limit(2000),[]),
+  withQueryFallback("projection_credit_cards",cardsQuery.order("created_at"),[]),
  ]);
  return {cardPurchases:purchases.data as unknown as CardPurchase[],cards:cards.data as unknown as CreditCard[],partial:Boolean(purchases.warning||cards.warning)};
 }

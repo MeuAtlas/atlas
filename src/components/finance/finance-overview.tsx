@@ -30,109 +30,132 @@ const monthLabel = (month: string) => new Intl.DateTimeFormat("pt-BR", {
   month: "long", year: "numeric", timeZone: "America/Sao_Paulo",
 }).format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
 
+const periodTitle = (month: string) => {
+  const label = monthLabel(month);
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+};
+
 const currency = (value: number) => new Intl.NumberFormat("pt-BR", {
   style: "currency", currency: "BRL",
 }).format(Math.abs(value));
 
-function FinanceDataFreshnessBadge({ partial }: { partial: boolean }) {
-  return partial ? <span className="fov-freshness">Dados parciais</span> : null;
+function FinanceDataFreshnessBadge({ partial, updatedAt, timeZone, showComplete = false }: {
+  partial: boolean;
+  updatedAt?: string | null;
+  timeZone?: string;
+  showComplete?: boolean;
+}) {
+  if (!partial && !showComplete) return null;
+  const date = updatedAt ? dateLabel(updatedAt, timeZone) : null;
+  return (
+    <span className={`fov-freshness fov-data-status ${partial ? "partial" : "complete"}`} role="status">
+      <i aria-hidden="true" />
+      {partial ? "Dados parciais" : "Dados atualizados"}{date ? ` até ${date}` : ""}
+    </span>
+  );
 }
 
 function CurrentMonthSummaryCard({
-  kind, title, value, detail, partial = false, explanation,
+  kind, title, value, explanation,
 }: {
   kind: "balance" | "inflow" | "outflow" | "result";
   title: string;
   value: number;
-  detail: string;
-  partial?: boolean;
   explanation?: string;
 }) {
   return (
     <article className={`fov-position-card ${kind}`} data-testid={`current-${kind}`}>
-      <span className="fov-position-icon" aria-hidden="true" />
       <div>
         <span className="fov-position-title">
+          <i aria-hidden="true" />
           {title}
           {explanation ? <span className="fov-info-note" title={explanation} aria-label={explanation}>i</span> : null}
         </span>
         <strong className={kind === "outflow" || value < 0 ? "negative" : kind === "inflow" || value > 0 && kind === "result" ? "positive" : undefined}>
           <Money value={value} />
         </strong>
-        <small>{detail}</small>
       </div>
-      <FinanceDataFreshnessBadge partial={partial} />
+      {kind === "result" ? <span className={`fov-result-direction ${value < 0 ? "negative" : "positive"}`} aria-hidden="true" /> : null}
     </article>
   );
 }
 
-function CurrentMonthSummaryGrid({ summary, timeZone }: {
+function CurrentMonthSummaryGrid({ summary }: {
   summary: CurrentMonthFinanceSummary;
-  timeZone: string;
 }) {
-  const difference = Math.abs(summary.currentMonthResult);
-  const resultDetail = summary.currentMonthResult < 0
-    ? `Neste mês, saiu ${currency(difference)} a mais do que entrou.`
-    : summary.currentMonthResult > 0
-      ? `Neste mês, entrou ${currency(difference)} a mais do que saiu.`
-      : "Entradas e saídas ficaram equilibradas neste mês.";
-  const balanceExplanation = "O saldo atual pode permanecer positivo mesmo quando o resultado do mês foi negativo, pois inclui valores acumulados de períodos anteriores.";
+  const balanceExplanation = "Saldo bancário apurado no início do mês, antes das entradas e saídas deste período.";
   return (
     <section className="fov-position-grid" aria-label="Resumo realizado do mês selecionado">
       <CurrentMonthSummaryCard
-        kind="balance" title="Saldo atual" value={summary.currentBalance}
-        detail={`${summary.currentBalanceUpdatedAt ? `Atualizado em ${dateLabel(summary.currentBalanceUpdatedAt, timeZone)} · ` : ""}Inclui valores acumulados de meses anteriores.`}
+        kind="balance" title="Saldo inicial" value={summary.openingBalance}
         explanation={balanceExplanation}
-        partial={summary.currentBalanceFreshness !== "complete"}
       />
-      <CurrentMonthSummaryCard kind="inflow" title="Entradas do mês" value={summary.currentMonthInflows}
-        detail={`${summary.currentMonthInflowsCount} lançamento(s)`} />
-      <CurrentMonthSummaryCard kind="outflow" title="Saídas do mês" value={summary.currentMonthOutflows}
-        detail={`${summary.currentMonthOutflowsCount} lançamento(s)`} />
-      <CurrentMonthSummaryCard kind="result" title="Resultado do mês" value={summary.currentMonthResult}
-        detail={resultDetail} />
+      <CurrentMonthSummaryCard kind="inflow" title="Entradas" value={summary.currentMonthInflows} />
+      <CurrentMonthSummaryCard kind="outflow" title="Saídas" value={summary.currentMonthOutflows} />
+      <CurrentMonthSummaryCard kind="result" title="Resultado do mês" value={summary.currentMonthResult} />
+      <CurrentMonthSummaryCard
+        kind="balance" title="Saldo final" value={summary.closingBalance}
+        explanation="O saldo final reconcilia o caixa do período: saldo inicial mais entradas, menos saídas."
+      />
     </section>
   );
 }
 
-function LargestMovementCard({ direction, item, timeZone }: {
+function HighlightMovement({ direction, item, timeZone }: {
   direction: "inflow" | "outflow";
   item: FinanceOverviewDashboard["selectedPeriod"]["largestMovements"]["largestInflow"];
   timeZone: string;
 }) {
   return (
-    <article className={`fov-largest ${direction}`}>
+    <article className={`fov-highlight-movement ${direction}`}>
       <i aria-hidden="true">{direction === "inflow" ? "↗" : "↘"}</i>
       <div>
         <span>{direction === "inflow" ? "Maior entrada" : "Maior saída"}</span>
-        {item ? <><strong><Money value={item.amount} /></strong><small>{dateLabel(item.date, timeZone)}</small><b title={item.description}>{item.description}</b></>
+        {item ? <><strong><Money value={item.amount} /></strong><small>{dateLabel(item.date, timeZone)} <b title={item.description}>• {item.description}</b></small></>
           : <small>Nenhuma movimentação no período.</small>}
       </div>
     </article>
   );
 }
 
-function CurrentMonthCashFlowPanel({ period, timeZone }: {
+function HighlightsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m12 3 2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84L6.6 19.6l1.03-6-4.36-4.25 6.03-.88L12 3Z" />
+    </svg>
+  );
+}
+
+function CurrentMonthCashFlowPanel({ period, timeZone, movementsHref }: {
   period: FinanceOverviewDashboard["selectedPeriod"];
   timeZone: string;
+  movementsHref: string;
 }) {
   const summary = period.currentSummary;
+  const movementCount = summary.currentMonthInflowsCount + summary.currentMonthOutflowsCount;
   return (
     <section className="fov-flow-layout">
       <article className="finance-panel fov-flow-panel">
-        <header><div><h2>Fluxo do mês</h2><small>Somente movimentações realizadas em {monthLabel(period.month)}.</small></div><FinanceDataFreshnessBadge partial={summary.currentBalanceFreshness !== "complete"} /></header>
+        <header><div><h2>Fluxo do mês</h2><small>Somente movimentações realizadas em {monthLabel(period.month)}.</small></div></header>
         <div className="fov-flow-totals">
           <span><small>Entradas</small><strong className="positive"><Money value={summary.currentMonthInflows} /></strong></span>
           <span><small>Saídas</small><strong className="negative"><Money value={summary.currentMonthOutflows} /></strong></span>
-          <span><small>Resultado</small><strong className={summary.currentMonthResult < 0 ? "negative" : "positive"}><Money value={summary.currentMonthResult} /></strong></span>
+          <span><small>Saldo em caixa</small><strong className="cash"><Money value={summary.closingBalance} /></strong></span>
         </div>
-        {period.cashFlowSeries.length ? <AccountMovementChart data={period.cashFlowSeries} />
+        {period.cashFlowSeries.length ? <AccountMovementChart data={period.cashFlowSeries} openingBalance={summary.openingBalance} />
           : <div className="fov-empty">Nenhuma movimentação neste período.</div>}
       </article>
-      <div className="fov-largest-stack">
-        <LargestMovementCard direction="inflow" item={period.largestMovements.largestInflow} timeZone={timeZone} />
-        <LargestMovementCard direction="outflow" item={period.largestMovements.largestOutflow} timeZone={timeZone} />
-      </div>
+      <aside className="finance-panel fov-highlights-panel" aria-label="Destaques do mês">
+        <header><span className="fov-highlights-icon"><HighlightsIcon /></span><h2>Destaques do mês</h2></header>
+        <div className="fov-highlights-list">
+          <HighlightMovement direction="inflow" item={period.largestMovements.largestInflow} timeZone={timeZone} />
+          <HighlightMovement direction="outflow" item={period.largestMovements.largestOutflow} timeZone={timeZone} />
+        </div>
+        <footer>
+          <Link href={movementsHref} prefetch={false}>Ver todos os lançamentos <span aria-hidden="true">›</span></Link>
+          <small>{movementCount} {movementCount === 1 ? "lançamento" : "lançamentos"} no período</small>
+        </footer>
+      </aside>
     </section>
   );
 }
@@ -239,11 +262,13 @@ function FollowingMonthsSummary({ periods }: { periods: FinanceOverviewDashboard
   return <section className="finance-panel fov-projection"><header><h2>Meses seguintes</h2><small>Resumo após o próximo mês.</small></header><div>{periods.map(item => <article key={item.month}><h3>{monthLabel(item.month)}</h3><span><small>Receitas previstas</small><strong className="positive"><Money value={item.expectedIncome} /></strong></span><span><small>Despesas previstas</small><strong className="negative"><Money value={item.expectedExpenses} /></strong></span><span><small>Resultado previsto</small><strong className={item.expectedResult < 0 ? "negative" : "positive"}><Money value={item.expectedResult} /></strong></span></article>)}</div></section>;
 }
 
-function CurrentMonthSection({ period, timeZone }: {
+function CurrentMonthSection({ period, timeZone, movementsHref }: {
   period: FinanceOverviewDashboard["selectedPeriod"];
   timeZone: string;
+  movementsHref: string;
 }) {
-  return <section className="fov-period-section fov-current-period"><header className="fov-period-heading"><div><span>REALIZADO</span><h2>{monthLabel(period.month)} — realizado</h2><p>O que realmente entrou e saiu neste período.</p></div></header><CurrentMonthSummaryGrid summary={period.currentSummary} timeZone={timeZone} /><CurrentMonthCashFlowPanel period={period} timeZone={timeZone} /><section className="fov-two-column"><CurrentMonthInvoicesPanel invoices={period.currentInvoices} timeZone={timeZone} month={period.month} /><CurrentMonthCommitmentsPanel commitments={period.currentCommitments} timeZone={timeZone} month={period.month} /></section><section className="fov-two-column"><CurrentMonthSpendingPanel period={period} /><CurrentMonthMovementsPanel period={period} month={period.month} /></section><AttentionPanel title={`Atenção necessária em ${monthLabel(period.month).split(" de ")[0]}`} items={period.attentionItems} /></section>;
+  const summary = period.currentSummary;
+  return <section className="fov-period-section fov-current-period"><header className="fov-period-heading"><div><span>REALIZADO</span><h2>{periodTitle(period.month)} — Realizado</h2><p>O que realmente entrou e saiu neste período.</p></div><FinanceDataFreshnessBadge partial={summary.currentBalanceFreshness !== "complete"} updatedAt={summary.currentBalanceUpdatedAt} timeZone={timeZone} showComplete /></header><CurrentMonthSummaryGrid summary={summary} /><CurrentMonthCashFlowPanel period={period} timeZone={timeZone} movementsHref={movementsHref} /><section className="fov-two-column"><CurrentMonthInvoicesPanel invoices={period.currentInvoices} timeZone={timeZone} month={period.month} /><CurrentMonthCommitmentsPanel commitments={period.currentCommitments} timeZone={timeZone} month={period.month} /></section><section className="fov-two-column"><CurrentMonthSpendingPanel period={period} /><CurrentMonthMovementsPanel period={period} month={period.month} /></section><AttentionPanel title={`Atenção necessária em ${monthLabel(period.month).split(" de ")[0]}`} items={period.attentionItems} /></section>;
 }
 
 function NextMonthSection({ period, followingPeriods, timeZone }: {
@@ -269,11 +294,19 @@ export function FinanceOverview({
   workspace: string;
   today?: Date;
 }) {
+  const movementsQuery = new URLSearchParams({
+    type: "bank",
+    period: "custom",
+    month: selectedMonth,
+    workspace,
+  });
+  if (selectedAccountId) movementsQuery.set("account", selectedAccountId);
+  const movementsHref = `/financeiro/movimentacoes?${movementsQuery.toString()}`;
   return (
     <ValueVisibility controls={false}>
       <main className="finance-overview fov-dashboard">
         <header className="fov-header"><div><p className="eyebrow">VISÃO GERAL</p><h1>{greeting(timeZone, today)}, {name}!</h1><p>Sua posição financeira em {monthLabel(selectedMonth)}.</p></div><FinanceAccountFilters accounts={accounts} accountId={selectedAccountId} month={selectedMonth} maximumMonth={maximumMonth} workspace={workspace} /></header>
-        <CurrentMonthSection period={dashboard.selectedPeriod} timeZone={timeZone} />
+        <CurrentMonthSection period={dashboard.selectedPeriod} timeZone={timeZone} movementsHref={movementsHref} />
         <NextMonthSection period={dashboard.nextPeriod} followingPeriods={dashboard.followingPeriods} timeZone={timeZone} />
       </main>
     </ValueVisibility>

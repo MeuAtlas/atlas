@@ -6,7 +6,7 @@ import {
   type FormHTMLAttributes,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useNavigationTransition } from "./navigation-feedback";
+import { useNavigationTransition } from "@/components/navigation/navigation-feedback";
 
 type ClientSearchFormProps = Omit<
   FormHTMLAttributes<HTMLFormElement>,
