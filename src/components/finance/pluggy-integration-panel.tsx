@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import {
   fullSyncItemAction,
   linkItemAction,
+  recoverPluggyTransactionsAction,
   retryResourceAction,
   syncItemAction,
   testCredentialsAction,
@@ -69,6 +70,13 @@ function formatDate(value: string | null) {
   return dateFormatter.format(date);
 }
 
+function formatProviderDate(value: string | null) {
+  return value
+    ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" })
+      .format(new Date(`${value}T12:00:00Z`))
+    : "Ainda não disponível";
+}
+
 function formatDuration(milliseconds: number | null) {
   if (milliseconds === null) return "Em andamento";
   if (milliseconds < 60_000) return `${Math.max(1, Math.round(milliseconds / 1000))}s`;
@@ -87,6 +95,7 @@ function syncStatus(status: string) {
 
 function triggerLabel(trigger: string) {
   if (trigger === "scheduled") return "Automática";
+  if (trigger === "recovery") return "Recuperação de 45 dias";
   if (trigger === "webhook") return "Atualização da instituição";
   if (trigger === "full_resync") return "Ressincronização completa";
   if (trigger === "retry") return "Nova tentativa";
@@ -229,7 +238,7 @@ export function SyncedProductRow({
     <button className="synced-product-row" type="button" onClick={onOpen}>
       <span className={`product-state-dot ${product.status}`} aria-hidden="true" />
       <span><b>{product.name}</b><small>{product.type}</small></span>
-      <span><b>{productStatus(product.status)}</b><small>Último sucesso {formatDate(product.lastSuccessfulSyncAt)}</small></span>
+      <span><b>{productStatus(product.status)}</b><small>{product.resourceType === "accounts" ? product.lastTransactionsSyncAt ? `Movimentações: ${formatDate(product.lastTransactionsSyncAt)}` : `Última movimentação: ${formatProviderDate(product.lastTransactionDate)}` : `Último sucesso ${formatDate(product.lastSuccessfulSyncAt)}`}</small></span>
       <i aria-hidden="true">›</i>
     </button>
   );
@@ -333,6 +342,18 @@ function CredentialTest() {
   );
 }
 
+function TransactionRecovery({ connectionId }: { connectionId: string }) {
+  const [state, action, pending] = useActionState(recoverPluggyTransactionsAction, initial);
+  return (
+    <form action={action} className="advanced-action-row">
+      <input type="hidden" name="connection_id" value={connectionId} />
+      <span><b>Recuperar movimentações recentes</b><small>Reprocessa os últimos 45 dias sem duplicar nem apagar dados anteriores.</small></span>
+      <button type="submit" disabled={pending}>{pending ? "Recuperandoâ€¦" : "Recuperar 45 dias"}</button>
+      <Feedback state={state} />
+    </form>
+  );
+}
+
 function ManualItemForm() {
   const [state, action, pending] = useActionState(linkItemAction, initial);
   return (
@@ -352,6 +373,7 @@ export function AdvancedIntegrationSettings({ dashboard }: { dashboard: FinanceI
       <div>
         <p className="advanced-warning">Use estas opções apenas para diagnóstico ou suporte.</p>
         <CredentialTest />
+        {dashboard.primaryConnection ? <TransactionRecovery connectionId={dashboard.primaryConnection.id} /> : null}
         {dashboard.primaryConnection ? (
           <details className="advanced-subsection">
             <summary>Vínculo manual por Item ID</summary>
@@ -402,7 +424,14 @@ export function ProductSyncDetailsModal({
         <ConnectionHealthBadge health={{ overallStatus: product.status === "updated" ? "updated" : "partial", title: productStatus(product.status), description: "", severity: product.status === "updated" ? "success" : product.status === "authentication_required" ? "danger" : "warning", lastSuccessfulSyncAt: product.lastSuccessfulSyncAt, lastFullSyncAt: null, nextScheduledSyncAt: null, requiresAction: product.requiresAction, actionLabel: null, actionHref: null }} />
         <dl className="integration-detail-grid">
           <div><dt>Última tentativa</dt><dd>{formatDate(product.lastAttemptAt)}</dd></div>
-          <div><dt>Último sucesso</dt><dd>{formatDate(product.lastSuccessfulSyncAt)}</dd></div>
+          <div><dt>{product.resourceType === "accounts" ? "Última atualização da conta" : "Último sucesso"}</dt><dd>{formatDate(product.lastSuccessfulSyncAt)}</dd></div>
+          {product.resourceType === "accounts" ? <>
+            <div><dt>Movimentações</dt><dd>{product.transactionsStatus ? productStatus(product.transactionsStatus) : "Ainda não disponível"}</dd></div>
+            <div><dt>Última atualização das movimentações</dt><dd>{formatDate(product.lastTransactionsSyncAt)}</dd></div>
+            <div><dt>Última movimentação recebida</dt><dd>{formatProviderDate(product.lastTransactionDate)}</dd></div>
+            <div><dt>Saldo</dt><dd>{product.balanceStatus ? productStatus(product.balanceStatus) : "Ainda não disponível"}</dd></div>
+            <div><dt>Última atualização do saldo</dt><dd>{formatDate(product.lastBalanceSyncAt)}</dd></div>
+          </> : null}
           <div><dt>Dados recebidos</dt><dd>{product.recordsReceived.toLocaleString("pt-BR")}</dd></div>
           <div><dt>Novos</dt><dd>{product.recordsInserted.toLocaleString("pt-BR")}</dd></div>
           <div><dt>Atualizados</dt><dd>{product.recordsUpdated.toLocaleString("pt-BR")}</dd></div>
@@ -433,6 +462,7 @@ export function SyncRunDetailsModal({ run, onClose }: { run: RecentSyncActivity;
           <div><dt>Atualizados</dt><dd>{run.recordsUpdated.toLocaleString("pt-BR")}</dd></div>
         </dl>
         {run.warningCodes.length ? <p className="integration-safe-message">Alguns recursos permaneceram com o último estado confiável.</p> : null}
+        {run.safeMessage ? <p className="integration-safe-message">{run.safeMessage}{run.errorCode ? ` (${run.errorCode})` : ""}</p> : null}
       </AtlasModalBody>
     </AtlasModal>
   );

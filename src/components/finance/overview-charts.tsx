@@ -83,6 +83,7 @@ export function AccountMovementChart({
     <div className="account-movement-chart-shell">
       <div className="account-movement-chart-head">
         <div className="account-movement-legend" aria-label="Legenda do gráfico">
+          {showsCashBalance ? <span className="balance"><i />Saldo</span> : null}
           <span className="inflow"><i />Entradas</span>
           <span className="outflow"><i />Saídas</span>
         </div>
@@ -166,7 +167,7 @@ export function AccountMovementChart({
               dataKey={inflowKey}
               name="Entradas"
               stroke="var(--atlas-success)"
-              strokeWidth={2.5}
+              strokeWidth={2.3}
               dot={false}
               activeDot={{ r: 4, fill: "var(--atlas-success)" }}
             />
@@ -184,7 +185,7 @@ export function AccountMovementChart({
               dataKey={resultKey}
               name={showsCashBalance ? "Saldo em caixa" : "Resultado"}
               stroke="var(--atlas-blue)"
-              strokeWidth={2.5}
+              strokeWidth={3.4}
               dot={false}
               activeDot={{ r: 4, fill: "var(--atlas-blue)" }}
             />

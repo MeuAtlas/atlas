@@ -70,6 +70,20 @@ const statusLabels: Record<CurrentCardInvoice["status"], string> = {
   estimated: "Fatura estimada",
 };
 
+const valueChangeReasonLabels: Record<string,string> = {
+  new_transaction: "Nova compra recebida",
+  transaction_updated: "MovimentaÃ§Ã£o atualizada pela instituiÃ§Ã£o",
+  transaction_deleted: "MovimentaÃ§Ã£o removida pela instituiÃ§Ã£o",
+  bank_total_changed: "Valor atualizado pelo banco",
+  credit_received: "CrÃ©dito recebido",
+  refund_received: "Estorno recebido",
+  manual_adjustment: "Ajuste confirmado manualmente",
+  complete_resync: "SincronizaÃ§Ã£o completa",
+  partial_sync_preserved: "SincronizaÃ§Ã£o parcial ignorada",
+  cache_refresh: "AtualizaÃ§Ã£o de visualizaÃ§Ã£o",
+  unknown: "AtualizaÃ§Ã£o conciliada",
+};
+
 const exclusionLabels: Record<InvoiceExclusionReason, string> = {
   outside_cycle: "Fora do ciclo",
   cancelled: "Cancelado",
@@ -895,6 +909,21 @@ export function InvoiceDetailsDrawer({
                   <b>{invoice.preservationReason??"NÃ£o informado"}</b>
                 </div>
               </section>
+
+              {cycleDetails?.valueHistory.length ? (
+                <details className="invoice-calculation">
+                  <summary>HistÃ³rico do valor</summary>
+                  <div className="invoice-value-history">
+                    {cycleDetails.valueHistory.map(entry => (
+                      <div key={entry.id}>
+                        <time dateTime={entry.createdAt}>{formatDate(entry.createdAt)}</time>
+                        <b><Money value={entry.displayTotal} /></b>
+                        <small>{valueChangeReasonLabels[entry.reason] ?? "AtualizaÃ§Ã£o conciliada"}</small>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
 
               {invoice.totalSource === "calculated_transactions" ? (
                 <p className="invoice-details-estimate">

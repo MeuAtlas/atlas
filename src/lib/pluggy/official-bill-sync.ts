@@ -1,7 +1,7 @@
 import "server-only";
 
 import {createHash} from "node:crypto";
-import {normalizeProviderBill} from "./bill-domain";
+import {normalizeProviderBill,resolveBillPaymentStatus} from "./bill-domain";
 import {databaseFailure,maskId} from "./diagnostics";
 import {findPluggyIdentityByItem,retrievePluggyBill} from "./client";
 import {IntegrationSyncError,normalizeIntegrationError} from "./errors";
@@ -43,10 +43,19 @@ export async function persistOfficialBills(input:{
    }
    const closing=normalized.closingDate??normalized.dueDate;
    const reference=referenceMonth(closing,normalized.dueDate);
-   const existing=await supabase.from("card_invoices").select("id")
+   const existing=await supabase.from("card_invoices").select("id,provider_updated_at")
     .eq("owner_id",ownerId).eq("provider","pluggy")
     .eq("provider_bill_id",normalized.providerBillId).maybeSingle();
    if(existing.error)databaseFailure(existing.error,"bills_fetch","card_invoices.provider_lookup");
+   if(
+    existing.data?.provider_updated_at&&bill.updatedAt&&
+    Date.parse(String(existing.data.provider_updated_at))>Date.parse(bill.updatedAt)
+   )continue;
+   const paymentState=resolveBillPaymentStatus({
+    total:normalized.providerInvoiceTotal,
+    payments:normalized.payments,
+    dueDate:normalized.dueDate,
+   });
    const row={
     owner_id:ownerId,workspace_id:card.data.workspace_id,
     visibility:card.data.visibility,card_id:cardId,
@@ -56,8 +65,12 @@ export async function persistOfficialBills(input:{
     closing_date:closing,due_date:normalized.dueDate,
     total_amount:normalized.providerInvoiceTotal,
     invoice_total:normalized.providerInvoiceTotal,
-    paid_amount:0,outstanding_amount:normalized.providerInvoiceTotal,
-    purchase_count:0,status:"closed",source:"pluggy_bill",
+     paid_amount:paymentState.paidAmount,
+     outstanding_amount:Math.max(0,normalized.providerInvoiceTotal-paymentState.paidAmount),
+     purchase_count:0,status:paymentState.status==="installment_payment"
+      ? "partially_paid"
+      : paymentState.status==="unknown"?"open":paymentState.status,
+     source:"pluggy_bill",
     total_source:"provider_bill",external_id:`pluggy:bill:${bill.id}`,
     provider:"pluggy",provider_bill_id:bill.id,
     provider_account_id:providerAccountId,
@@ -76,8 +89,15 @@ export async function persistOfficialBills(input:{
       financeChargeCount:normalized.financeCharges.length,
       closingDateSource:normalized.closingDate?"provider_bill":"due_date_fallback",
     },
-    provider_updated_at:bill.updatedAt??null,
-    updated_at:new Date().toISOString(),
+     provider_updated_at:bill.updatedAt??null,
+     last_bank_total_updated_at:bill.updatedAt??new Date().toISOString(),
+     last_remote_updated_at:bill.updatedAt??null,
+     last_sync_attempt_at:new Date().toISOString(),
+     last_successful_sync_at:new Date().toISOString(),
+     last_reliable_snapshot_at:new Date().toISOString(),
+     sync_status:"updated",value_change_reason:"bank_total_changed",
+     value_change_source:"pluggy_bill",
+     updated_at:new Date().toISOString(),
    };
    const saved=existing.data
     ? await supabase.from("card_invoices").update(row)

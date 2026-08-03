@@ -1085,6 +1085,12 @@ function MovementDetailsDrawer({
                         </span>
                       </label>
                     ) : null}
+                    <p className="movement-person-explanation">
+                      Ao confirmar, o Atlas memoriza o identificador seguro do
+                      destino. Próximos pagamentos para o mesmo destino serão
+                      associados ao compromisso do mês e somados até quitar o
+                      valor previsto.
+                    </p>
                     <button
                       type="submit"
                       disabled={!commitmentOccurrences.length ||

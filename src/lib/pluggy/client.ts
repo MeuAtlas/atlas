@@ -94,7 +94,7 @@ export async function listPluggyLoans(itemId:string){
  throw new PluggyError("Loan pagination exceeded the safety limit","pluggy_pagination_limit",undefined,true);
 }
 export const getPluggyLoans=listPluggyLoans;
-export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom}});
+export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string,dateTo?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom,dateTo,pageSize:500}});
 export const getPluggyTransaction=(transactionId:string)=>pluggyRequest<PluggyTransaction>(`/transactions/${encodeURIComponent(transactionId)}`);
 export async function listPluggyBills(accountId:string){
  const rows:PluggyBill[]=[];

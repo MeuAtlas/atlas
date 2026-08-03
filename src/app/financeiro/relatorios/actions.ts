@@ -23,6 +23,9 @@ const money = z.preprocess((value) => {
 function refresh(year: number, month: number) {
   revalidatePath("/financeiro/relatorios");
   revalidatePath(`/financeiro/relatorios/${year}/${String(month).padStart(2, "0")}`);
+  revalidatePath("/financeiro");
+  revalidatePath("/financeiro/movimentacoes");
+  revalidatePath("/financeiro/cartoes");
 }
 
 export async function configureFinancialTrackingStart(data: FormData) {
@@ -88,6 +91,68 @@ export async function saveOfficialStatement(data: FormData) {
   refresh(year, month);
 }
 
+export async function linkStatementPayment(data: FormData) {
+  const workspaceId = uuid.parse(data.get("workspace_id"));
+  const statementId = uuid.parse(data.get("statement_id"));
+  const transactionId = uuid.parse(data.get("transaction_id"));
+  const year = z.coerce.number().int().min(1900).max(2200).parse(data.get("year"));
+  const month = z.coerce.number().int().min(1).max(12).parse(data.get("month"));
+  const allocatedRaw = String(data.get("allocated_amount") ?? "").trim();
+  const allocatedAmount = allocatedRaw ? money.parse(allocatedRaw) : null;
+  const context = await requireAdmin(workspaceId);
+  const linked = await context.supabase.rpc("allocate_credit_card_statement_payment", {
+    p_statement_id: statementId,
+    p_transaction_id: transactionId,
+    p_allocated_amount: allocatedAmount,
+  });
+  if (linked.error) throw new Error(linked.error.message || "Não foi possível vincular o pagamento à fatura.");
+  const monthRow = await context.supabase.from("financial_months").select("id")
+    .eq("workspace_id", workspaceId).eq("reference_year", year)
+    .eq("reference_month", month).maybeSingle();
+  await recordAudit(context, { workspaceId, financialMonthId: monthRow.data?.id,
+    action: "statement_payment_linked", metadata: { statement_id: statementId,
+      transaction_id: transactionId, allocated_amount: allocatedAmount } });
+  refresh(year, month);
+}
+
+export async function confirmStatementPayment(data: FormData) {
+  const workspaceId = uuid.parse(data.get("workspace_id"));
+  const statementId = uuid.parse(data.get("statement_id"));
+  const year = z.coerce.number().int().min(1900).max(2200).parse(data.get("year"));
+  const month = z.coerce.number().int().min(1).max(12).parse(data.get("month"));
+  const amount = money.parse(data.get("amount"));
+  const paymentDate = z.string().date().parse(data.get("payment_date"));
+  const directThirdParty = String(data.get("direct_third_party") ?? "") === "on";
+  const context = await requireAdmin(workspaceId);
+  const confirmed = await context.supabase.rpc("confirm_credit_card_statement_payment", {
+    p_statement_id: statementId,
+    p_amount: amount,
+    p_payment_date: paymentDate,
+    p_direct_third_party: directThirdParty,
+  });
+  if (confirmed.error) throw new Error(confirmed.error.message || "Não foi possível confirmar este pagamento.");
+  const monthRow = await context.supabase.from("financial_months").select("id")
+    .eq("workspace_id", workspaceId).eq("reference_year", year)
+    .eq("reference_month", month).maybeSingle();
+  await recordAudit(context, { workspaceId, financialMonthId: monthRow.data?.id,
+    action: directThirdParty ? "statement_third_party_payment_confirmed" : "statement_payment_manually_confirmed",
+    metadata: { statement_id: statementId, amount, payment_date: paymentDate } });
+  refresh(year, month);
+}
+
+export async function removeStatementPayment(data: FormData) {
+  const workspaceId = uuid.parse(data.get("workspace_id"));
+  const paymentId = uuid.parse(data.get("payment_id"));
+  const year = z.coerce.number().int().min(1900).max(2200).parse(data.get("year"));
+  const month = z.coerce.number().int().min(1).max(12).parse(data.get("month"));
+  const context = await requireAdmin(workspaceId);
+  const removed = await context.supabase.rpc("remove_credit_card_statement_payment", {
+    p_payment_id: paymentId,
+  });
+  if (removed.error) throw new Error(removed.error.message || "Não foi possível corrigir o vínculo.");
+  refresh(year, month);
+}
+
 export async function assignCardTransactionResponsibility(data: FormData) {
   const workspaceId = uuid.parse(data.get("workspace_id"));
   const purchaseId = uuid.parse(data.get("purchase_id"));
@@ -148,8 +213,16 @@ export async function closeFinancialMonth(data: FormData) {
   const context = await requireAdmin(workspaceId);
   const preview = await getMonthlyReportPreview({ supabase: context.supabase, workspaceId, year, month, tracking: context.tracking, canCreate: true, ownerId: context.user.id, includeOwnerPrivateData: context.includeOwnerPrivateData });
   if (!preview.schemaReady) throw new Error("A migration do relatório mensal ainda não foi aplicada.");
-  const validation = validateMonthlyClosing({ period: preview.snapshot.period, status: preview.financialMonth.status, statements: preview.statements, purchases: preview.purchases, allocations: preview.snapshot.allocations, accountsSyncHealthy: true });
+  const validation = validateMonthlyClosing({ period: preview.snapshot.period, status: preview.financialMonth.status, statements: preview.statements, openStatements: preview.openStatements, unmatchedPaymentCount: preview.snapshot.paymentReconciliation?.unmatchedCandidates, purchases: preview.purchases, allocations: preview.snapshot.allocations, accountsSyncHealthy: true, expectedStatementCount: preview.cards.length });
   if (!validation.canClose) throw new Error(validation.blockers[0]?.description ?? "Ainda existem informações para conferir.");
+  if (["awaiting_consolidation", "needs_attention", "reopened"].includes(preview.financialMonth.status)) {
+    const prepared = await context.supabase.rpc("prepare_financial_month_for_review", {
+      p_month_id: preview.financialMonth.id,
+    });
+    if (prepared.error) {
+      throw new Error(prepared.error.message || "Não foi possível preparar este mês para conclusão.");
+    }
+  }
   const hash = hashMonthlySnapshot(preview.snapshot);
   if (preview.snapshot.tracking.availableDataStartAt !== preview.financialMonth.available_data_start_at) {
     const trackingUpdate = await context.supabase.from("financial_months").update({ available_data_start_at: preview.snapshot.tracking.availableDataStartAt }).eq("id", preview.financialMonth.id);
@@ -169,7 +242,7 @@ export async function prepareFinancialMonthForReview(data: FormData) {
   const month = z.coerce.number().int().min(1).max(12).parse(data.get("month"));
   const context = await requireAdmin(workspaceId);
   const preview = await getMonthlyReportPreview({ supabase: context.supabase, workspaceId, year, month, tracking: context.tracking, canCreate: true, ownerId: context.user.id, includeOwnerPrivateData: context.includeOwnerPrivateData });
-  const validation = validateMonthlyClosing({ period: preview.snapshot.period, status: preview.financialMonth.status, statements: preview.statements, purchases: preview.purchases, allocations: preview.snapshot.allocations, accountsSyncHealthy: true });
+  const validation = validateMonthlyClosing({ period: preview.snapshot.period, status: preview.financialMonth.status, statements: preview.statements, openStatements: preview.openStatements, unmatchedPaymentCount: preview.snapshot.paymentReconciliation?.unmatchedCandidates, purchases: preview.purchases, allocations: preview.snapshot.allocations, accountsSyncHealthy: true, expectedStatementCount: preview.cards.length });
   if (!validation.canClose) throw new Error(validation.blockers[0]?.description ?? "Ainda existem informações para conferir.");
   const updated = await context.supabase.rpc("prepare_financial_month_for_review", { p_month_id: preview.financialMonth.id });
   if (updated.error) {

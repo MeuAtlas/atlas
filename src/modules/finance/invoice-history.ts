@@ -78,14 +78,70 @@ export type CreditCardInvoiceHistoryResult = {
 
 export type InvoiceHistoryAnalyticsEntry = Pick<
   CreditCardInvoiceHistoryItem,
-  "id" | "cardId" | "dueDate" | "status" | "total" | "totalSource"
->;
+  "id" | "cardId" | "dueDate" | "total" | "totalSource"
+> & {
+  status: StoredCardInvoice["status"];
+  cycleStartDate?: string | null;
+  cycleEndDate?: string | null;
+  closingDate?: string | null;
+  expectedPaymentDate?: string | null;
+  paymentDate?: string | null;
+  paidAmount?: number | null;
+  reliableTotal?: number | null;
+  estimatedTotal?: number | null;
+  paymentConfirmationStatus?: string | null;
+  paymentConfirmationSource?: string | null;
+  isConfirmed?: boolean;
+};
+
+export type StatementHistoryStatus =
+  | "paid"
+  | "open"
+  | "closed_unpaid"
+  | "payment_detected"
+  | "partially_paid"
+  | "estimated"
+  | "missing"
+  | "cancelled";
+
+export type StatementHistoryChartItem = {
+  statementId: string;
+  statementIds: string[];
+  year: number;
+  month: number;
+  cashMonth: string;
+  monthLabel: string;
+  cycleStartDate: string | null;
+  cycleEndDate: string | null;
+  closingDate: string | null;
+  dueDate: string | null;
+  paymentDate: string | null;
+  status: StatementHistoryStatus;
+  statusLabel: string;
+  paidAmount: number | null;
+  displayAmount: number | null;
+  amountSource: "paid_amount" | "bank_total" | "reliable_total" | "estimated_total";
+  participatesInMedian: boolean;
+  isCurrentOpenStatement: boolean;
+  isConfirmed: boolean;
+  invoiceCount: number;
+  tooltip: {
+    title: string;
+    cycleLabel: string | null;
+    closingLabel: string | null;
+    dueLabel: string | null;
+    paymentLabel: string | null;
+    statusLabel: string;
+    sourceLabel: string;
+  };
+};
 
 export type InvoiceHistoryAnalytics = {
   months: Array<{
     month: string;
     total: number;
     invoiceCount: number;
+    item: StatementHistoryChartItem;
   }>;
   median: number | null;
   average: number | null;
@@ -115,30 +171,177 @@ function median(values: number[]) {
     : roundedMoney((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
+const dateMonth = (value: string | null | undefined) =>
+  value && /^\d{4}-\d{2}/.test(value) ? value.slice(0, 7) : null;
+
+function nextMonth(value: string) {
+  const [year, month] = value.slice(0, 7).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month, 1));
+  return date.toISOString().slice(0, 7);
+}
+
+/** Cash-basis month shared by card history and monthly-report projections. */
+export function getStatementCashMonth(statement: InvoiceHistoryAnalyticsEntry) {
+  return dateMonth(statement.paymentDate) ??
+    dateMonth(statement.dueDate) ??
+    dateMonth(statement.expectedPaymentDate) ??
+    (dateMonth(statement.closingDate) ? nextMonth(statement.closingDate!) : null) ??
+    dateMonth(statement.dueDate) ??
+    dateMonth(statement.cycleEndDate);
+}
+
+function chartStatus(statement: InvoiceHistoryAnalyticsEntry): StatementHistoryStatus {
+  if (statement.status === "cancelled" || statement.paymentConfirmationStatus === "cancelled") return "cancelled";
+  const confirmation = statement.paymentConfirmationStatus;
+  if (["paid", "manually_confirmed", "overpaid"].includes(confirmation ?? "") ||
+      (!confirmation && statement.status === "paid")) return "paid";
+  if (confirmation === "partially_paid" || statement.status === "partially_paid") return "partially_paid";
+  if (["payment_detected", "payment_mismatch"].includes(confirmation ?? "")) return "payment_detected";
+  if (statement.status === "open" || confirmation === "open") return "open";
+  if (["closed", "due", "overdue"].includes(statement.status)) return "closed_unpaid";
+  return "estimated";
+}
+
+const STATUS_LABELS: Record<StatementHistoryStatus, string> = {
+  paid: "Paga",
+  open: "Em aberto",
+  closed_unpaid: "Aguardando pagamento",
+  payment_detected: "Pagamento encontrado",
+  partially_paid: "Parcialmente paga",
+  estimated: "Estimativa",
+  missing: "Sem fatura identificada",
+  cancelled: "Cancelada",
+};
+
+export function getStatementChartDisplayAmount(statement: InvoiceHistoryAnalyticsEntry) {
+  const status = chartStatus(statement);
+  const paid = amountOrNull(statement.paidAmount);
+  if (status === "paid" && paid !== null && paid > 0) {
+    return { amount: paid, source: "paid_amount" as const };
+  }
+  if (status === "partially_paid" && paid !== null && paid > 0) {
+    return { amount: paid, source: "paid_amount" as const };
+  }
+  const official = amountOrNull(statement.total);
+  if (official !== null && official > 0) return { amount: official, source: "bank_total" as const };
+  const reliable = amountOrNull(statement.reliableTotal);
+  if (reliable !== null && reliable > 0) return { amount: reliable, source: "reliable_total" as const };
+  const estimated = amountOrNull(statement.estimatedTotal);
+  return { amount: estimated && estimated > 0 ? estimated : null, source: "estimated_total" as const };
+}
+
+const isoDateLabel = (value: string | null | undefined) => value
+  ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`))
+  : null;
+
+function sourceLabel(source: StatementHistoryChartItem["amountSource"], status: StatementHistoryStatus) {
+  if (source === "paid_amount") return "Pagamento identificado na conta";
+  if (source === "bank_total") return "Total oficial ou informado pela instituição";
+  if (source === "reliable_total") return "Último total confiável";
+  return status === "estimated" ? "Estimativa das compras identificadas" : "Total calculado";
+}
+
+function toChartItem(statement: InvoiceHistoryAnalyticsEntry): StatementHistoryChartItem | null {
+  const cashMonth = getStatementCashMonth(statement);
+  const status = chartStatus(statement);
+  if (!cashMonth || status === "cancelled") return null;
+  const display = getStatementChartDisplayAmount(statement);
+  if (display.amount === null) return null;
+  const confirmed = statement.isConfirmed ?? status === "paid";
+  const [year, month] = cashMonth.split("-").map(Number);
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${cashMonth}-01T12:00:00Z`));
+  return {
+    statementId: statement.id,
+    statementIds: [statement.id],
+    year,
+    month,
+    cashMonth,
+    monthLabel,
+    cycleStartDate: statement.cycleStartDate ?? null,
+    cycleEndDate: statement.cycleEndDate ?? null,
+    closingDate: statement.closingDate ?? null,
+    dueDate: statement.dueDate ?? null,
+    paymentDate: statement.paymentDate ?? null,
+    status,
+    statusLabel: STATUS_LABELS[status],
+    paidAmount: display.source === "paid_amount" ? display.amount : null,
+    displayAmount: display.amount,
+    amountSource: display.source,
+    participatesInMedian: status === "paid" && confirmed && display.amount > 0,
+    isCurrentOpenStatement: ["open", "closed_unpaid", "payment_detected", "partially_paid", "estimated"].includes(status),
+    isConfirmed: confirmed,
+    invoiceCount: 1,
+    tooltip: {
+      title: monthLabel,
+      cycleLabel: statement.cycleStartDate && statement.cycleEndDate
+        ? `${isoDateLabel(statement.cycleStartDate)} a ${isoDateLabel(statement.cycleEndDate)}` : null,
+      closingLabel: isoDateLabel(statement.closingDate),
+      dueLabel: isoDateLabel(statement.dueDate),
+      paymentLabel: status === "paid" ? isoDateLabel(statement.paymentDate) : null,
+      statusLabel: STATUS_LABELS[status],
+      sourceLabel: sourceLabel(display.source, status),
+    },
+  };
+}
+
+const statusPriority: Record<StatementHistoryStatus, number> = {
+  open: 8, payment_detected: 7, partially_paid: 6, closed_unpaid: 5,
+  estimated: 4, paid: 3, missing: 2, cancelled: 1,
+};
+
+export function aggregateStatementsByCashMonth(statements: InvoiceHistoryAnalyticsEntry[]) {
+  const grouped = new Map<string, StatementHistoryChartItem>();
+  for (const statement of statements) {
+    const item = toChartItem(statement);
+    if (!item || item.displayAmount === null) continue;
+    const current = grouped.get(item.cashMonth);
+    if (!current) { grouped.set(item.cashMonth, item); continue; }
+    const dominant = statusPriority[item.status] > statusPriority[current.status] ? item : current;
+    const combinedAmount = roundedMoney((current.displayAmount ?? 0) + item.displayAmount);
+    grouped.set(item.cashMonth, {
+      ...dominant,
+      statementId: current.statementId,
+      statementIds: [...current.statementIds, ...item.statementIds],
+      displayAmount: combinedAmount,
+      paidAmount: current.participatesInMedian && item.participatesInMedian ? combinedAmount : dominant.paidAmount,
+      participatesInMedian: current.participatesInMedian && item.participatesInMedian,
+      isConfirmed: current.isConfirmed && item.isConfirmed,
+      invoiceCount: current.invoiceCount + item.invoiceCount,
+    });
+  }
+  return [...grouped.values()].sort((left, right) => left.cashMonth.localeCompare(right.cashMonth));
+}
+
+export function calculatePaidStatementMedian(items: StatementHistoryChartItem[]) {
+  return median(items.flatMap(item => item.participatesInMedian && item.displayAmount && item.displayAmount > 0 ? [item.displayAmount] : []));
+}
+
+export function getStatementForCashMonth(statements: InvoiceHistoryAnalyticsEntry[], cashMonth: string) {
+  return aggregateStatementsByCashMonth(statements).find(item => item.cashMonth === cashMonth) ?? null;
+}
+
 export function buildInvoiceHistoryAnalytics(
   invoices: InvoiceHistoryAnalyticsEntry[],
   currentTotal: number | null,
   monthLimit = 12,
 ): InvoiceHistoryAnalytics {
-  const grouped = new Map<string, { total: number; invoiceCount: number }>();
-  for (const invoice of invoices) {
-    if (invoice.status === "cancelled" || invoice.total === null) continue;
-    const month = invoice.dueDate.slice(0, 7);
-    const current = grouped.get(month) ?? { total: 0, invoiceCount: 0 };
-    current.total = roundedMoney(current.total + Math.abs(invoice.total));
-    current.invoiceCount += 1;
-    grouped.set(month, current);
-  }
-  const months = [...grouped.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(-Math.max(1, monthLimit))
-    .map(([month, value]) => ({ month, ...value }));
-  const totals = months.map(month => month.total);
-  const historicalMedian = median(totals);
+  const allItems = aggregateStatementsByCashMonth(invoices);
+  const currentItem = [...allItems].reverse().find(item => item.isCurrentOpenStatement) ?? null;
+  const paidItems = allItems.filter(item => item.participatesInMedian);
+  const chartItems = allItems.slice(-Math.max(1, monthLimit));
+  const months = chartItems.map(item => ({
+    month: item.cashMonth,
+    total: item.displayAmount ?? 0,
+    invoiceCount: item.invoiceCount,
+    item,
+  }));
+  const totals = paidItems.map(item => item.displayAmount ?? 0).filter(value => value > 0);
+  const historicalMedian = calculatePaidStatementMedian(paidItems);
   const average = totals.length
     ? roundedMoney(totals.reduce((sum, value) => sum + value, 0) / totals.length)
     : null;
-  const normalizedCurrent = amountOrNull(currentTotal);
+  const normalizedCurrent = currentItem?.displayAmount ?? amountOrNull(currentTotal);
   const currentDifference =
     normalizedCurrent !== null && historicalMedian !== null
       ? roundedMoney(normalizedCurrent - historicalMedian)

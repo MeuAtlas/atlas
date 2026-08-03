@@ -15,7 +15,7 @@ export type IntegrationActionState={status:"idle"|"success"|"error";message:stri
 const okay=(message:string):IntegrationActionState=>({status:"success",message});
 const fail=(error:unknown):IntegrationActionState=>({status:"error",message:publicPluggyMessage(error)});
 function field(data:FormData,name:string,max=180){const value=String(data.get(name)??"").trim();if(!value||value.length>max)throw new Error("invalid_field");return value}
-function refresh(){revalidatePath("/financeiro");revalidatePath("/financeiro/integracoes");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/cartoes?view=current");revalidatePath("/financeiro/cartoes?view=history");revalidatePath("/financeiro/movimentacoes")}
+function refresh(){revalidatePath("/financeiro");revalidatePath("/financeiro/integracoes");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/cartoes?view=current");revalidatePath("/financeiro/cartoes?view=history");revalidatePath("/financeiro/movimentacoes");revalidatePath("/financeiro/relatorios");revalidatePath("/financeiro/relatorios/[year]/[month]","page")}
 async function refreshIntegrationTags(
  supabase:Awaited<ReturnType<typeof requireFinanceAccess>>["supabase"],
  userId:string,
@@ -34,7 +34,7 @@ function refreshSyncedResources(summary:Awaited<ReturnType<typeof syncPluggyItem
  revalidatePath("/financeiro/integracoes");
  const succeeded=new Set(summary.resources.filter(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status)).map(resource=>resource.resourceType));
  if(succeeded.has("accounts")||succeeded.has("transactions")){revalidatePath("/financeiro");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/movimentacoes");revalidatePath("/financeiro/planejamento");revalidatePath("/financeiro/relatorios")}
- if(succeeded.has("credit_cards")||succeeded.has("bills")){revalidatePath("/financeiro");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/planejamento")}
+ if(succeeded.has("credit_cards")||succeeded.has("bills")){revalidatePath("/financeiro");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/planejamento");revalidatePath("/financeiro/relatorios");revalidatePath("/financeiro/relatorios/[year]/[month]","page")}
  if(succeeded.has("loans"))revalidatePath("/financeiro/emprestimos");
 }
 function syncFeedback(result:Awaited<ReturnType<typeof syncPluggyItem>>){
@@ -88,6 +88,22 @@ export async function retryResourceAction(_state:IntegrationActionState,data:For
   await refreshIntegrationTags(supabase,user.id,connectionId);
   return okay(`${resource==="transactions"?"Movimentações":"Recurso"} atualizado em uma tentativa independente.`);
  }catch(error){logIntegrationFailure(error,{operation:"sync.resource.retry",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Resource Retry Failure]"});return fail(error)}
+}
+export async function recoverPluggyTransactionsAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
+ const {supabase,user}=await requireFinanceAccess();const started=Date.now();
+ try{
+  const connectionId=field(data,"connection_id",50);
+  const result=await syncPluggyItem(supabase,user.id,connectionId,false,{
+   triggerType:"recovery",resourceTypes:["accounts","transactions"],
+   recoveryWindowDays:90,
+  });
+  refreshSyncedResources(result.summary);
+  await refreshIntegrationTags(supabase,user.id,connectionId);
+  return okay(syncFeedback(result));
+ }catch(error){
+  logIntegrationFailure(error,{operation:"sync.recovery",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Recovery Failure]"});
+  return fail(error);
+ }
 }
 export async function toggleAutomaticSyncAction(
  _state:IntegrationActionState,

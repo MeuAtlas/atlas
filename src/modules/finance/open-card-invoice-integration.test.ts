@@ -6,26 +6,27 @@ import {
   resolveOpenInvoiceTotal,
 } from "./open-card-invoice";
 
-test("caso 7082,45 usa estimativa maior mesmo com detalhe parcial", () => {
+test("caso 7082,45 preserva o snapshot confiável com detalhe parcial", () => {
   const total = resolveOpenInvoiceTotal({
-    confirmedOpenTotal: 7082.45,
-    calculatedTotal: 7111.37,
-    calculatedReliable: true,
-    lastReliableTotal: 6900,
+    calculatedTotal: 7082.45,
+    calculatedReliable: false,
+    lastReliableTotal: 7669.72,
+    persistedDisplayTotal: 7669.72,
+    persistedDataCompleteness: "partial",
   });
   assert.deepEqual(
     {
       cards: total.amount,
       movements: total.amount,
       overview: total.amount,
-      difference: openInvoiceDifference(total.amount, 7111.37),
+      difference: openInvoiceDifference(total.amount, 7082.45),
       detailsCompleteness: "partial",
     },
     {
-      cards: 7111.37,
-      movements: 7111.37,
-      overview: 7111.37,
-      difference: 0,
+      cards: 7669.72,
+      movements: 7669.72,
+      overview: 7669.72,
+      difference: 587.27,
       detailsCompleteness: "partial",
     },
   );

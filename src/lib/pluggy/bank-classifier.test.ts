@@ -131,3 +131,12 @@ test("pagamento Santander descrito como cartão de crédito é pagamento de fatu
   assert.equal(payment.transaction_role, "invoice_payment");
   assert.equal(payment.financial_origin, "invoice");
 });
+
+test("abreviação PGTO também identifica pagamento da fatura", () => {
+  const payment = classifyBankTransaction(tx({
+    type: "DEBIT", amount: -5000,
+    description: "PGTO FATURA CARTAO MASTER",
+  }));
+  assert.equal(payment.transaction_role, "invoice_payment");
+  assert.equal(payment.bank_direction, "outflow");
+});

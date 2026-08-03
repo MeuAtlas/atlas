@@ -34,6 +34,11 @@ export type IntegrationProductSummary = {
   freshness: string;
   lastAttemptAt: string | null;
   lastSuccessfulSyncAt: string | null;
+  lastTransactionsSyncAt: string | null;
+  lastBalanceSyncAt: string | null;
+  lastTransactionDate: string | null;
+  transactionsStatus: IntegrationProductStatus | null;
+  balanceStatus: IntegrationProductStatus | null;
   recordsReceived: number;
   recordsInserted: number;
   recordsUpdated: number;
@@ -80,6 +85,8 @@ export type RecentSyncActivity = {
   recordsUpdated: number;
   recordsPreserved: number;
   warningCodes: string[];
+  errorCode: string | null;
+  safeMessage: string | null;
 };
 
 export type AdvancedCardDiagnostic = {
@@ -366,6 +373,8 @@ export function buildFinanceIntegrationsDashboard(
           candidateName.trim() === resourceMetadataName.trim();
       });
       const relatedStatus = relatedResources.map(productStatus);
+      const transactionResource = relatedResources.find(candidate =>
+        candidate.resourceType === "transactions") ?? null;
       const ownStatus = productStatus(resource);
       const status: IntegrationProductStatus = relatedStatus.includes("authentication_required")
         ? "authentication_required"
@@ -383,6 +392,21 @@ export function buildFinanceIntegrationsDashboard(
         freshness: resource.dataFreshness,
         lastAttemptAt: resource.lastAttemptAt,
         lastSuccessfulSyncAt: resource.lastSuccessfulSyncAt,
+        lastTransactionsSyncAt: typeof resource.metadata.last_transactions_sync_at === "string"
+          ? resource.metadata.last_transactions_sync_at
+          : transactionResource?.lastSuccessfulSyncAt ?? null,
+        lastBalanceSyncAt: resource.resourceType === "accounts"
+          ? typeof resource.metadata.last_balance_sync_at === "string"
+            ? resource.metadata.last_balance_sync_at
+            : resource.lastSuccessfulSyncAt
+          : null,
+        lastTransactionDate: typeof resource.metadata.last_transaction_date === "string"
+          ? resource.metadata.last_transaction_date
+          : null,
+        transactionsStatus: transactionResource
+          ? productStatus(transactionResource)
+          : null,
+        balanceStatus: resource.resourceType === "accounts" ? ownStatus : null,
         recordsReceived: resource.received,
         recordsInserted: resource.inserted,
         recordsUpdated: resource.updated,

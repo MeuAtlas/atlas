@@ -28,7 +28,7 @@ function InvoiceStatusBadge({
       <span
         className={`invoice-source-badge${partial ? " is-partial" : ""}`}
       >
-        {partial ? "Dados parciais" : summary.amountSourceLabel}
+        {partial ? "Atualizada parcialmente" : summary.amountSourceLabel}
       </span>
     </div>
   );

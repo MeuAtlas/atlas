@@ -11,6 +11,7 @@ import {
   getMonthlyCardTransactions,
   getMonthlyPeriod,
   isStatementForMonthlyConsumption,
+  mergeDependentCostsIntoRecurringGroups,
   nextMonthlyReportVersion,
   resolveMonthlyPurchaseResponsibility,
   shouldReuseClosedReport,
@@ -21,6 +22,30 @@ import {
 import type { FinancialTransaction } from "./types";
 
 const period = getMonthlyPeriod(2026, 7);
+
+test("custo de dependente soma extras vinculados sem duplicar compromissos", () => {
+  const result = mergeDependentCostsIntoRecurringGroups([{
+    name: "Anna Letícia",
+    type: "dependent",
+    total: 2330.12,
+    items: [
+      { name: "Escola Anna", amount: 1331 },
+      { name: "Plano de Saúde Anna", amount: 329.13 },
+      { name: "WellHub Anna", amount: 319.99 },
+      { name: "Mesada", amount: 350 },
+    ],
+  }], [{
+    name: "Anna Letícia",
+    isDependent: true,
+    actualSpentCents: 55000,
+    projectedCommitmentsCents: 198012,
+  }]);
+  assert.equal(result[0].total, 2530.12);
+  assert.deepEqual(result[0].items.at(-1), {
+    name: "Extras e outras despesas",
+    amount: 200,
+  });
+});
 const purchase = (overrides: Partial<MonthlyCardPurchase> = {}) => ({
   id: "purchase-1", card_id: "card-1", invoice_id: null, description: "Compra",
   total_amount: 100, installment_amount: 100, purchase_date: "2026-07-15",
@@ -38,6 +63,15 @@ const statement = (overrides: Partial<MonthlyStatement> = {}) => ({
   official_total_amount: 100, calculated_total_amount: 100,
   reconciliation_difference: 0, reconciliation_status: "matched",
   official_amount_confirmed: true, closing_date: "2026-08-03", due_date: "2026-08-10",
+  expected_statement_amount: 100, current_open_amount: 100,
+  detected_payment_amount: 100, confirmed_payment_amount: 100,
+  payment_difference: 0, payment_confirmation_status: "paid",
+  payment_confirmation_source: "bank_transaction",
+  payment_confirmed_at: "2026-07-15T12:00:00Z", statement_status: "paid",
+  personal_share_amount: 100, third_party_share_amount: 0,
+  payments: [{ id: "statement-payment-1", bankTransactionId: "bank-1",
+    allocatedAmount: 100, paymentDate: "2026-07-15",
+    paymentSource: "bank_transaction", isManual: false, isThirdParty: false }],
   ...overrides,
 }) as MonthlyStatement;
 const bank = (overrides: Partial<FinancialTransaction> = {}) => ({
@@ -92,10 +126,10 @@ test("7. reembolso pendente é aviso e não bloqueia fechamento", () => {
   assert.equal(result.issues.find((item) => item.type === "pending_reimbursement")?.severity, "info");
 });
 
-test("8. diferença de fatura bloqueia até resolução consciente", () => {
-  const result = validateMonthlyClosing({ period, now: new Date("2026-08-05T12:00:00Z"), status: "review", statements: [statement({ official_total_amount: 120, reconciliation_status: "different" })], purchases: [purchase()] });
+test("8. diferença do pagamento bloqueia até resolução consciente", () => {
+  const result = validateMonthlyClosing({ period, now: new Date("2026-08-05T12:00:00Z"), status: "review", statements: [statement({ payment_confirmation_status: "payment_mismatch", payment_difference: 20 })], purchases: [purchase()] });
   assert.equal(result.canClose, false);
-  assert.equal(result.blockers[0]?.type, "statement_difference");
+  assert.equal(result.blockers[0]?.type, "statement_payment_review");
 });
 
 test("9. compra sem vínculo explícito pertence ao titular e não pede confirmação", () => {
@@ -125,7 +159,7 @@ test("9.1 compra herda a pessoa responsável definida no instrumento do cartão"
   assert.equal(calculateThirdPartyConsumption([resolved]), 100);
 });
 
-test("9.2 relatório de julho confere a fatura do consumo de julho, não a paga em julho", () => {
+test("9.2 análise de consumo preserva a referência do ciclo sem definir o mês de caixa", () => {
   const juneConsumptionPaidInJuly = statement({
     id: "june-invoice",
     reference_month: "2026-07-01",
@@ -204,11 +238,11 @@ test("14. fatura prevista permanece separada do consumo por competência", () =>
   assert.equal(snapshot.totals.forecastCardInvoice, 180);
 });
 
-test("15. mediana mensal usa o histórico disponível de até doze meses e não transações individuais", () => {
+test("15. mediana mensal usa os últimos seis meses concluídos e não transações individuais", () => {
   const perspective = calculateMonthlyPerspective({ current: 1800, history: [1000, 1200, 1400, 1600, 2000, 2200, 9999], subject: "income" });
-  assert.equal(perspective.monthsUsed, 7);
-  assert.equal(perspective.reference, 1600);
-  assert.equal(perspective.percentageDifference, 12.5);
+  assert.equal(perspective.monthsUsed, 6);
+  assert.equal(perspective.reference, 1800);
+  assert.equal(perspective.percentageDifference, 0);
 });
 
 test("16. primeiro mês não inventa mediana ou percentual", () => {
@@ -265,4 +299,26 @@ test("21. pagamento de fatura é excluído do consumo mesmo com papel legado de 
   });
   assert.equal(snapshot.totals.totalBankOutflows, 700);
   assert.equal(snapshot.totals.personalConsumption, 0);
+});
+
+test("22. snapshot preserva casa, dependentes, terceiros, parcelas e projeção sem duplicar o total", () => {
+  const snapshot = buildMonthlySnapshot({
+    period, transactions: [], purchases: [], statements: [], accounts: [], status: "review",
+    allocations: [{ person_id: "person-1", person_name: "Anna", source_card_movement_id: "purchase-1", allocated_amount: 300, reimbursable_amount: 300, reimbursed_amount: 100, pending_reimbursement_amount: 200 }],
+    recurringGroups: [{ name: "Casa", type: "household", total: 500, items: [{ name: "Internet", amount: 100 }] }, { name: "Anna", type: "dependent", total: 300, items: [{ name: "Escola", amount: 300 }] }],
+    installments: [{ id: "plan-1", description: "Notebook", current: 7, total: 12, amount: 200, paid: 1200, remaining: 1000, endsAt: "2026-12-01" }],
+    futureCommitmentMonths: [{ month: "2026-08", amount: 1400 }],
+    futureInstallments: [{ month: "2026-08", amount: 200 }],
+  });
+  assert.equal(snapshot.householdCost?.total, 500);
+  assert.equal(snapshot.dependentsCost?.total, 300);
+  assert.equal(snapshot.thirdPartySummary?.[0].pending, 200);
+  assert.equal(snapshot.installments?.remaining, 1000);
+  assert.deepEqual(snapshot.projection?.[0], { month: "2026-08", total: 1400, installments: 200, recurring: 800, other: 600, card: 0 });
+});
+
+test("23. ausência de PDF ou fatura paga no mês não bloqueia o fechamento", () => {
+  const validation = validateMonthlyClosing({ period, status: "review", statements: [], purchases: [], expectedStatementCount: 1, now: new Date("2026-08-04T12:00:00Z") });
+  assert.equal(validation.canClose, true);
+  assert.equal(validation.blockers.length, 0);
 });

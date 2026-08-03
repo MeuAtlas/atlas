@@ -4,6 +4,10 @@ import {
   type DataCompleteness,
 } from "./resilience";
 import {shouldAcceptIncomingInvoiceTotal} from "./bill-domain";
+import {
+  resolveStatementDisplayAmount,
+  type StatementChangeReason,
+} from "./statement-value-policy";
 
 type InvoiceRow=Record<string,unknown>;
 
@@ -39,6 +43,9 @@ export function mergeInvoicePersistenceRow(input:{
   completeness:DataCompleteness;
   reasons:string[];
   syncedAt:string;
+  changeReason?:StatementChangeReason;
+  changeSource?:string;
+  syncExecutionId?:string|null;
 }){
   const {previous,incoming,completeness,reasons,syncedAt}=input;
   const previousCount=numeric(previous?.purchase_count);
@@ -51,9 +58,23 @@ export function mergeInvoicePersistenceRow(input:{
   const abruptTotalDrop=Boolean(
     previousCalculated!==null&&previousCalculated>0&&incomingCalculated===0,
   );
+  const resolution=resolveStatementDisplayAmount({
+    bankTotalAmount:
+      incoming.total_source==="provider_bill"
+        ? incoming.provider_invoice_total
+        : null,
+    calculatedTotalAmount:incoming.calculated_invoice_total,
+    calculationCompleteness:completeness,
+    lastReliableTotalAmount:reliableInvoiceTotal(previous),
+    previousDisplayTotalAmount:previous?.current_display_total,
+    manualTotalAmount:
+      incoming.manual_invoice_total??incoming.confirmed_invoice_total,
+    changeReason:input.changeReason,
+  });
   const preserve=completeness==="partial"&&(
     abruptCountDrop||
     abruptTotalDrop||
+    resolution.preserved||
     shouldPreservePreviousValue({
       previous:previousCalculated,
       incoming:incomingCalculated,
@@ -81,9 +102,8 @@ export function mergeInvoicePersistenceRow(input:{
     ? reliableInvoiceTotal({...incoming,data_completeness:"complete",
         last_complete_sync_at:syncedAt})
     : null;
-  const reliableTotal=completeness==="complete"
-    ? reliableIncoming
-    : reliableBefore;
+  const reliableTotal=resolution.lastReliableTotalAmount??
+    (completeness==="complete"?reliableIncoming:reliableBefore);
   const reliableCount=completeness==="complete"
     ? incomingCount
     : numeric(previous?.last_reliable_purchase_count) ??
@@ -118,8 +138,7 @@ export function mergeInvoicePersistenceRow(input:{
         )
       : {}),
     last_reliable_invoice_total:reliableTotal,
-    current_display_total:
-      completeness==="complete"?reliableIncoming:reliableBefore,
+    current_display_total:resolution.displayTotalAmount,
     last_reliable_purchase_count:reliableCount,
     purchase_count_source:completeness==="complete"
       ? "complete_transactions"
@@ -136,6 +155,30 @@ export function mergeInvoicePersistenceRow(input:{
         : null,
     provider_status:completeness==="partial"?"degraded":"available",
     preservation_reason:preservationReason,
+    sync_status:completeness==="complete"?"updated":"partially_updated",
+    last_sync_attempt_at:syncedAt,
+    last_successful_sync_at:completeness==="complete"?syncedAt:
+      previous?.last_successful_sync_at??previous?.last_complete_sync_at??null,
+    last_calculation_updated_at:syncedAt,
+    last_reliable_snapshot_at:
+      resolution.lastReliableTotalAmount!==reliableBefore
+        ? syncedAt
+        : previous?.last_reliable_snapshot_at??previous?.last_complete_sync_at??null,
+    last_remote_updated_at:incoming.provider_updated_at??null,
+    last_transaction_count:incomingCount,
+    last_complete_transaction_count:completeness==="complete"
+      ? incomingCount
+      : previous?.last_complete_transaction_count??reliableCount,
+    last_partial_transaction_count:completeness==="partial"
+      ? incomingCount
+      : previous?.last_partial_transaction_count??null,
+    value_change_amount:
+      resolution.displayTotalAmount!==null&&numeric(previous?.current_display_total)!==null
+        ? Math.round((resolution.displayTotalAmount-Number(previous?.current_display_total))*100)/100
+        : 0,
+    value_change_reason:resolution.reason,
+    value_change_source:input.changeSource??"reconciliation",
+    sync_execution_id:input.syncExecutionId??null,
   };
   return {
     row,

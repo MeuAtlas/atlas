@@ -52,6 +52,8 @@ const run: RecentSyncActivity = {
   recordsUpdated: 1250,
   recordsPreserved: 0,
   warningCodes: [],
+  errorCode: null,
+  safeMessage: null,
 };
 const resource: IntegrationResourceInput = {
   id: "resource-1",

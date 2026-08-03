@@ -1440,7 +1440,7 @@ export async function linkTransactionToOccurrence(
     }
     if (result.outcome === "already_linked") {
       return successfulFormResult(
-        "Esta movimentação já está vinculada a esta parcela.",
+        "Esta movimentação já estava vinculada. O destino ficou memorizado para os próximos pagamentos.",
         occurrenceId,
       );
     }
@@ -1482,7 +1482,7 @@ export async function linkTransactionToOccurrence(
     return successfulFormResult(
       result.outcome === "replaced"
         ? "Pagamento transferido para a parcela escolhida."
-        : "Pagamento vinculado com sucesso.",
+        : "Pagamento vinculado. O destino será reconhecido automaticamente nos próximos meses.",
       occurrenceId,
     );
   } catch (error) {

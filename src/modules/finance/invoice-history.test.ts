@@ -428,10 +428,78 @@ test("histórico calcula mediana mensal e compara a fatura vigente", () => {
     analytics.months.map(month => [month.month, month.total]),
     [["2026-05", 8000], ["2026-06", 10000], ["2026-07", 11517.22]],
   );
-  assert.equal(analytics.median, 10000);
-  assert.equal(analytics.currentDifference, -2602.75);
-  assert.equal(analytics.currentDifferencePercentage, -26.03);
-  assert.equal(analytics.currentPosition, "below");
+  assert.equal(analytics.median, 9000);
+  assert.equal(analytics.currentDifference, 2517.22);
+  assert.equal(analytics.currentDifferencePercentage, 27.97);
+  assert.equal(analytics.currentPosition, "above");
+});
+
+test("organiza a fatura aberta no mês de pagamento sem criar barra Atual nem mês zero", () => {
+  const analytics = buildInvoiceHistoryAnalytics([
+    {
+      id: "july-paid", cardId: "mastercard", dueDate: "2026-07-10", status: "paid",
+      total: 11517.22, totalSource: "provider_bill", paidAmount: 11517.22,
+      paymentDate: "2026-07-10", paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+    {
+      id: "august-open", cardId: "mastercard", dueDate: "2026-08-10", status: "open",
+      total: 7669.72, totalSource: "provider_bill", cycleStartDate: "2026-07-04",
+      cycleEndDate: "2026-08-03", closingDate: "2026-08-03",
+      paymentConfirmationStatus: "open", isConfirmed: false,
+    },
+  ], null);
+
+  assert.deepEqual(analytics.months.map(item => [item.month, item.total, item.item.status]), [
+    ["2026-07", 11517.22, "paid"],
+    ["2026-08", 7669.72, "open"],
+  ]);
+  assert.equal(analytics.months.some(item => item.month === "current" || item.total === 0), false);
+  assert.equal(analytics.median, 11517.22);
+  assert.match(analytics.months[1].item.tooltip.cycleLabel ?? "", /04\/07\/2026 a 03\/08\/2026/);
+});
+
+test("pagamento confirmado mantém agosto pago e avança a próxima fatura aberta para setembro", () => {
+  const analytics = buildInvoiceHistoryAnalytics([
+    {
+      id: "august-paid", cardId: "mastercard", dueDate: "2026-08-10", status: "paid",
+      total: 7669.72, totalSource: "provider_bill", paidAmount: 7702.14,
+      paymentDate: "2026-08-10", paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+    {
+      id: "september-open", cardId: "mastercard", dueDate: "2026-09-10", status: "open",
+      total: 1610.5, totalSource: "calculated_transactions", cycleStartDate: "2026-08-04",
+      cycleEndDate: "2026-09-03", closingDate: "2026-09-03",
+      paymentConfirmationStatus: "open", isConfirmed: false,
+    },
+  ], null);
+
+  assert.deepEqual(analytics.months.map(item => [item.month, item.total, item.item.status]), [
+    ["2026-08", 7702.14, "paid"],
+    ["2026-09", 1610.5, "open"],
+  ]);
+  assert.equal(analytics.median, 7702.14);
+  assert.equal(analytics.currentTotal, 1610.5);
+});
+
+test("data do pagamento confirmado tem prioridade sobre vencimento e meses iguais são consolidados", () => {
+  const analytics = buildInvoiceHistoryAnalytics([
+    {
+      id: "late", cardId: "mastercard", dueDate: "2026-07-10", status: "paid",
+      total: 400, totalSource: "provider_bill", paidAmount: 400,
+      paymentDate: "2026-08-02", paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+    {
+      id: "regular", cardId: "visa", dueDate: "2026-08-12", status: "paid",
+      total: 600, totalSource: "provider_bill", paidAmount: 600,
+      paymentDate: "2026-08-12", paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+  ], null);
+  assert.equal(analytics.months.length, 1);
+  assert.equal(analytics.months[0].month, "2026-08");
+  assert.equal(analytics.months[0].total, 1000);
+  assert.equal(analytics.months[0].item.invoiceCount, 2);
+  assert.equal(analytics.median, 1000);
+  assert.equal(analytics.currentPosition, "unavailable");
 });
 
 test("faturas canceladas e sem total não distorcem a mediana", () => {

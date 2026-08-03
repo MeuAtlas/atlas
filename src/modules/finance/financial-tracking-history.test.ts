@@ -55,11 +55,12 @@ test("preparação para revisão corrige estado persistido antigo de forma trans
   assert.match(sql, /can_admin_workspace/);
 });
 
-test("lista mensal mostra a fatura prevista separada do consumo por competência", () => {
-  const page = readFileSync("src/app/financeiro/relatorios/page.tsx", "utf8");
-  assert.match(page, /Fatura prevista/);
-  assert.match(page, /totals\?\.forecastCardInvoice/);
-  assert.doesNotMatch(page, /totals\?\.totalCardConsumption/);
+test("lista mensal mostra somente a fatura do próprio mês de caixa", () => {
+  const service = readFileSync("src/modules/finance/financial-reports-list.ts", "utf8");
+  assert.match(service, /getStatementForCashMonth/);
+  assert.match(service, /reconciliationStatements/);
+  assert.match(service, /confirmed_payment_amount/);
+  assert.doesNotMatch(service, /forecastCardInvoice/);
 });
 
 test("fatura prevista usa o ciclo de consumo do mês, não a fatura paga nele", () => {
@@ -79,7 +80,8 @@ test("fatura futura inclui parcelas projetadas ainda sem compra materializada", 
 
 test("lista mensal usa os papéis tipográficos oficiais do Atlas", () => {
   const page = readFileSync("src/app/financeiro/relatorios/page.tsx", "utf8");
+  const list = readFileSync("src/components/finance/financial-reports-list.tsx", "utf8");
   for (const variant of ["pageTitle", "pageSubtitle", "tableHeader", "tableBody", "financialValueSmall", "button"]) {
-    assert.match(page, new RegExp(`variant=\\"${variant}\\"`));
+    assert.match(`${page}\n${list}`, new RegExp(`variant=\\"${variant}\\"`));
   }
 });

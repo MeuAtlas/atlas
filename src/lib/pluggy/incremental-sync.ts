@@ -66,6 +66,138 @@ export type PluggySyncSummary = {
   finishedAt: string;
 };
 
+export type PluggyProductWarning = {
+  code?: string;
+  message?: string;
+};
+
+export type PluggyProductStatus = {
+  product: string;
+  isUpdated: boolean;
+  lastUpdatedAt: string | null;
+  warnings: PluggyProductWarning[];
+};
+
+export type ParsedPluggySyncStatus = {
+  itemStatus: string | null;
+  executionStatus: string | null;
+  isPartial: boolean;
+  products: PluggyProductStatus[];
+};
+
+const canonicalProductNames: Record<string, string> = {
+  account: "accounts",
+  accounts: "accounts",
+  transaction: "transactions",
+  transactions: "transactions",
+  creditcard: "creditCards",
+  creditcards: "creditCards",
+  bill: "bills",
+  bills: "bills",
+  investment: "investments",
+  investments: "investments",
+  loan: "loans",
+  loans: "loans",
+  identity: "identity",
+};
+
+function canonicalProductName(value: string) {
+  const compact = value.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return canonicalProductNames[compact] ?? value;
+}
+
+function productWarnings(value: unknown): PluggyProductWarning[] {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<PluggyProductWarning[]>((warnings, warning) => {
+    if (typeof warning === "string") {
+      warnings.push({ message: warning.slice(0, 300) });
+      return warnings;
+    }
+    if (!warning || typeof warning !== "object") return warnings;
+    const row = warning as Record<string, unknown>;
+    const code = typeof row.code === "string" ? row.code.slice(0, 100) : undefined;
+    const message = typeof row.message === "string" ? row.message.slice(0, 300) : undefined;
+    if (code || message) warnings.push({ code, message });
+    return warnings;
+  }, []);
+}
+
+export function parsePluggyItemSyncStatus(item: {
+  status?: unknown;
+  executionStatus?: unknown;
+  statusDetail?: unknown;
+}): ParsedPluggySyncStatus {
+  const itemStatus = typeof item.status === "string" ? item.status : null;
+  const executionStatus = typeof item.executionStatus === "string"
+    ? item.executionStatus
+    : null;
+  const detail = item.statusDetail && typeof item.statusDetail === "object" &&
+    !Array.isArray(item.statusDetail)
+    ? item.statusDetail as Record<string, unknown>
+    : {};
+  const products = Object.entries(detail).flatMap(([product, raw]) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const value = raw as Record<string, unknown>;
+    return [{
+      product: canonicalProductName(product),
+      isUpdated: value.isUpdated === true,
+      lastUpdatedAt: typeof value.lastUpdatedAt === "string"
+        ? value.lastUpdatedAt
+        : null,
+      warnings: productWarnings(value.warnings),
+    }];
+  });
+  const normalizedExecution = executionStatus?.toUpperCase() ?? null;
+  return {
+    itemStatus,
+    executionStatus,
+    isPartial: ["PARTIAL_SUCCESS", "COMPLETED_WITH_WARNINGS", "WARNING"]
+      .includes(normalizedExecution ?? ""),
+    products,
+  };
+}
+
+export function pluggyProductIsUpdated(
+  parsed: ParsedPluggySyncStatus,
+  product: string,
+) {
+  const match = parsed.products.find(candidate =>
+    candidate.product === canonicalProductName(product));
+  if (match) return match.isUpdated;
+  return parsed.executionStatus?.toUpperCase() === "SUCCESS";
+}
+
+export function pluggyProductStatus(
+  parsed: ParsedPluggySyncStatus,
+  product: string,
+) {
+  return parsed.products.find(candidate =>
+    candidate.product === canonicalProductName(product)) ?? null;
+}
+
+export function shouldApplyRemoteRecord(input: {
+  localRemoteUpdatedAt?: string | null;
+  incomingRemoteUpdatedAt?: string | null;
+  localSyncedAt?: string | null;
+  incomingSyncedAt?: string | null;
+}) {
+  const time = (value: string | null | undefined) => {
+    if (!value) return null;
+    const parsed = new Date(value).valueOf();
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const localRemote = time(input.localRemoteUpdatedAt);
+  const incomingRemote = time(input.incomingRemoteUpdatedAt);
+  if (localRemote !== null && incomingRemote !== null) {
+    return incomingRemote >= localRemote;
+  }
+  if (localRemote !== null && incomingRemote === null) return false;
+  const localSync = time(input.localSyncedAt);
+  const incomingSync = time(input.incomingSyncedAt);
+  if (localSync !== null && incomingSync !== null) return incomingSync >= localSync;
+  return true;
+}
+
 const usefulStatuses = new Set<PluggyResourceStatus>([
   "succeeded",
   "succeeded_with_warnings",
@@ -102,19 +234,23 @@ export function interpretPluggyItemStatus(input: {
   ) {
     warningCodes.push("provider_partial_success");
   }
-  if (
-    ["OUTDATED", "LOGIN_ERROR", "UNAVAILABLE"].includes(providerStatus)
-  ) {
+  if (["OUTDATED", "LOGIN_ERROR", "UNAVAILABLE"].includes(providerStatus)) {
     warningCodes.push("provider_item_unavailable");
   }
+  if (["UPDATING", "WAITING_USER_INPUT", "WAITING_USER_ACTION"]
+    .includes(providerStatus)) warningCodes.push("provider_item_waiting");
 
-  const hardFailure =
-    ["DELETED", "REVOKED"].includes(providerStatus) ||
+  const terminalFailure = ["DELETED", "REVOKED"].includes(providerStatus) ||
     ["AUTH_ERROR", "FORBIDDEN"].includes(executionStatus);
+  const canProcessAvailableResources = !terminalFailure &&
+    (providerStatus === "UPDATED" ||
+      ["SUCCESS", "PARTIAL_SUCCESS", "COMPLETED_WITH_WARNINGS", "WARNING"]
+        .includes(executionStatus));
+  const hardFailure = terminalFailure || !canProcessAvailableResources;
   const softFailure = !hardFailure && warningCodes.length > 0;
 
   return {
-    canProcessAvailableResources: !hardFailure,
+    canProcessAvailableResources,
     providerStatus,
     warningCodes,
     hardFailure,
@@ -214,7 +350,7 @@ export function classifyPluggyRetry(error: {
 
 export function incrementalWindowStart(
   lastSuccessfulSyncAt: string | null | undefined,
-  overlapDays = 7,
+  overlapDays = 10,
 ) {
   if (!lastSuccessfulSyncAt) return undefined;
   const parsed = new Date(lastSuccessfulSyncAt);

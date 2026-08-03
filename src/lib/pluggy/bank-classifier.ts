@@ -197,7 +197,7 @@ export function classifyBankTransaction(
     role = "transfer";
     rule = "bank.internal_transfer.matched_counterpart";
   } else if (
-    /PAGAMENTO.*FATURA|FATURA.*PAGAMENTO|PAGAMENTO.*CARTAO.*(CREDITO|MASTER|VISA)|CREDIT CARD PAYMENT/.test(
+    /(?:PAGAMENTO|PGTO).*(?:FATURA|CARTAO.*(?:CREDITO|MASTER|VISA))|FATURA.*PAGAMENTO|CREDIT CARD PAYMENT/.test(
       clue,
     )
   ) {

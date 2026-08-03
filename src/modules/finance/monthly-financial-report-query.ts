@@ -9,8 +9,8 @@ import {
   availableFinancialMonths,
   getMonthlyPeriod,
   isRealIncomeEntry,
-  isStatementForMonthlyConsumption,
   isBeforeFinancialTracking,
+  mergeDependentCostsIntoRecurringGroups,
   resolveMonthlyPurchaseResponsibility,
   resolveAutomaticMonthStatus,
   type FinancialMonthStatus,
@@ -18,14 +18,19 @@ import {
   type MonthlyCardPurchase,
   type MonthlyReportSnapshot,
   type MonthlyStatement,
+  type MonthlyStatementPayment,
 } from "./monthly-financial-report";
+import {
+  calculateStatementPaymentStatus,
+  identifyCreditCardPaymentTransaction,
+} from "./credit-card-payment-reconciliation";
 import {
   getFinanceProjectionCardData,
   getReliableCurrentInvoiceSnapshots,
   resolveOpenCardInvoice,
 } from "./queries";
 import { calculateMonthlyFinancialResult, shiftFinanceMonth } from "./monthly-result";
-import { getMonthlyFinancialCommitments } from "./commitments-query";
+import { getCommitmentsOverview, getMonthlyFinancialCommitments } from "./commitments-query";
 import { calculateHistoricalMonthlyIncomeMedian } from "./income-expenses";
 import {
   buildInvoiceHistoryAnalytics,
@@ -130,11 +135,10 @@ function isMissingMonthlySchema(error: { code?: string } | null) {
   return ["42P01", "PGRST204", "PGRST205"].includes(error?.code ?? "");
 }
 
-function recommendedCloseAt(year: number, month: number, closingDays: number[]) {
-  if (!closingDays.length) return null;
-  const day = Math.max(...closingDays.map((value) => Math.min(28, Math.max(1, value))));
-  const next = new Date(Date.UTC(year, month, day, 12));
-  return next.toISOString();
+function recommendedCloseAt(year: number, month: number) {
+  // Cash basis does not wait for the next statement to close. A short window
+  // after month-end is enough for the final bank movements to synchronize.
+  return new Date(Date.UTC(year, month, 1, 12)).toISOString();
 }
 
 export async function createFinancialMonthIfNeeded(
@@ -155,9 +159,7 @@ export async function createFinancialMonthIfNeeded(
   if (existing.data) return existing.data as FinancialMonthRecord;
   if (!allowCreate) throw new RangeError("Este relatório ainda não foi compartilhado ou criado.");
 
-  const cards = await supabase.from("credit_cards").select("closing_day")
-    .eq("workspace_id", workspaceId).eq("status", "active");
-  const recommendation = recommendedCloseAt(year, month, (cards.data ?? []).map((card) => Number(card.closing_day)).filter(Boolean));
+  const recommendation = recommendedCloseAt(year, month);
   const status = resolveAutomaticMonthStatus({ period, recommendedCloseAt: recommendation });
   const inserted = await supabase.from("financial_months").insert({
     workspace_id: workspaceId,
@@ -227,9 +229,50 @@ export async function getFinancialMonths(input: {
   return result.data.filter((row) => monthNumbers.includes(Number(row.reference_month)));
 }
 
-function toStatement(row: Record<string, unknown>, cardNames: Map<string, string>): MonthlyStatement {
+function statementPurchaseShares(row: Record<string, unknown>) {
+  const purchases = Array.isArray(row.card_purchases)
+    ? row.card_purchases as Array<Record<string, unknown>>
+    : [];
+  return purchases.reduce<{ personal: number; thirdParty: number }>((totals, purchase) => {
+    if (purchase.status === "cancelled" || purchase.transaction_role === "refund") return totals;
+    const amount = Math.abs(Number(purchase.installment_amount ?? purchase.total_amount ?? 0));
+    const instrumentValue = Array.isArray(purchase.credit_card_instruments)
+      ? purchase.credit_card_instruments[0]
+      : purchase.credit_card_instruments;
+    const instrument = instrumentValue && typeof instrumentValue === "object"
+      ? instrumentValue as Record<string, unknown>
+      : null;
+    const assignedToThirdParty = Boolean(instrument?.payment_responsible_person_id);
+    const thirdParty = purchase.third_party_share_amount == null
+      ? assignedToThirdParty ? amount : 0
+      : Math.abs(Number(purchase.third_party_share_amount));
+    const personal = purchase.personal_share_amount == null
+      ? Math.max(0, amount - thirdParty)
+      : Math.abs(Number(purchase.personal_share_amount));
+    return { personal: totals.personal + personal, thirdParty: totals.thirdParty + thirdParty };
+  }, { personal: 0, thirdParty: 0 });
+}
+
+function toStatement(
+  row: Record<string, unknown>,
+  cardNames: Map<string, string>,
+  payments: MonthlyStatementPayment[] = [],
+): MonthlyStatement {
   const official = row.official_total_amount ?? row.confirmed_invoice_total ?? row.manual_invoice_total ?? row.provider_invoice_total;
   const calculated = row.calculated_total_amount ?? row.calculated_invoice_total ?? row.total_amount ?? 0;
+  const expected = Number(row.expected_statement_amount ?? official ?? calculated ?? 0);
+  const shares = statementPurchaseShares(row);
+  const currentOpen = Number(row.current_display_total ?? row.current_open_amount ?? row.confirmed_open_total ?? expected);
+  const isOpen = String(row.status) === "open";
+  const confirmedPayment = payments.reduce((sum, payment) => sum + payment.allocatedAmount, 0);
+  const status = row.payment_confirmation_status
+    ? String(row.payment_confirmation_status)
+    : calculateStatementPaymentStatus({
+        expectedAmount: expected,
+        payments,
+        statementOpen: String(row.status) === "open",
+        cancelled: String(row.status) === "cancelled",
+      });
   return {
     id: String(row.id),
     card_id: String(row.card_id),
@@ -239,12 +282,31 @@ function toStatement(row: Record<string, unknown>, cardNames: Map<string, string
     reconciliation_difference: official == null ? null : Number(official) - Number(calculated),
     reconciliation_status: row.reconciliation_status == null ? null : String(row.reconciliation_status),
     official_amount_confirmed: Boolean(row.official_amount_confirmed ?? row.confirmed_invoice_total),
+    official_amount_source: row.official_amount_source ? String(row.official_amount_source) : null,
     closing_date: String(row.closing_date),
     due_date: String(row.due_date),
     cycle_start_date: row.statement_period_start ? String(row.statement_period_start) : row.cycle_start_date ? String(row.cycle_start_date) : null,
     cycle_end_date: row.statement_period_end ? String(row.statement_period_end) : row.cycle_end_date ? String(row.cycle_end_date) : null,
     statement_file_path: row.statement_file_path ? String(row.statement_file_path) : null,
     reference_month: row.reference_month ? String(row.reference_month) : null,
+    expected_statement_amount: expected,
+    current_open_amount: currentOpen,
+    detected_payment_amount: Number(row.detected_payment_amount ?? confirmedPayment),
+    confirmed_payment_amount: Number(row.confirmed_payment_amount ?? confirmedPayment),
+    payment_difference: row.payment_difference == null
+      ? Math.round((confirmedPayment - expected) * 100) / 100
+      : Number(row.payment_difference),
+    payment_confirmation_status: status as MonthlyStatement["payment_confirmation_status"],
+    payment_confirmation_source: row.payment_confirmation_source ? String(row.payment_confirmation_source) : null,
+    payment_confirmed_at: row.payment_confirmed_at ? String(row.payment_confirmed_at) : null,
+    statement_status: String(row.statement_status ?? row.status ?? "estimated"),
+    personal_share_amount: isOpen
+      ? Math.max(0, currentOpen - shares.thirdParty)
+      : Number(row.personal_share_amount ?? Math.max(0, expected - shares.thirdParty)),
+    third_party_share_amount: isOpen
+      ? shares.thirdParty
+      : Number(row.third_party_share_amount ?? shares.thirdParty),
+    payments,
   };
 }
 
@@ -265,18 +327,23 @@ export async function getMonthlyReportPreview(input: {
   const scopeFilter = personalScope
     ? `and(workspace_id.eq.${workspaceId},visibility.eq.workspace),and(owner_id.eq.${input.ownerId},workspace_id.is.null)`
     : `and(workspace_id.eq.${workspaceId},visibility.eq.workspace)`;
-  const historicalIncomeStart = shiftFinanceMonth(period, -12).startDate;
+  const historicalIncomeStart = shiftFinanceMonth(period, -6).startDate;
+  const paymentScopeFilter = personalScope && input.ownerId
+    ? `workspace_id.eq.${workspaceId},owner_id.eq.${input.ownerId}`
+    : `workspace_id.eq.${workspaceId}`;
   const loansQuery = personalScope && input.ownerId
     ? supabase.from("financial_loans").select("id,name,institution_name,outstanding_balance,installment_amount,installments_remaining,next_installment_date,payroll_deducted,status").eq("owner_id", input.ownerId).neq("status", "unavailable")
     : supabase.from("financial_loans").select("id,name,institution_name,outstanding_balance,installment_amount,installments_remaining,next_installment_date,payroll_deducted,status").eq("workspace_id", workspaceId).neq("status", "unavailable");
-  const [accountsResult, transactionsResult, historicalIncomeResult, subsequentTransactionsResult, purchasesResult, cardsResult, invoicesResult, historicalInvoicesResult, allocationsResult, versionsResult, commitmentMonths, loansResult] = await Promise.all([
+  const [accountsResult, transactionsResult, historicalIncomeResult, subsequentTransactionsResult, purchasesResult, cardsResult, invoicesResult, statementPaymentsResult, historicalCardPaymentsResult, historicalInvoicesResult, allocationsResult, versionsResult, commitmentMonths, loansResult] = await Promise.all([
     supabase.from("financial_accounts").select("id,name,opening_balance,current_balance,last_sync_at").or(scopeFilter).eq("status", "active"),
     supabase.from("financial_transactions").select("*,financial_accounts:financial_accounts!financial_transactions_account_id_fkey(name,institution_name),credit_cards:credit_cards!financial_transactions_credit_card_id_fkey(name,last_four_digits),financial_categories:financial_categories!financial_transactions_category_id_fkey(name)").or(scopeFilter).or("migrated_card_purchase_id.is.null,transaction_role.eq.invoice_payment,cash_flow_kind.eq.invoice_payment").gte("competence_date", period.startDate).lt("competence_date", period.endExclusiveDate),
     supabase.from("financial_transactions").select("*").or(scopeFilter).or("migrated_card_purchase_id.is.null,transaction_role.eq.invoice_payment,cash_flow_kind.eq.invoice_payment").gte("competence_date", historicalIncomeStart).lt("competence_date", period.startDate),
     supabase.from("financial_transactions").select("*").or(scopeFilter).or("migrated_card_purchase_id.is.null,transaction_role.eq.invoice_payment,cash_flow_kind.eq.invoice_payment").gte("competence_date", period.endExclusiveDate).lte("competence_date", new Date().toISOString().slice(0, 10)),
     supabase.from("card_purchases").select("*,credit_cards:credit_cards!card_purchases_card_id_fkey(name,institution_name,last_four_digits),credit_card_instruments:credit_card_instruments!card_purchases_instrument_id_fkey(display_name,last_four_digits,card_kind,payment_responsible_person_id,default_financial_responsible_id,responsibility_mode),financial_categories:financial_categories!card_purchases_category_id_fkey(name)").or(scopeFilter).or(`and(competence_date.gte.${period.startDate},competence_date.lt.${period.endExclusiveDate}),and(competence_date.is.null,purchase_date.gte.${period.startDate},purchase_date.lt.${period.endExclusiveDate})`),
     supabase.from("credit_cards").select("id,name,last_four_digits,closing_day,due_day,last_sync_at").or(scopeFilter).eq("status", "active"),
-    supabase.from("card_invoices").select("*").gte("closing_date", period.startDate).lt("closing_date", new Date(Date.UTC(year, month + 1, 15)).toISOString().slice(0, 10)),
+    supabase.from("card_invoices").select("*,card_purchases(personal_share_amount,third_party_share_amount,installment_amount,total_amount,transaction_role,status,credit_card_instruments(payment_responsible_person_id))").gte("due_date", shiftFinanceMonth(period, -1).startDate).lt("due_date", shiftFinanceMonth(period, 2).startDate),
+    supabase.from("credit_card_statement_payments").select("id,statement_id,bank_transaction_id,allocated_amount,payment_date,payment_source,is_manual,is_third_party,card_invoices!inner(*,card_purchases(personal_share_amount,third_party_share_amount,installment_amount,total_amount,transaction_role,status)),financial_transactions:financial_transactions!credit_card_statement_payments_bank_transaction_id_fkey(description,financial_accounts:financial_accounts!financial_transactions_account_id_fkey(name,institution_name))").or(paymentScopeFilter).gte("payment_date", period.startDate).lt("payment_date", period.endExclusiveDate),
+    supabase.from("credit_card_statement_payments").select("allocated_amount,payment_date,bank_transaction_id,is_third_party").or(paymentScopeFilter).gte("payment_date", historicalIncomeStart).lt("payment_date", period.startDate),
     supabase.from("card_invoices").select("id,card_id,due_date,status,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,total_source").or(scopeFilter).in("status", [...HISTORICAL_INVOICE_STATUSES]).lt("closing_date", period.endExclusiveDate).order("due_date", { ascending: false }).limit(60),
     supabase.from("expense_allocations").select("*,financial_people:financial_people!expense_allocations_person_id_fkey(name)").eq("workspace_id", workspaceId).is("archived_at", null),
     financialMonth.id.startsWith("pending-") ? Promise.resolve({ data: [], error: null }) : supabase.from("monthly_financial_reports").select("*").eq("financial_month_id", financialMonth.id).order("version", { ascending: false }),
@@ -291,6 +358,8 @@ export async function getMonthlyReportPreview(input: {
     ["compras no cartão", purchasesResult],
     ["cartões", cardsResult],
     ["faturas", invoicesResult],
+    ["pagamentos de faturas", statementPaymentsResult],
+    ["histórico de pagamentos de faturas", historicalCardPaymentsResult],
     ["histórico de faturas", historicalInvoicesResult],
     ["rateios e reembolsos", allocationsResult],
     ["empréstimos", loansResult],
@@ -307,6 +376,16 @@ export async function getMonthlyReportPreview(input: {
     });
     throw new Error(`Não foi possível carregar ${source} deste mês.`);
   }
+  const installmentHorizon = shiftFinanceMonth(period, 4).startDate;
+  const [commitmentsOverview, installmentPlansResult, installmentOccurrencesResult, peopleResult] = await Promise.all([
+    getCommitmentsOverview(supabase, input.ownerId ?? "", { workspaceId, month: period.startDate }),
+    supabase.from("card_installment_plans").select("id,description_reference,installment_amount,total_installments,paid_installments,remaining_installments,estimated_last_competence,status").eq("workspace_id", workspaceId).in("status", ["active", "completed"]),
+    supabase.from("card_installment_occurrences").select("installment_plan_id,competence_month,installment_number,total_installments,amount,status").eq("workspace_id", workspaceId).gte("competence_month", period.startDate).lt("competence_month", installmentHorizon).neq("status", "cancelled"),
+    supabase.from("financial_people").select("id,name").eq("workspace_id", workspaceId).is("archived_at", null),
+  ]);
+  if (installmentPlansResult.error || installmentOccurrencesResult.error || peopleResult.error) {
+    throw new Error("Não foi possível carregar parcelamentos e responsáveis deste mês.");
+  }
   const cards = cardsResult.data ?? [];
   const cardIds = new Set(cards.map((card) => String(card.id)));
   const cardNames = new Map(cards.map((card) => [String(card.id), String(card.name)]));
@@ -315,11 +394,70 @@ export async function getMonthlyReportPreview(input: {
     if (!cardIds.has(String(row.card_id))) return false;
     return String(row.reference_month ?? "").slice(0, 7) === invoiceConsumptionReference;
   });
-  const statements = monthInvoiceRows
-    .map((row) => toStatement(row as Record<string, unknown>, cardNames))
-    .filter((statement) => isStatementForMonthlyConsumption(statement, period));
+  const paymentRows = (statementPaymentsResult.data ?? []).map((row) => {
+    const transaction = Array.isArray(row.financial_transactions)
+      ? row.financial_transactions[0]
+      : row.financial_transactions;
+    const account = Array.isArray(transaction?.financial_accounts)
+      ? transaction.financial_accounts[0]
+      : transaction?.financial_accounts;
+    return {
+      id: String(row.id),
+      statementId: String(row.statement_id),
+      statement: (Array.isArray(row.card_invoices) ? row.card_invoices[0] : row.card_invoices) as Record<string, unknown>,
+      payment: {
+        id: String(row.id),
+        bankTransactionId: row.bank_transaction_id ? String(row.bank_transaction_id) : null,
+        allocatedAmount: Number(row.allocated_amount),
+        paymentDate: String(row.payment_date),
+        paymentSource: String(row.payment_source) as MonthlyStatementPayment["paymentSource"],
+        isManual: Boolean(row.is_manual),
+        isThirdParty: Boolean(row.is_third_party),
+        description: transaction?.description ? String(transaction.description) : null,
+        accountName: account?.name ? String(account.name) : account?.institution_name ? String(account.institution_name) : null,
+      } satisfies MonthlyStatementPayment,
+    };
+  });
+  const paymentsByStatement = new Map<string, MonthlyStatementPayment[]>();
+  for (const row of paymentRows) {
+    paymentsByStatement.set(row.statementId, [...(paymentsByStatement.get(row.statementId) ?? []), row.payment]);
+  }
+  const paidInvoiceRows = [...new Map(paymentRows.map(row => [row.statementId, row.statement])).values()];
+  const statements = paidInvoiceRows.map(row =>
+    toStatement(row, cardNames, paymentsByStatement.get(String(row.id)) ?? []));
+  const paidStatementIds = new Set(statements.map(statement => statement.id));
+  const reconciliationStatements = (invoicesResult.data ?? [])
+    .filter(row => cardIds.has(String(row.card_id)) &&
+      !paidStatementIds.has(String(row.id)) &&
+      String(row.status) !== "cancelled" &&
+      String(row.due_date) >= period.startDate &&
+      String(row.due_date) < period.endExclusiveDate)
+    .map(row => toStatement(row as Record<string, unknown>, cardNames));
+  const openStatementRows = (invoicesResult.data ?? [])
+    .filter(row => cardIds.has(String(row.card_id)) &&
+      !["cancelled", "paid"].includes(String(row.status)) &&
+      String(row.due_date) >= period.endExclusiveDate &&
+      String(row.due_date) < shiftFinanceMonth(period, 2).startDate);
   const monthlyPurchases = (purchasesResult.data ?? [])
     .map((row) => resolveMonthlyPurchaseResponsibility(row as MonthlyCardPurchase));
+  const peopleNames = new Map((peopleResult.data ?? []).map((person) => [String(person.id), String(person.name)]));
+  const purchaseByPlan = new Map(monthlyPurchases.filter((purchase) => purchase.installment_plan_id).map((purchase) => [String(purchase.installment_plan_id), purchase]));
+  const occurrencesByPlan = new Map<string, NonNullable<typeof installmentOccurrencesResult.data>>();
+  for (const occurrence of installmentOccurrencesResult.data ?? []) {
+    const key = String(occurrence.installment_plan_id);
+    occurrencesByPlan.set(key, [...(occurrencesByPlan.get(key) ?? []), occurrence]);
+  }
+  const installments = (installmentPlansResult.data ?? []).flatMap((plan) => {
+    const occurrences = occurrencesByPlan.get(String(plan.id)) ?? [];
+    const current = occurrences.find((occurrence) => String(occurrence.competence_month).slice(0, 7) === period.key);
+    if (!current) return [];
+    const purchase = purchaseByPlan.get(String(plan.id));
+    const amount = Number(current.amount ?? plan.installment_amount ?? 0);
+    const paidInstallments = Number(plan.paid_installments ?? 0);
+    const remainingInstallments = Number(plan.remaining_installments ?? Math.max(0, Number(plan.total_installments) - Number(current.installment_number)));
+    return [{ id: String(plan.id), description: String(plan.description_reference), current: Number(current.installment_number), total: Number(current.total_installments ?? plan.total_installments), amount, paid: Math.round(amount * paidInstallments * 100) / 100, remaining: Math.round(amount * remainingInstallments * 100) / 100, endsAt: String(plan.estimated_last_competence), responsibleName: purchase?.financial_responsible_id ? peopleNames.get(String(purchase.financial_responsible_id)) ?? null : null }];
+  });
+  const futureInstallments = [...new Set((installmentOccurrencesResult.data ?? []).map((occurrence) => String(occurrence.competence_month).slice(0, 7)))].filter((key) => key > period.key).map((key) => ({ month: key, amount: (installmentOccurrencesResult.data ?? []).filter((occurrence) => String(occurrence.competence_month).slice(0, 7) === key).reduce((sum, occurrence) => sum + Number(occurrence.amount ?? 0), 0) }));
   const resolvedMonthInvoices = await Promise.all(monthInvoiceRows.map((row) =>
     resolveOpenCardInvoice(supabase, input.ownerId ?? "", {
       workspaceId: personalScope ? null : workspaceId,
@@ -386,8 +524,8 @@ export async function getMonthlyReportPreview(input: {
     includeOwnerPrivateData: personalScope,
   };
   const historicalIncomeTransactions = (historicalIncomeResult.data ?? []) as FinancialTransaction[];
-  const incomeMonthlyTotals = Array.from({ length: 12 }, (_, index) =>
-    shiftFinanceMonth(period, index - 12)).flatMap((historicalPeriod) => {
+  const incomeMonthlyTotals = Array.from({ length: 6 }, (_, index) =>
+    shiftFinanceMonth(period, index - 6)).flatMap((historicalPeriod) => {
       const monthlyResult = calculateMonthlyFinancialResult({
         transactions: historicalIncomeTransactions,
         purchases: [],
@@ -406,7 +544,7 @@ export async function getMonthlyReportPreview(input: {
     });
   const incomeStatistics = calculateHistoricalMonthlyIncomeMedian({
     monthlyTotals: incomeMonthlyTotals,
-    maximumMonths: 12,
+    maximumMonths: 6,
     includeZeroMonths: false,
     endMonth: period.startDate,
   });
@@ -425,8 +563,45 @@ export async function getMonthlyReportPreview(input: {
       totalSource: resolved.source,
     }];
   });
-  const invoiceAnalytics = buildInvoiceHistoryAnalytics(historicalInvoiceEntries, forecastCardInvoice, 12);
-  const futureCommitmentMonths = commitmentMonths.slice(0, 3).map((item) => ({ month: item.competenceMonth.slice(0, 7), amount: item.totalCommittedCents / 100 }));
+  const invoiceAnalytics = buildInvoiceHistoryAnalytics(historicalInvoiceEntries, forecastCardInvoice, 6);
+  const historicalCardCashByMonth = new Map<string, number>();
+  for (const payment of historicalCardPaymentsResult.data ?? []) {
+    if (!payment.bank_transaction_id || payment.is_third_party) continue;
+    const key = String(payment.payment_date).slice(0, 7);
+    historicalCardCashByMonth.set(key,
+      (historicalCardCashByMonth.get(key) ?? 0) + Number(payment.allocated_amount ?? 0));
+  }
+  const historicalCardCashTotals = [...historicalCardCashByMonth.values()].sort((left, right) => left - right);
+  const historicalCardCashMedian = historicalCardCashTotals.length
+    ? historicalCardCashTotals.length % 2
+      ? historicalCardCashTotals[Math.floor(historicalCardCashTotals.length / 2)]
+      : (historicalCardCashTotals[historicalCardCashTotals.length / 2 - 1] +
+        historicalCardCashTotals[historicalCardCashTotals.length / 2]) / 2
+    : null;
+  const futureCommitmentMonths = commitmentMonths.slice(0, 3).map((item) => ({
+    month: item.competenceMonth.slice(0, 7),
+    // Installments already belong to the open statement forecast and must not
+    // be counted again in the next-income commitment.
+    amount: Math.max(0, item.totalCommittedCents - item.installmentTotalCents) / 100,
+    }));
+  const resolvedOpenInvoices = await Promise.all(openStatementRows.map(row =>
+    resolveOpenCardInvoice(supabase, input.ownerId ?? "", {
+      workspaceId: personalScope ? null : workspaceId,
+      cycleId: String(row.id),
+      referenceDate: row.due_date ? String(row.due_date) : period.endExclusiveDate,
+    })));
+  const openStatements = openStatementRows.map((row, index) => {
+    const statement = toStatement(row as Record<string, unknown>, cardNames);
+    const resolved = resolvedOpenInvoices[index];
+    if (resolved?.displayTotal == null) return statement;
+    return {
+      ...statement,
+      current_open_amount: resolved.displayTotal,
+      personal_share_amount: Math.max(
+        0,resolved.displayTotal-statement.third_party_share_amount,
+      ),
+    };
+  });
   const loans = (loansResult.data ?? []).map((loan) => ({
     id: String(loan.id),
     name: String(loan.name ?? "Empréstimo"),
@@ -437,29 +612,73 @@ export async function getMonthlyReportPreview(input: {
     nextDueDate: loan.next_installment_date ? String(loan.next_installment_date) : null,
     payrollDeducted: Boolean(loan.payroll_deducted),
   }));
+  const allocatedBankTransactions = new Set(paymentRows
+    .map(row => row.payment.bankTransactionId)
+    .filter((id): id is string => Boolean(id)));
+  const paymentCandidates = ((transactionsResult.data ?? []) as FinancialTransaction[])
+    .flatMap(transaction => {
+      const identified = identifyCreditCardPaymentTransaction(transaction);
+      if (!identified.isCandidate || allocatedBankTransactions.has(transaction.id)) return [];
+      return [{ id: transaction.id, description: transaction.description,
+        amount: identified.amount, paymentDate: identified.paymentDate ?? transaction.competence_date,
+        creditCardId: transaction.credit_card_id ?? null,
+        confidence: identified.confidence }];
+    });
+  const unmatchedPaymentCount = paymentCandidates.length;
+  const unmatchedCardPayments: MonthlyStatementPayment[] = paymentCandidates.map(candidate => ({
+    id: `candidate-${candidate.id}`,
+    bankTransactionId: candidate.id,
+    allocatedAmount: candidate.amount,
+    paymentDate: candidate.paymentDate,
+    paymentSource: "bank_transaction",
+    isManual: false,
+    isThirdParty: false,
+    description: candidate.description,
+  }));
   const liveSnapshot = buildMonthlySnapshot({
     period,
     transactions: (transactionsResult.data ?? []) as FinancialTransaction[],
     subsequentTransactions: (subsequentTransactionsResult.data ?? []) as FinancialTransaction[],
     purchases: monthlyPurchases,
     statements,
+    openStatements,
+    unmatchedPaymentCount,
+    unmatchedCardPayments,
     allocations,
     accounts,
     forecastCardInvoice,
     incomeHistoricalReference: {
-      median: incomeStatistics.medianAmount == null ? null : incomeStatistics.medianAmount / 100,
-      months: incomeStatistics.monthsAvailable,
+      median: financialMonth.is_first_financial_report || incomeStatistics.medianAmount == null
+        ? null
+        : incomeStatistics.medianAmount / 100,
+      months: financialMonth.is_first_financial_report ? 0 : incomeStatistics.monthsAvailable,
     },
     cardInvoiceHistoricalReference: {
-      median: invoiceAnalytics.median,
-      months: invoiceAnalytics.months.length,
+      median: financialMonth.is_first_financial_report
+        ? null
+        : historicalCardCashMedian ?? invoiceAnalytics.median,
+      months: financialMonth.is_first_financial_report
+        ? 0
+        : historicalCardCashTotals.length || invoiceAnalytics.months.length,
     },
     futureCommitmentMonths,
+    recurringGroups: mergeDependentCostsIntoRecurringGroups(
+      commitmentsOverview.recurring.groups.map((group) => ({ name: group.contextName, type: group.groupType, total: group.total / 100, items: group.items.filter((item) => item.status !== "paused").map((item) => ({ name: item.title, amount: item.amountCents / 100 })) })),
+      commitmentsOverview.people.map(person => ({
+        name: person.person.name,
+        isDependent: person.person.isDependent,
+        actualSpentCents: person.breakdown.actualSpentCents,
+        projectedCommitmentsCents: person.breakdown.projectedCommitmentsCents,
+      })),
+    ),
+    installments,
+    futureInstallments,
     futureCommitments: futureCommitmentMonths[0]?.amount ?? 0,
     loans,
     scope: calculationScope,
     status,
     accountsSyncHealthy: true,
+    expectedStatementCount: cards.length,
     tracking: {
       startedAt: financialMonth.tracking_started_at ?? input.tracking?.startedAt ?? period.startInstant,
       availableDataStartAt,
@@ -479,7 +698,11 @@ export async function getMonthlyReportPreview(input: {
     cards,
     purchases: monthlyPurchases,
     statements,
+    reconciliationStatements,
+    openStatements,
+    paymentCandidates,
     versions,
+    people: peopleResult.data ?? [],
     schemaReady: !financialMonth.id.startsWith("pending-"),
   };
 }

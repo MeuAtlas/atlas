@@ -20,4 +20,6 @@ export function invalidateOpenInvoiceCache(
   revalidatePath("/financeiro");
   revalidatePath("/financeiro/cartoes");
   revalidatePath("/financeiro/movimentacoes");
+  revalidatePath("/financeiro/relatorios");
+  revalidatePath("/financeiro/relatorios/[year]/[month]", "page");
 }

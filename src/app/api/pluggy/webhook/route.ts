@@ -11,7 +11,8 @@ export const runtime="nodejs";
 export const maxDuration=60;
 
 type PluggyWebhook={
- event?:unknown;eventId?:unknown;itemId?:unknown;
+ event?:unknown;eventId?:unknown;itemId?:unknown;accountId?:unknown;
+ transactionIds?:unknown;
 };
 
 function authorized(request:Request){
@@ -35,6 +36,12 @@ export async function POST(request:Request){
  const eventId=safeText(payload.eventId,160);
  const event=safeText(payload.event,80);
  const itemId=safeText(payload.itemId,180);
+ const accountId=safeText(payload.accountId,180);
+ const transactionIds=Array.isArray(payload.transactionIds)
+  ? payload.transactionIds.flatMap(value=>{
+   const id=safeText(value,180);return id?[id]:[];
+  }).slice(0,500)
+  : [];
  if(!eventId||!event)return Response.json({error:"invalid_payload"},{status:400});
 
  let supabase:ReturnType<typeof createAdminClient>;
@@ -50,7 +57,10 @@ export async function POST(request:Request){
 
  after(async()=>{
   try{
-   if(!itemId||!event.startsWith("item/")){
+   const supported=event.startsWith("item/")||[
+    "transactions/created","transactions/updated","transactions/deleted",
+   ].includes(event);
+   if(!itemId||!supported){
     await supabase.from("pluggy_webhook_events").update({
      status:"ignored",processed_at:new Date().toISOString(),
     }).eq("event_id",eventId);
@@ -75,10 +85,31 @@ export async function POST(request:Request){
      String(connection.data.id),
     );
    }else{
+    const transactionEvent=event.startsWith("transactions/");
+    if(transactionEvent&&!accountId)throw new Error("webhook_account_missing");
+    if(event==="transactions/deleted"&&!transactionIds.length)
+     throw new Error("webhook_transaction_ids_missing");
+    if(event==="transactions/updated"&&!transactionIds.length)
+     throw new Error("webhook_transaction_ids_missing");
+    const triggerType=event==="item/updated"
+     ? "webhook_item_updated"
+     : event==="transactions/created"
+      ? "webhook_transactions_created"
+      : event==="transactions/updated"
+       ? "webhook_transactions_updated"
+       : event==="transactions/deleted"
+        ? "webhook_transactions_deleted"
+        : "webhook";
     const synced=await syncPluggyItem(
      supabase as Parameters<typeof syncPluggyItem>[0],
      String(connection.data.owner_id),String(connection.data.id),false,
-     {triggerType:"webhook"},
+     {
+      triggerType,
+      resourceTypes:transactionEvent?["transactions"]:undefined,
+      accountIds:accountId?[accountId]:undefined,
+      transactionIds:event!=="transactions/deleted"?transactionIds:undefined,
+      deletedTransactionIds:event==="transactions/deleted"?transactionIds:undefined,
+     },
     );
     await invalidatePluggySyncCaches({
      supabase,

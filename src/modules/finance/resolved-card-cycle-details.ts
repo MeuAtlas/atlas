@@ -118,6 +118,15 @@ export type ResolvedCardCycleDetails = {
     explainedAmount: number | null;
     unexplainedAmount: number | null;
   };
+  valueHistory: Array<{
+    id: string;
+    displayTotal: number;
+    changeAmount: number;
+    direction: "increase" | "decrease" | "unchanged";
+    reason: string;
+    source: string;
+    createdAt: string;
+  }>;
   cacheTag: string;
 };
 
@@ -137,6 +146,7 @@ export type BuildResolvedCardCycleDetailsInput = {
   lastAttemptAt?: string | null;
   preservationReason?: string | null;
   providerStatus?: string | null;
+  valueHistory?: ResolvedCardCycleDetails["valueHistory"];
 };
 
 const money = (value: number) =>
@@ -441,6 +451,7 @@ export function buildResolvedCardCycleDetails(
       explainedAmount: detailedTotal,
       unexplainedAmount: reconciliationDifference,
     },
+    valueHistory: input.valueHistory ?? [],
     cacheTag: input.invoice.cacheTag,
   };
 }

@@ -5,14 +5,14 @@ export interface PluggyItem extends JsonRecord { id: string; status?: string; ex
 export interface PluggyAccount extends JsonRecord {
   id: string; itemId?: string; type?: string; subtype?: string; name?: string; marketingName?: string;
   balance?: number; currencyCode?: string; number?: string; creditData?: JsonRecord;
-  parentAccountId?: string; brand?: string;
+  parentAccountId?: string; brand?: string; createdAt?: string; updatedAt?: string;
 }
 export interface PluggyTransaction extends JsonRecord {
   id: string; accountId: string; description?: string; amount?: number; date?: string; type?: string;
   amountInAccountCurrency?:number;convertedAmount?:number;localAmount?:number;status?: string; category?: string; categoryId?: string; currencyCode?: string; providerId?: string;
   merchant?: { name?: string }; paymentData?: JsonRecord; creditCardMetadata?: JsonRecord;
   operationType?: string; operationTypeAdditionalInfo?: string; balance?: number;
-  effectiveDate?: string; settlementDate?: string;
+  effectiveDate?: string; settlementDate?: string; createdAt?: string; updatedAt?: string;
   billId?:string; billForecastDate?:string; purchaseDate?:string; installmentNumber?:number; totalInstallments?:number; totalAmount?:number;
 }
 export interface PluggyBill extends JsonRecord {

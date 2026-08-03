@@ -11,6 +11,10 @@ const browser = readFileSync(
   "utf8",
 );
 const styles = readFileSync("src/app/globals.css", "utf8");
+const movementsPage = readFileSync(
+  "src/app/financeiro/movimentacoes/page.tsx",
+  "utf8",
+);
 
 test("pessoa é vinculada somente à movimentação escolhida", () => {
   assert.match(actions, /association_scope: "current"/);
@@ -24,6 +28,16 @@ test("recorrência permanece separada da identificação manual da pessoa", () =
   assert.match(browser, /Nenhuma regra ou vínculo automático será criado/);
   assert.match(browser, /Prever novamente/);
   assert.match(browser, /Vincular a um compromisso ou parcela/);
+});
+
+test("compromisso aceita pagamentos adicionais e memoriza o destino", () => {
+  assert.doesNotMatch(
+    movementsPage,
+    /financial_commitment_occurrences[\s\S]{0,900}\.is\("linked_transaction_id", null\)/,
+  );
+  assert.match(movementsPage, /\.gte\("competence_month"/);
+  assert.match(browser, /memoriza o identificador seguro do/);
+  assert.match(browser, /somados até quitar o/);
 });
 
 test("painel da pessoa bloqueia estouro horizontal no modal e no gráfico", () => {

@@ -34,7 +34,7 @@ export async function getFinanceIntegrationsDashboard(input: {
   const connectionRows = await requireQuery("bank_connections", connectionQuery);
   const connectionIds = connectionRows.map(row => String(row.id));
 
-  const [health, history, creditProducts, pending, cardRows, resourceRows, automatic] =
+  const [health, history, creditProducts, pending, cardRows, resourceRows, automatic, accountFreshness] =
     await Promise.all([
       withQueryFallback(
         "provider_incidents",
@@ -47,7 +47,7 @@ export async function getFinanceIntegrationsDashboard(input: {
       withQueryFallback(
         "financial_sync_runs",
         input.supabase.from("financial_sync_runs")
-          .select("id,bank_connection_id,status,trigger_type,started_at,completed_at,resources_succeeded,resources_failed,resources_preserved,records_inserted,records_updated,records_preserved,warning_codes")
+          .select("id,bank_connection_id,status,trigger_type,started_at,completed_at,resources_succeeded,resources_failed,resources_preserved,records_inserted,records_updated,records_preserved,warning_codes,error_code,error_message")
           .eq("owner_id", input.userId).order("started_at", { ascending: false })
           .limit(15),
         [],
@@ -77,7 +77,7 @@ export async function getFinanceIntegrationsDashboard(input: {
       withQueryFallback(
         "financial_resource_sync_status",
         input.supabase.from("financial_resource_sync_status")
-          .select("id,bank_connection_id,sync_run_id,resource_type,entity_type,provider_entity_id,status,data_freshness,last_attempt_at,last_successful_sync_at,records_received,records_inserted,records_updated,records_preserved,error_code,error_message_safe,retryable,metadata")
+          .select("id,bank_connection_id,sync_run_id,resource_type,entity_type,provider_entity_id,local_entity_id,status,data_freshness,last_attempt_at,last_successful_sync_at,records_received,records_inserted,records_updated,records_preserved,error_code,error_message_safe,retryable,metadata")
           .eq("owner_id", input.userId).order("created_at", { ascending: false })
           .limit(120),
         [],
@@ -87,6 +87,13 @@ export async function getFinanceIntegrationsDashboard(input: {
         input.supabase.from("bank_connections").select("id,automatic_sync_enabled")
           .eq("owner_id", input.userId).eq("provider", "pluggy")
           .neq("status", "disabled"),
+        [],
+      ),
+      withQueryFallback(
+        "pluggy_account_freshness",
+        input.supabase.from("financial_accounts")
+          .select("id,last_accounts_sync_at,last_transactions_sync_at,last_balance_sync_at,last_transaction_date")
+          .eq("owner_id", input.userId).eq("source", "pluggy"),
         [],
       ),
     ]);
@@ -159,7 +166,10 @@ export async function getFinanceIntegrationsDashboard(input: {
       recordsUpdated: Number(row.records_updated ?? 0),
       recordsPreserved: Number(row.records_preserved ?? 0),
       warningCodes: Array.isArray(row.warning_codes) ? row.warning_codes.map(String) : [],
+      errorCode: row.error_code ? String(row.error_code) : null,
+      safeMessage: row.error_message ? String(row.error_message) : null,
     }));
+  const accountFreshnessById = new Map(accountFreshness.data.map(row => [String(row.id), row]));
   const resources: IntegrationResourceInput[] = resourceRows.data
     .filter(row => connectionIds.includes(String(row.bank_connection_id)))
     .map(row => ({
@@ -177,12 +187,21 @@ export async function getFinanceIntegrationsDashboard(input: {
       inserted: Number(row.records_inserted ?? 0),
       updated: Number(row.records_updated ?? 0),
       preserved: Number(row.records_preserved ?? 0),
-      safeMessage: row.error_message_safe ? String(row.error_message_safe) : null,
+      safeMessage: row.error_message_safe
+        ? String(row.error_message_safe)
+        : row.error_code
+          ? `A atualização deste recurso não foi concluída; os dados anteriores foram preservados. (${String(row.error_code)})`
+          : null,
       errorCode: row.error_code ? String(row.error_code) : null,
       retryable: Boolean(row.retryable),
-      metadata: row.metadata && typeof row.metadata === "object"
-        ? row.metadata as Record<string, unknown>
-        : {},
+      metadata: {
+        ...(row.metadata && typeof row.metadata === "object"
+          ? row.metadata as Record<string, unknown>
+          : {}),
+        ...(row.local_entity_id && accountFreshnessById.has(String(row.local_entity_id))
+          ? accountFreshnessById.get(String(row.local_entity_id))
+          : {}),
+      },
     }));
   const cardDiagnostics: AdvancedCardDiagnostic[] = cardRows.data.map(row => ({
     id: String(row.id),

@@ -172,8 +172,9 @@ export default async function MovementsPage({
         supabase.from("financial_commitment_occurrences").select(
           "*,financial_commitments!inner(id,workspace_id,title,description,commitment_type,recurrence_frequency,recurrence_interval,amount_type,expected_amount,minimum_expected_amount,maximum_expected_amount,currency_code,category_id,account_id,card_id,payment_method,due_day,due_date,start_date,end_date,next_due_date,status,auto_match_enabled,merchant_match_pattern,description_match_pattern,expected_day_tolerance,expected_amount_tolerance,source,source_record_id,is_payroll_deduction,generates_future_projections,last_generated_until)",
         ).eq("workspace_id", workspaceId)
-          .in("status", ["projected", "expected", "pending", "overdue", "partially_paid"])
-          .is("linked_transaction_id", null)
+          .not("status", "in", '("cancelled","skipped","disputed")')
+          .gte("competence_month", `${period.from.slice(0, 7)}-01`)
+          .lte("competence_month", `${period.to.slice(0, 7)}-01`)
           .is("linked_card_movement_id", null)
           .order("expected_due_date").limit(300),
         supabase.from("commitment_match_decisions")
@@ -231,7 +232,7 @@ export default async function MovementsPage({
           const commitmentRow = Array.isArray(row.financial_commitments)
             ? row.financial_commitments[0]
             : row.financial_commitments;
-          if (!commitmentRow?.auto_match_enabled) return null;
+          if (!commitmentRow?.auto_match_enabled || row.status === "paid") return null;
           const candidate = scoreCommitmentMatch({
             occurrence: mapOccurrence(
               row as unknown as Parameters<typeof mapOccurrence>[0],

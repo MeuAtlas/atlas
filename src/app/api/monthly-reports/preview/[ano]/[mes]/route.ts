@@ -35,8 +35,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ ano:
     ownerId: context.user.id,
     includeOwnerPrivateData: context.includeOwnerPrivateData,
   });
-  if (data.financialMonth.status !== "awaiting_consolidation") {
-    return new NextResponse("A prévia está disponível enquanto o relatório aguarda consolidação.", { status: 409 });
+  if (data.financialMonth.status === "closed") {
+    return new NextResponse("Este mês já possui uma versão oficial concluída.", { status: 409 });
   }
 
   const generated = await generateMonthlyReportPdf({

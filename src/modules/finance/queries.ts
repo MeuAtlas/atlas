@@ -106,14 +106,12 @@ export async function getCreditCardInvoiceAnalyticsEntries(
   userId: string,
   workspaceId: string | null = null,
 ): Promise<InvoiceHistoryAnalyticsEntry[]> {
-  const today = new Date().toISOString().slice(0, 10);
   let query = supabase
     .from("card_invoices")
     .select(
-      "id,card_id,due_date,status,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,total_source",
+      "id,card_id,cycle_start_date,cycle_end_date,closing_date,due_date,status,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,last_reliable_invoice_total,current_display_total,confirmed_payment_amount,payment_confirmation_status,payment_confirmation_source,payment_confirmed_at,total_source",
     )
-    .in("status", [...HISTORICAL_INVOICE_STATUSES])
-    .lt("closing_date", today)
+    .neq("status", "cancelled")
     .order("due_date", { ascending: false })
     .limit(60);
   query = workspaceId
@@ -127,9 +125,35 @@ export async function getCreditCardInvoiceAnalyticsEntries(
       "Não foi possível calcular o histórico de consumo dos cartões.",
     );
   }
+  const statementIds = (result.data ?? []).map(row => String(row.id));
+  const paymentsResult = statementIds.length
+    ? await supabase.from("credit_card_statement_payments")
+        .select("statement_id,payment_date,allocated_amount,is_third_party,payment_source")
+        .in("statement_id", statementIds)
+    : { data: [], error: null };
+  const paymentsByStatement = new Map<string, Array<{
+    payment_date: string;
+    allocated_amount: number | string;
+    is_third_party: boolean;
+    payment_source: string;
+  }>>();
+  if (!paymentsResult.error) {
+    for (const payment of paymentsResult.data ?? []) {
+      const key = String(payment.statement_id);
+      const list = paymentsByStatement.get(key) ?? [];
+      list.push(payment as typeof list[number]);
+      paymentsByStatement.set(key, list);
+    }
+  }
   return (result.data ?? []).flatMap(row => {
-    const status = String(row.status) as HistoricalInvoiceStatus;
-    if (!HISTORICAL_INVOICE_STATUSES.includes(status)) return [];
+    const status = String(row.status) as StoredCardInvoice["status"];
+    const payments = paymentsByStatement.get(String(row.id)) ?? [];
+    const confirmedPaymentAmount = Number(row.confirmed_payment_amount ?? 0);
+    const paidAmount = confirmedPaymentAmount > 0
+      ? confirmedPaymentAmount
+      : payments.reduce((sum, payment) => sum + Math.abs(Number(payment.allocated_amount ?? 0)), 0);
+    const paymentDate = payments.map(payment => payment.payment_date).sort().at(-1) ??
+      (row.payment_confirmed_at ? String(row.payment_confirmed_at).slice(0, 10) : null);
     const resolved = resolveHistoricalInvoiceTotal(
       row as Pick<
         StoredCardInvoice,
@@ -143,9 +167,21 @@ export async function getCreditCardInvoiceAnalyticsEntries(
     return [{
       id: String(row.id),
       cardId: String(row.card_id),
+      cycleStartDate: row.cycle_start_date ? String(row.cycle_start_date) : null,
+      cycleEndDate: row.cycle_end_date ? String(row.cycle_end_date) : null,
+      closingDate: row.closing_date ? String(row.closing_date) : null,
       dueDate: String(row.due_date),
+      paymentDate,
       status,
-      total: resolved.total,
+      total: status === "open" && Number(row.current_display_total ?? 0) > 0
+        ? Number(row.current_display_total)
+        : resolved.total,
+      reliableTotal: row.last_reliable_invoice_total == null ? null : Number(row.last_reliable_invoice_total),
+      estimatedTotal: row.calculated_invoice_total == null ? null : Number(row.calculated_invoice_total),
+      paidAmount: paidAmount > 0 ? paidAmount : null,
+      paymentConfirmationStatus: row.payment_confirmation_status ? String(row.payment_confirmation_status) : null,
+      paymentConfirmationSource: row.payment_confirmation_source ? String(row.payment_confirmation_source) : null,
+      isConfirmed: ["paid", "manually_confirmed", "overpaid"].includes(String(row.payment_confirmation_status ?? "")),
       totalSource: resolved.source,
     }];
   });
@@ -1366,11 +1402,17 @@ export async function resolveOpenCardInvoice(
     manualInvoiceTotal: cycle.manual_invoice_total,
     manualUpdatedAt: cycle.updated_at,
     calculatedTotal: detailedTotal,
-    calculatedReliable: detailsCompleteness !== "unavailable",
+    calculatedReliable: detailsCompleteness === "complete",
     calculatedUpdatedAt: cycle.last_sync_at ?? cycle.updated_at,
     lastReliableTotal:
       cycle.last_reliable_invoice_total ?? cycle.current_display_total,
     lastReliableUpdatedAt: cycle.last_complete_sync_at ?? cycle.updated_at,
+    persistedDisplayTotal: cycle.current_display_total,
+    persistedDataCompleteness:
+      cycle.data_completeness === "complete" ||
+      cycle.data_completeness === "partial"
+        ? cycle.data_completeness
+        : "unknown",
   });
   const explicitConfirmedOpenTotal =
     openInvoiceMoney(cycle.confirmed_open_total) ??
@@ -1499,6 +1541,20 @@ export async function getResolvedCardCycleDetails(
     credit_cards?: { source?: string | null; brand?: string | null } | null;
   } | null;
 
+  const historyResult = await supabase
+    .from("credit_card_statement_value_history")
+    .select("id,new_display_total_amount,change_amount,change_direction,change_reason,change_source,created_at")
+    .eq("statement_id", cycle.cycleId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  if (historyResult.error) {
+    throwSupabaseError(
+      historyResult.error,
+      "getResolvedCardCycleDetails.statement_value_history",
+      "NÃ£o foi possÃ­vel carregar o histÃ³rico do valor da fatura.",
+    );
+  }
+
   return buildResolvedCardCycleDetails({
     cycle,
     invoice,
@@ -1518,6 +1574,15 @@ export async function getResolvedCardCycleDetails(
       metadata?.updated_at,
     preservationReason: metadata?.preservation_reason,
     providerStatus: metadata?.provider_status,
+    valueHistory: (historyResult.data ?? []).map(row => ({
+      id: String(row.id),
+      displayTotal: Number(row.new_display_total_amount ?? 0),
+      changeAmount: Number(row.change_amount ?? 0),
+      direction: String(row.change_direction) as "increase" | "decrease" | "unchanged",
+      reason: String(row.change_reason),
+      source: String(row.change_source),
+      createdAt: String(row.created_at),
+    })),
   });
 }
 

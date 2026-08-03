@@ -113,7 +113,7 @@ export default async function Page({
   const resolvedInvoices = new Map(
     (await Promise.all(invoices.map(async invoice => {
       const resolved = await resolveOpenCardInvoice(supabase, user.id, {
-        workspaceId,
+        workspaceId: invoice.card.workspace_id ?? null,
         cardAccountId: invoice.card.id,
         referenceDate: new Date(),
       });
@@ -137,13 +137,19 @@ export default async function Page({
     analyticsEntries = await getCreditCardInvoiceAnalyticsEntries(
       supabase,
       user.id,
-      workspaceId,
+      null,
     );
   } catch {
     // A indisponibilidade do histórico não bloqueia a fatura vigente.
   }
+  const chartEntries = analyticsEntries.map(entry => {
+    if (!["open", "estimated", "partially_paid"].includes(entry.status)) return entry;
+    const current = resolvedInvoices.get(entry.cardId)?.resolved;
+    if (!current?.displayTotal) return entry;
+    return { ...entry, total: current.displayTotal, reliableTotal: current.displayTotal };
+  });
   const invoiceAnalytics = buildInvoiceHistoryAnalytics(
-    analyticsEntries,
+    chartEntries,
     currentInvoiceTotal,
   );
 

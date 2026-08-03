@@ -63,14 +63,14 @@ test("diferença e tag usam centavos, workspace e cycleId", () => {
   );
 });
 
-test("estimativa atual precede o último valor confiável antigo", () => {
+test("último valor confiável precede uma nova estimativa sem snapshot", () => {
   const resolved = resolveOpenInvoiceTotal({
     calculatedTotal: 6942.14,
     calculatedReliable: true,
     lastReliableTotal: 7082.45,
   });
-  assert.equal(resolved.amount, 6942.14);
-  assert.equal(resolved.source, "calculated");
+  assert.equal(resolved.amount, 7082.45);
+  assert.equal(resolved.source, "last_reliable");
   assert.equal(resolvedOpenInvoiceSourceLabel({
     source: "last_reliable",
     providerOrigin: true,

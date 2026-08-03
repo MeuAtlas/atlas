@@ -294,6 +294,7 @@ export async function getCommitmentsOverview(
     peopleResult,
     allocationsResult,
     transactionPeopleResult,
+    occurrenceTransactionsResult,
     historyResult,
   ] =
     await Promise.all([
@@ -315,13 +316,16 @@ export async function getCommitmentsOverview(
         "commitment_id,person_id,allocation_type,allocation_value,is_primary,financial_people(id,name,is_dependent)",
       ).eq("workspace_id", input.workspaceId),
       supabase.from("transaction_people").select(
-        "person_id,allocation_type,allocation_value,source,financial_transactions!inner(amount,competence_date)",
+        "transaction_id,person_id,allocation_type,allocation_value,source,financial_transactions!inner(amount,competence_date)",
       ).eq("workspace_id", input.workspaceId)
         .gte("financial_transactions.competence_date", month)
         .lt(
           "financial_transactions.competence_date",
           nextMonth,
         ),
+      supabase.from("financial_occurrence_transactions")
+        .select("transaction_id")
+        .eq("workspace_id", input.workspaceId),
       supabase.from("financial_commitment_history")
         .select("id,commitment_id,event_type,summary,created_at")
         .eq("workspace_id", input.workspaceId)
@@ -333,6 +337,7 @@ export async function getCommitmentsOverview(
     peopleResult,
     allocationsResult,
     transactionPeopleResult,
+    occurrenceTransactionsResult,
     historyResult,
   ].find(result => result.error);
   if (failed?.error) {
@@ -363,6 +368,7 @@ export async function getCommitmentsOverview(
   }>;
   const transactionAllocationRows =
     (transactionPeopleResult.data ?? []) as unknown as Array<{
+      transaction_id: string;
       person_id: string;
       allocation_type: CommitmentPersonAllocation["allocationType"];
       allocation_value: number | string;
@@ -372,6 +378,11 @@ export async function getCommitmentsOverview(
         competence_date: string;
       } | null;
     }>;
+  const commitmentTransactionIds = new Set(
+    (occurrenceTransactionsResult.data ?? []).map(item =>
+      String(item.transaction_id)
+    ),
+  );
   const items = commitments.map(({ row, commitment }) => {
     const related = occurrences.filter(item =>
       item.commitmentId === commitment.id
@@ -501,7 +512,9 @@ export async function getCommitmentsOverview(
       }
     }
     for (const transactionAllocation of transactionAllocationRows.filter(
-      item => item.person_id === person.id && item.source !== "commitment",
+      item => item.person_id === person.id &&
+        item.source !== "commitment" &&
+        !commitmentTransactionIds.has(item.transaction_id),
     )) {
       const transaction = transactionAllocation.financial_transactions;
       if (!transaction) continue;

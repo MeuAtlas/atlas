@@ -58,6 +58,8 @@ export type OpenInvoiceTotalAliases = {
   calculatedUpdatedAt?: string | null;
   lastReliableTotal?: unknown;
   lastReliableUpdatedAt?: string | null;
+  persistedDisplayTotal?: unknown;
+  persistedDataCompleteness?: "complete" | "partial" | "unknown" | null;
 };
 
 const roundMoney = (value: number) =>
@@ -93,6 +95,7 @@ export function resolveOpenInvoiceTotal(input: OpenInvoiceTotalAliases) {
   const manual = openInvoiceMoney(input.manualInvoiceTotal);
   const calculated = openInvoiceMoney(input.calculatedTotal);
   const lastReliable = openInvoiceMoney(input.lastReliableTotal);
+  const persistedDisplay = openInvoiceMoney(input.persistedDisplayTotal);
   const providerCandidate = {
     amount: provider,
     source: "provider_bill" as const,
@@ -153,12 +156,24 @@ export function resolveOpenInvoiceTotal(input: OpenInvoiceTotalAliases) {
       : manuallyConfirmed;
   }
   if (
+    input.persistedDataCompleteness === "partial" &&
+    persistedDisplay !== null
+  ) {
+    return {
+      amount: persistedDisplay,
+      source: lastReliable !== null && persistedDisplay <= lastReliable
+        ? "last_reliable" as const
+        : "calculated" as const,
+      reliable: lastReliable !== null && persistedDisplay <= lastReliable,
+      updatedAt: input.calculatedUpdatedAt ?? input.lastReliableUpdatedAt ?? null,
+    };
+  }
+  if (
     manuallyConfirmed?.amount !== null &&
     manuallyConfirmed?.amount !== undefined
   ) {
     return manuallyConfirmed;
   }
-  if (estimate.amount !== null && estimate.reliable) return estimate;
   if (lastReliable !== null) {
     return {
       amount: lastReliable,
@@ -167,6 +182,7 @@ export function resolveOpenInvoiceTotal(input: OpenInvoiceTotalAliases) {
       updatedAt: input.lastReliableUpdatedAt ?? null,
     };
   }
+  if (estimate.amount !== null && estimate.reliable) return estimate;
   return {
     amount: null,
     source: "unavailable" as const,
@@ -186,10 +202,10 @@ export function resolvedOpenInvoiceSourceLabel(input: {
       ? "Confirmada no Santander"
       : "Confirmada manualmente";
   }
-  if (input.source === "provider_bill") return "Pluggy";
+  if (input.source === "provider_bill") return "Valor informado pelo banco";
   if (input.source === "manual") return "Atualizada manualmente";
   if (input.source === "calculated") {
-    return "Estimativa pelas compras sincronizadas";
+    return "Calculado pelas compras sincronizadas";
   }
   if (input.source === "last_reliable") {
     return input.providerOrigin

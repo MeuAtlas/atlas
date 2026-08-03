@@ -6,7 +6,10 @@ import {
   classifyPluggyRetry,
   incrementalWindowStart,
   interpretPluggyItemStatus,
+  parsePluggyItemSyncStatus,
+  pluggyProductIsUpdated,
   resolveOverallSyncStatus,
+  shouldApplyRemoteRecord,
   summarizeIncrementalSync,
   type PluggyResourceSyncResult,
 } from "./incremental-sync";
@@ -138,11 +141,43 @@ test("retry distingue falha temporária de credencial inválida", () => {
   assert.equal(classifyPluggyRetry({ status: 403, code: "FORBIDDEN" }).retryable, false);
 });
 
-test("janela incremental usa sete dias de sobreposição", () => {
+test("janela incremental usa dez dias de sobreposição", () => {
   assert.equal(
     incrementalWindowStart("2026-07-28T10:00:00Z"),
-    "2026-07-21",
+    "2026-07-18",
   );
+});
+
+test("PARTIAL_SUCCESS parses statusDetail per product", () => {
+  const parsed = parsePluggyItemSyncStatus({
+    status: "UPDATED",
+    executionStatus: "PARTIAL_SUCCESS",
+    statusDetail: {
+      accounts: { isUpdated: true, lastUpdatedAt: "2026-08-02T12:00:00Z", warnings: [] },
+      transactions: { isUpdated: false, lastUpdatedAt: "2026-07-25T12:00:00Z", warnings: [{ code: "TIMEOUT", message: "temporary" }] },
+      creditCards: null,
+    },
+  });
+  assert.equal(parsed.isPartial, true);
+  assert.equal(pluggyProductIsUpdated(parsed, "accounts"), true);
+  assert.equal(pluggyProductIsUpdated(parsed, "transactions"), false);
+  assert.equal(parsed.products.find(product => product.product === "transactions")?.warnings[0]?.code, "TIMEOUT");
+});
+
+test("missing product on PARTIAL_SUCCESS is not assumed updated", () => {
+  const parsed = parsePluggyItemSyncStatus({ status: "UPDATED", executionStatus: "PARTIAL_SUCCESS" });
+  assert.equal(pluggyProductIsUpdated(parsed, "transactions"), false);
+});
+
+test("remote precedence blocks an older provider snapshot", () => {
+  assert.equal(shouldApplyRemoteRecord({
+    localRemoteUpdatedAt: "2026-08-02T12:00:00Z",
+    incomingRemoteUpdatedAt: "2026-08-01T12:00:00Z",
+  }), false);
+  assert.equal(shouldApplyRemoteRecord({
+    localRemoteUpdatedAt: "2026-08-01T12:00:00Z",
+    incomingRemoteUpdatedAt: "2026-08-02T12:00:00Z",
+  }), true);
 });
 
 test("orquestrador persiste por recurso e não degrada todas as entidades", () => {

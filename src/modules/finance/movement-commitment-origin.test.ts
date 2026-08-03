@@ -106,7 +106,7 @@ test("repetir o mesmo vínculo é idempotente e não gera erro fatal", () => {
   assert.match(actions, /result\.outcome === "already_linked"/);
   assert.match(
     actions,
-    /Esta movimentação já está vinculada a esta parcela/,
+    /Esta movimentação já estava vinculada\. O destino ficou memorizado para os próximos pagamentos/,
   );
   assert.doesNotMatch(
     actions,

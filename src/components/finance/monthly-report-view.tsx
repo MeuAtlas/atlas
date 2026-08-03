@@ -4,9 +4,9 @@ import { Money } from "./value-visibility";
 import { AccountMovementChart } from "./overview-charts";
 import type { FinancialMonthRecord, MonthlyReportRecord } from "@/modules/finance/monthly-financial-report-query";
 import type { MonthlyCardPurchase, MonthlyReportSnapshot, MonthlyStatement } from "@/modules/finance/monthly-financial-report";
-import { assignCardTransactionResponsibility, closeFinancialMonth, prepareFinancialMonthForReview, reopenFinancialMonth, retryMonthlyReportPdf, saveOfficialStatement } from "@/app/financeiro/relatorios/actions";
+import { assignCardTransactionResponsibility, closeFinancialMonth, confirmStatementPayment, linkStatementPayment, prepareFinancialMonthForReview, removeStatementPayment, reopenFinancialMonth, retryMonthlyReportPdf, saveOfficialStatement } from "@/app/financeiro/relatorios/actions";
 
-const statusLabel: Record<string, string> = { open: "Em andamento", awaiting_consolidation: "Aguardando consolidação", review: "Pronto para revisão", closing: "Concluindo mês", closed: "Concluído", reopened: "Reaberto para correção" };
+const statusLabel: Record<string, string> = { planned: "Planejado", open: "Em andamento", awaiting_consolidation: "Aguardando consolidação", review: "Pronto para revisão", needs_attention: "Precisa de atenção", closing: "Concluindo mês", closed: "Concluído", reopened: "Reaberto para correção" };
 const date = (value: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value));
 const monthName = (year: number, month: number) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
 
@@ -14,8 +14,9 @@ export function MonthlyStatusBadge({ status }: { status: string }) { return <spa
 
 export function MonthlyStatusBanner({ month }: { month: FinancialMonthRecord }) {
   const messages: Record<string, string> = {
+    planned: "Este mês ainda não começou. Os valores exibidos são apenas previsões conhecidas.",
     open: "Seu mês ainda está em andamento. Os valores serão atualizados durante o mês.",
-    awaiting_consolidation: `${monthName(month.reference_year, month.reference_month)} terminou. Agora estamos reunindo as últimas informações dos cartões.`,
+    awaiting_consolidation: `${monthName(month.reference_year, month.reference_month)} terminou. Agora estamos conciliando os pagamentos reais e as últimas movimentações bancárias.`,
     review: "Tudo certo. Este mês já pode ser revisado e concluído.",
     closing: "Estamos salvando a fotografia deste mês e preparando o relatório.",
     closed: "Este é o fechamento oficial. Os valores salvos não mudarão automaticamente.",
@@ -25,7 +26,7 @@ export function MonthlyStatusBanner({ month }: { month: FinancialMonthRecord }) 
 }
 
 export function MonthlySummaryCards({ snapshot, partial }: { snapshot: MonthlyReportSnapshot; partial: boolean }) {
-  const cards = [["Saldo inicial", snapshot.totals.openingBalance], ["Entradas", snapshot.totals.totalIncome], ["Saídas bancárias", snapshot.totals.totalBankOutflows], ["Resultado em caixa", snapshot.totals.cashResult], ["Saldo final", snapshot.totals.closingBalance], ["Consumo pessoal", snapshot.totals.personalConsumption]] as const;
+  const cards = [["Começou com", snapshot.totals.openingBalance], ["Entrou", snapshot.totals.totalIncome], ["Saiu", snapshot.totals.totalBankOutflows], ["Diferença do mês", snapshot.totals.cashResult], ["Terminou com", snapshot.totals.closingBalance], ["Renda do mês", snapshot.totals.totalRealIncome ?? snapshot.totals.totalIncome]] as const;
   return <section className="monthly-summary monthly-summary-panel">{cards.map(([label, value]) => <article key={label}><span>{label}</span><strong><Money value={value} /></strong>{partial ? <small>Parcial até hoje</small> : <small>Mês completo</small>}</article>)}</section>;
 }
 
@@ -45,6 +46,59 @@ export function CardStatementReconciliation({ statement, common, editable = true
   </article>;
 }
 
+const paymentStatusLabel: Record<string, string> = {
+  open: "Aberta", estimated: "Estimada", payment_detected: "Pagamento encontrado",
+  partially_paid: "Paga parcialmente", paid: "Paga", overpaid: "Paga acima do valor",
+  payment_mismatch: "Diferença a conferir", manually_confirmed: "Confirmada manualmente",
+  cancelled: "Cancelada",
+};
+
+type PaymentCandidate = {
+  id: string;
+  description: string;
+  amount: number;
+  paymentDate: string;
+  creditCardId: string | null;
+  confidence: "high" | "medium" | "low";
+};
+
+export function PaidStatementSummary({ statement, candidates, common, editable = true }: {
+  statement: MonthlyStatement;
+  candidates: PaymentCandidate[];
+  common: { workspaceId: string; year: number; month: number };
+  editable?: boolean;
+}) {
+  const pending = Math.max(0, statement.expected_statement_amount - statement.confirmed_payment_amount);
+  return <article className="statement-card monthly-paid-statement">
+    <header><div><h3>{statement.card_name}</h3><small>Vencimento {date(statement.due_date)}</small></div><span className={["paid", "manually_confirmed"].includes(statement.payment_confirmation_status) ? "positive" : "negative"}>{paymentStatusLabel[statement.payment_confirmation_status] ?? statement.payment_confirmation_status}</span></header>
+    <dl><div><dt>Valor esperado</dt><dd><Money value={statement.expected_statement_amount} /></dd></div><div><dt>Efetivamente pago</dt><dd><Money value={statement.confirmed_payment_amount} /></dd></div><div><dt>Saldo pendente</dt><dd><Money value={pending} /></dd></div><div><dt>Sua parte estimada</dt><dd><Money value={statement.personal_share_amount} /></dd></div><div><dt>Parte de terceiros</dt><dd><Money value={statement.third_party_share_amount} /></dd></div><div><dt>Diferença</dt><dd><Money value={statement.payment_difference ?? 0} /></dd></div></dl>
+    <div className="monthly-statement-payments"><strong>Pagamentos encontrados</strong>{statement.payments.map(payment => <div key={payment.id}><span><b>{payment.description ?? (payment.isThirdParty ? "Pagamento direto de terceiro" : "Pagamento confirmado")}</b><small>{date(payment.paymentDate)}{payment.accountName ? ` • ${payment.accountName}` : ""}</small></span><Money value={payment.allocatedAmount} />{editable ? <form action={removeStatementPayment}><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="payment_id" value={payment.id} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><button className="finance-button secondary">Corrigir vínculo</button></form> : null}</div>)}</div>
+    {editable && candidates.length ? <details><summary>Vincular outro pagamento</summary><form action={linkStatementPayment} className="monthly-inline-form"><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="statement_id" value={statement.id} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><label className="wide">Movimentação bancária<select name="transaction_id" required><option value="">Selecione</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{date(candidate.paymentDate)} • {candidate.description} • {candidate.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</option>)}</select></label><label>Valor alocado<input name="allocated_amount" inputMode="decimal" placeholder="Valor total do débito" /></label><button className="finance-button">Vincular pagamento</button></form></details> : null}
+    {editable ? <details><summary>Confirmar pagamento sem movimentação bancária</summary><form action={confirmStatementPayment} className="monthly-inline-form"><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="statement_id" value={statement.id} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><label>Valor<input required name="amount" inputMode="decimal" /></label><label>Data<input required type="date" name="payment_date" /></label><label className="monthly-check wide"><input type="checkbox" name="direct_third_party" /> Pago diretamente por terceiro — não saiu da minha conta</label><button className="finance-button">Confirmar pagamento</button></form></details> : null}
+    <p className="monthly-explanation">O valor pago foi confirmado pela movimentação da conta. O PDF é opcional e serve apenas para detalhamento.</p>
+    {editable ? <Link href={`/financeiro/cartoes/importar-fatura?workspace=${common.workspaceId}`} prefetch={false}>Anexar PDF da fatura <small>Opcional</small></Link> : null}
+  </article>;
+}
+
+export function OpenStatementForecast({ statement, incomePercentage }: {
+  statement: MonthlyStatement;
+  incomePercentage: number | null;
+}) {
+  return <article className="statement-card monthly-open-statement"><header><div><h3>{statement.card_name}</h3><small>Fecha em {date(statement.closing_date)} • vence em {date(statement.due_date)}</small></div><span>{paymentStatusLabel[statement.payment_confirmation_status] ?? "Aberta"}</span></header><dl><div><dt>Valor atual</dt><dd><Money value={statement.current_open_amount} /></dd></div><div><dt>Sua parte estimada</dt><dd><Money value={statement.personal_share_amount} /></dd></div><div><dt>Parte de terceiros</dt><dd><Money value={statement.third_party_share_amount} /></dd></div><div><dt>Próxima renda comprometida</dt><dd>{incomePercentage == null ? "Estimativa indisponível" : `${incomePercentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}</dd></div></dl><p>Esta fatura ainda pode mudar até o fechamento. Ela não é uma saída deste mês, mas já compromete parte da renda do próximo mês.</p></article>;
+}
+
+export function MonthlyCardCashSection({ snapshot, candidates, reconciliationStatements = [], common, editable = true }: {
+  snapshot: MonthlyReportSnapshot;
+  candidates: PaymentCandidate[];
+  reconciliationStatements?: MonthlyStatement[];
+  common: { workspaceId: string; year: number; month: number };
+  editable?: boolean;
+}) {
+  const paid = snapshot.paidStatements ?? snapshot.statements ?? [];
+  const open = snapshot.openStatements ?? [];
+  return <section className="finance-panel monthly-card-cash"><header><div><p className="eyebrow">Caixa e cartão</p><h2>Cartão pago no mês e próxima fatura</h2></div><strong><Money value={snapshot.cashCardOutflow ?? 0} /></strong></header><p className="monthly-explanation">O caixa usa a data e o valor do pagamento bancário. As compras permanecem somente na análise de consumo, sem duplicar a despesa.</p>{editable && candidates.length && reconciliationStatements.length ? <div className="monthly-card-reconciliation"><h3>Pagamento bancário a conciliar</h3><p>O Atlas encontrou um débito de fatura, mas precisa confirmar a qual fatura ele pertence.</p>{reconciliationStatements.map(statement => <PaidStatementSummary key={statement.id} statement={statement} candidates={candidates} common={common} editable />)}</div> : null}<div className="monthly-card-cash-grid"><div><h3>Cartão pago no mês</h3>{paid.length ? paid.map(statement => <PaidStatementSummary key={statement.id} statement={statement} candidates={candidates} common={common} editable={editable} />) : <p>Nenhuma fatura foi paga neste mês.</p>}</div><div><h3>Próxima fatura</h3>{open.length ? open.map(statement => <OpenStatementForecast key={statement.id} statement={statement} incomePercentage={snapshot.nextIncomeCommitmentPercentage ?? null} />) : <p>Nenhuma fatura aberta foi localizada para o próximo mês.</p>}</div></div><div className="monthly-next-indicators"><span>Pagamento bruto do cartão<strong><Money value={snapshot.cashCardOutflow ?? 0} /></strong></span><span>Reembolsos recebidos<strong><Money value={snapshot.totals.reimbursementsReceived} /></strong></span><span>Custo líquido pessoal<strong><Money value={snapshot.netPersonalCardCost ?? snapshot.cashCardOutflow ?? 0} /></strong></span><span>Cartão na próxima renda<strong><Money value={snapshot.nextMonthCardCommitment ?? 0} /></strong></span></div></section>;
+}
+
 export function MonthlyNarrative({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
   if (!snapshot.narrative?.length) return null;
   return <section className="finance-panel monthly-narrative"><header><div><p className="eyebrow">Leitura do Atlas</p><h2>Como foi este mês</h2></div></header><div>{snapshot.narrative.map((message) => <p key={message}>{message}</p>)}</div></section>;
@@ -57,7 +111,7 @@ function Perspective({ title, eyebrow, perspective }: { title: string; eyebrow: 
 
 export function MonthlyPerspectiveSections({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
   if (!snapshot.incomePerspective && !snapshot.cardPerspective) return null;
-  return <div className="monthly-two-columns">{snapshot.incomePerspective ? <Perspective eyebrow="Renda em perspectiva" title="Receitas reais" perspective={snapshot.incomePerspective} /> : null}{snapshot.cardPerspective ? <Perspective eyebrow="Cartão em perspectiva" title="Fatura do cartão no mês" perspective={snapshot.cardPerspective} /> : null}</div>;
+  return <div className="monthly-two-columns">{snapshot.incomePerspective ? <Perspective eyebrow="Renda em perspectiva" title="Receitas reais" perspective={snapshot.incomePerspective} /> : null}{snapshot.cardPerspective ? <Perspective eyebrow="Caixa do cartão" title="Pagamento realizado no mês" perspective={snapshot.cardPerspective} /> : null}</div>;
 }
 
 export function MonthlyCashFlowSection({ snapshot, workspaceId }: { snapshot: MonthlyReportSnapshot; workspaceId: string }) {
@@ -71,6 +125,28 @@ export function PersonalConsumptionSection({ snapshot }: { snapshot: MonthlyRepo
   return <section className="finance-panel monthly-consumption"><header><div><p className="eyebrow">Consumo pessoal</p><h2>O que pertence a este mês</h2></div><strong><Money value={snapshot.totals.personalConsumption} /></strong></header><div className="monthly-consumption-split"><span>Pago diretamente em conta<strong><Money value={Math.max(0, snapshot.totals.personalConsumption - (snapshot.totals.personalCardConsumption ?? 0))} /></strong></span><span>Consumido no cartão<strong><Money value={snapshot.totals.personalCardConsumption ?? Math.max(0, snapshot.totals.totalCardConsumption - snapshot.totals.thirdPartyCardConsumption)} /></strong></span></div>{categories.length ? <div className="monthly-category-list">{categories.slice(0, 5).map((category) => <div key={category.name}><span>{category.name}<small>{category.share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</small></span><strong><Money value={category.amount} /></strong></div>)}</div> : <p>Nenhuma despesa pessoal classificada neste período.</p>}</section>;
 }
 
+export function MonthlyLifeCostSection({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
+  const recurring = snapshot.recurringCommitments;
+  const household = snapshot.householdCost;
+  const dependents = snapshot.dependentsCost;
+  const available = (snapshot.totals.totalRealIncome ?? snapshot.totals.totalIncome) - (recurring?.total ?? 0) - (household?.total ?? 0) - (dependents?.total ?? 0);
+  return <section className="finance-panel monthly-life-cost"><header><div><p className="eyebrow">Renda e custo da vida</p><h2>O que já estava comprometido</h2></div><strong><Money value={recurring?.total ?? 0} /></strong></header><p>{recurring?.incomeShare == null ? "A proporção aparecerá quando houver renda real confirmada." : `${recurring.incomeShare.toLocaleString("pt-BR")}% da renda real já estava comprometida antes do mês começar.`}</p><div className="monthly-life-grid"><article><h3>Composição da renda</h3>{snapshot.incomeBreakdown?.length ? snapshot.incomeBreakdown.map((item) => <span key={item.name}>{item.name}<strong><Money value={item.amount} /></strong></span>) : <p>Este é o primeiro mês acompanhado. A composição aparecerá com as receitas confirmadas.</p>}</article><article><h3>Custo da casa</h3><b><Money value={household?.total ?? 0} /></b>{household?.items.map((item) => <span key={item.name}>{item.name}<strong><Money value={item.amount} /></strong></span>)}</article><article><h3>Dependentes</h3><b><Money value={dependents?.total ?? 0} /></b>{dependents?.people.map((person) => <span key={person.name}>{person.name}<strong><Money value={person.total} /></strong></span>)}</article></div><div className="monthly-available"><span>Disponível antes dos gastos variáveis</span><strong className={available < 0 ? "negative" : "positive"}><Money value={available} /></strong><small>Renda real menos compromissos recorrentes, casa e dependentes.</small></div></section>;
+}
+
+export function MonthlyCardDetails({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
+  const installments = snapshot.installments;
+  const thirdParties = snapshot.thirdPartySummary ?? [];
+  return <div className="monthly-two-columns"><section className="finance-panel"><header><div><p className="eyebrow">Valores de terceiros</p><h2>Quem ainda precisa acertar</h2></div></header>{thirdParties.length ? <div className="monthly-detail-table"><div className="head"><span>Pessoa</span><span>Parte dela</span><span>Já recebeu</span><span>Falta receber</span></div>{thirdParties.map((person) => <div key={person.personId}><strong>{person.personName}</strong><Money value={person.total} /><Money value={person.received} /><Money value={person.pending} /></div>)}</div> : <p>Não há valores de terceiros neste mês.</p>}</section><section className="finance-panel"><header><div><p className="eyebrow">Parcelamentos</p><h2>Compras que continuam</h2></div></header><div className="monthly-installment-summary"><span>Parcelas agora<strong><Money value={installments?.chargedNow ?? 0} /></strong></span><span>Já pago<strong><Money value={installments?.paid ?? 0} /></strong></span><span>Ainda falta<strong><Money value={installments?.remaining ?? 0} /></strong></span></div>{installments?.items.length ? <div className="monthly-installment-list">{installments.items.map((item) => <article key={item.id}><span><b>{item.description}</b><small>Parcela {item.current} de {item.total}{item.responsibleName ? ` • ${item.responsibleName}` : ""}</small></span><span><strong><Money value={item.amount} /></strong><small>termina em {item.endsAt.slice(0, 7).split("-").reverse().join("/")}</small></span></article>)}</div> : <p>Nenhuma parcela identificada neste mês.</p>}</section></div>;
+}
+
+export function MonthlyProjectionSection({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
+  const projection = snapshot.projection ?? [];
+  if (!projection.length) return null;
+  const first = projection[0];
+  const gap = Math.max(0, first.total - snapshot.totals.closingBalance);
+  return <section className="finance-panel monthly-projection"><header><div><p className="eyebrow">Próximo mês</p><h2>Como os próximos meses começam</h2></div></header><div className="monthly-projection-grid">{projection.map((item) => <article key={item.month}><h3>{new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${item.month}-01T12:00:00Z`))}</h3><strong><Money value={item.total} /></strong><dl>{item.card ? <div><dt>Próxima fatura — sua parte</dt><dd><Money value={item.card} /></dd></div> : null}<div><dt>Parcelas dentro da fatura</dt><dd><Money value={item.installments} /></dd></div><div><dt>Recorrentes</dt><dd><Money value={item.recurring} /></dd></div><div><dt>Outros previstos</dt><dd><Money value={item.other} /></dd></div></dl></article>)}</div><div className="monthly-next-indicators"><span>Saldo final<strong><Money value={snapshot.totals.closingBalance} /></strong></span><span>Previsto no próximo mês<strong><Money value={first.total} /></strong></span><span>Falta para cobrir<strong><Money value={gap} /></strong></span><span>A receber de terceiros<strong><Money value={snapshot.totals.reimbursementsPending} /></strong></span></div></section>;
+}
+
 export function MonthlyFutureAndLoans({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
   const commitments = snapshot.futureCommitments ?? [];
   const loans = snapshot.loans ?? [];
@@ -79,8 +155,10 @@ export function MonthlyFutureAndLoans({ snapshot }: { snapshot: MonthlyReportSna
 }
 
 export function MonthlyTransactionsSection({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
-  if (!snapshot.entries.length) return null;
-  return <details className="finance-panel monthly-transactions"><summary>Movimentações do período <span>{snapshot.entries.length}</span></summary><div className="monthly-transaction-list">{snapshot.entries.slice(0, 100).map((entry) => <div key={`${entry.source}:${entry.id}`}><time>{date(entry.date)}</time><span><b>{entry.description}</b><small>{entry.context} • {entry.category} • {entry.origin}</small></span><strong className={entry.kind === "revenue" ? "positive" : "negative"}><Money value={entry.kind === "revenue" ? entry.amount : -entry.amount} /></strong></div>)}</div>{snapshot.entries.length > 100 ? <p>Mostrando as 100 movimentações mais relevantes. Use a página de movimentações para consultar todas.</p> : null}</details>;
+  const movements = snapshot.bankMovements ?? [];
+  if (!movements.length && !snapshot.entries.length) return null;
+  if (movements.length) return <details className="finance-panel monthly-transactions"><summary>Movimentações bancárias do período <span>{movements.length}</span></summary><div className="monthly-transaction-list">{movements.slice(0, 100).map(movement => <div key={movement.id}><time>{date(movement.date)}</time><span><b>{movement.description}</b><small>{movement.accountName}{movement.transactionRole === "invoice_payment" ? " • Pagamento de fatura" : ""}</small></span><strong className={movement.direction === "inflow" ? "positive" : "negative"}><Money value={movement.direction === "inflow" ? movement.amount : -movement.amount} /></strong></div>)}</div>{movements.length > 100 ? <p>Mostrando as 100 movimentações mais relevantes. Use a página de movimentações para consultar todas.</p> : null}</details>;
+  return <details className="finance-panel monthly-transactions"><summary>Movimentações do período <span>{snapshot.entries.length}</span></summary><div className="monthly-transaction-list">{snapshot.entries.slice(0, 100).map((entry) => <div key={`${entry.source}:${entry.id}`}><time>{date(entry.date)}</time><span><b>{entry.description}</b><small>{entry.context} • {entry.category} • {entry.origin}</small></span><strong className={entry.kind === "revenue" ? "positive" : "negative"}><Money value={entry.kind === "revenue" ? entry.amount : -entry.amount} /></strong></div>)}</div></details>;
 }
 
 export function MonthlyAttentionList({ snapshot }: { snapshot: MonthlyReportSnapshot }) {
@@ -110,7 +188,8 @@ export function MonthlyReportVersionHistory({ versions, common }: { versions: Mo
 export function MonthlyCloseDialog({ month, snapshot, canAdmin, common }: { month: FinancialMonthRecord; snapshot: MonthlyReportSnapshot; canAdmin: boolean; common: { workspaceId: string; year: number; month: number } }) {
   const blockers = snapshot.issues.filter((issue) => issue.severity === "blocking");
   if (!canAdmin) return null;
+  if (month.status === "planned") return null;
   if (month.status === "closed") return <details className="monthly-close-box"><summary>Reabrir mês</summary><form action={reopenFinancialMonth}><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="month_id" value={month.id} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><label>Motivo<textarea required minLength={3} name="reason" /></label><button className="finance-button secondary">Confirmar reabertura</button></form></details>;
-  if (["awaiting_consolidation", "reopened"].includes(month.status) && !blockers.length) return <details className="monthly-close-box" open><summary>Tudo certo para revisar este mês</summary><form action={prepareFinancialMonthForReview}><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><p>As faturas, responsabilidades e diferenças estão conferidas. Avance para a revisão final.</p><button className="finance-button">Preparar revisão</button></form></details>;
+  if (["awaiting_consolidation", "reopened"].includes(month.status) && !blockers.length) return <details className="monthly-close-box" open><summary>Tudo certo para revisar este mês</summary><form action={prepareFinancialMonthForReview}><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><p>Os pagamentos bancários, responsabilidades e diferenças estão conferidos. O PDF das faturas é opcional.</p><button className="finance-button">Preparar revisão</button></form></details>;
   return <details className="monthly-close-box" open={!blockers.length && month.status !== "open"}><summary>{blockers.length ? `Ainda há ${blockers.length} item(ns) para conferir` : `Concluir ${monthName(common.year, common.month)} e gerar relatório`}</summary>{blockers.length ? <p>Resolva os itens marcados como necessários antes de continuar.</p> : <form action={closeFinancialMonth}><input type="hidden" name="workspace_id" value={common.workspaceId} /><input type="hidden" name="year" value={common.year} /><input type="hidden" name="month" value={common.month} /><p>O Atlas salvará uma fotografia deste mês. Alterações futuras exigirão reabertura e criarão uma nova versão.</p><button className="finance-button">Concluir e gerar relatório</button></form>}</details>;
 }
