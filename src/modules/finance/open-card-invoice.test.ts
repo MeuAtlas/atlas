@@ -55,6 +55,19 @@ test("Bill só é promovida quando confiável e fallback mantém último valor",
   }).source, "provider_bill");
 });
 
+test("Bill menor não reduz o valor persistido quando o ciclo está parcial", () => {
+  const resolved = resolveOpenInvoiceTotal({
+    providerInvoiceTotal: 7082.45,
+    providerReliable: true,
+    calculatedTotal: 7082.45,
+    lastReliableTotal: 7669.72,
+    persistedDisplayTotal: 7669.72,
+    persistedDataCompleteness: "partial",
+  });
+  assert.equal(resolved.amount, 7669.72);
+  assert.equal(resolved.source, "last_reliable");
+});
+
 test("diferença e tag usam centavos, workspace e cycleId", () => {
   assert.equal(openInvoiceDifference(7082.45, 6942.14), 140.31);
   assert.equal(

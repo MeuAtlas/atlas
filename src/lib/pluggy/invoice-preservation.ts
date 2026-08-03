@@ -70,6 +70,7 @@ export function mergeInvoicePersistenceRow(input:{
     manualTotalAmount:
       incoming.manual_invoice_total??incoming.confirmed_invoice_total,
     changeReason:input.changeReason,
+    bankTotalCanReduce:completeness==="complete",
   });
   const preserve=completeness==="partial"&&(
     abruptCountDrop||

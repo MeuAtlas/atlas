@@ -43,9 +43,10 @@ test("visão geral, projeção e detalhe usam a mesma seleção compatível de c
       ?.length,
     3,
   );
+  const selectionStart = source.indexOf("export const CARD_PURCHASE_SELECT");
   const selection = source.slice(
-    source.indexOf("export const CARD_PURCHASE_SELECT"),
-    source.indexOf("export async function getCardInvoiceHistory"),
+    selectionStart,
+    source.indexOf(";", selectionStart) + 1,
   );
   assert.doesNotMatch(selection, /realized_at/);
 });

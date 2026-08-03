@@ -44,6 +44,10 @@ import {
 import { calculateOpenCardCycleBreakdown } from "./open-card-cycle";
 import { normalizeCardMovementAmounts } from "./foreign-card-movement";
 import {
+  findCreditCardPaymentCandidates,
+  identifyCreditCardPaymentTransaction,
+} from "./credit-card-payment-reconciliation";
+import {
   buildResolvedCardCycleDetails,
   type ResolvedCardCycleDetails,
 } from "./resolved-card-cycle-details";
@@ -109,7 +113,7 @@ export async function getCreditCardInvoiceAnalyticsEntries(
   let query = supabase
     .from("card_invoices")
     .select(
-      "id,card_id,cycle_start_date,cycle_end_date,closing_date,due_date,status,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,last_reliable_invoice_total,current_display_total,confirmed_payment_amount,payment_confirmation_status,payment_confirmation_source,payment_confirmed_at,total_source",
+      "id,card_id,cycle_start_date,cycle_end_date,closing_date,due_date,status,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,calculated_invoice_total,last_reliable_invoice_total,current_display_total,paid_amount,paid_at,payment_status,confirmed_payment_amount,payment_confirmation_status,payment_confirmation_source,payment_confirmed_at,total_source",
     )
     .neq("status", "cancelled")
     .order("due_date", { ascending: false })
@@ -128,11 +132,23 @@ export async function getCreditCardInvoiceAnalyticsEntries(
   const statementIds = (result.data ?? []).map(row => String(row.id));
   const paymentsResult = statementIds.length
     ? await supabase.from("credit_card_statement_payments")
-        .select("statement_id,payment_date,allocated_amount,is_third_party,payment_source")
+        .select("statement_id,bank_transaction_id,payment_date,allocated_amount,is_third_party,payment_source")
         .in("statement_id", statementIds)
     : { data: [], error: null };
+  const officialPaymentsResult = statementIds.length
+    ? await supabase.from("credit_card_bill_payments")
+        .select("bill_id,value_type")
+        .in("bill_id", statementIds)
+    : { data: [], error: null };
+  const officialPartialStatementIds = new Set(
+    (officialPaymentsResult.data ?? []).flatMap(payment =>
+      String(payment.value_type) === "INSTALLMENT_PAYMENT"
+        ? [String(payment.bill_id)]
+        : []),
+  );
   const paymentsByStatement = new Map<string, Array<{
     payment_date: string;
+    bank_transaction_id: string | null;
     allocated_amount: number | string;
     is_third_party: boolean;
     payment_source: string;
@@ -145,15 +161,95 @@ export async function getCreditCardInvoiceAnalyticsEntries(
       paymentsByStatement.set(key, list);
     }
   }
+  const allocatedTransactionIds = new Set(
+    [...paymentsByStatement.values()].flatMap(payments =>
+      payments.flatMap(payment => payment.bank_transaction_id
+        ? [payment.bank_transaction_id]
+        : []),
+    ),
+  );
+  const explicitPartialTransactionIds = new Set<string>();
+  const earliestClosingDate = (result.data ?? [])
+    .flatMap(row => row.closing_date ? [String(row.closing_date).slice(0, 10)] : [])
+    .sort()[0];
+  if (earliestClosingDate) {
+    let fallbackQuery = supabase.from("financial_transactions").select(
+      "id,description,amount,original_amount,transaction_type,transaction_role,source_type,financial_origin,cash_flow_kind,bank_direction,financial_nature,status,competence_date,due_date,realized_at,provider_posted_at,bank_posted_at,effective_at,user_effective_at,source,visibility,account_id,credit_card_id,invoice_id,workspace_id",
+    ).eq("owner_id", userId)
+      .not("account_id", "is", null)
+      .or("transaction_role.eq.invoice_payment,cash_flow_kind.eq.invoice_payment,financial_nature.eq.invoice_payment")
+      .gte("competence_date", earliestClosingDate)
+      .order("competence_date", { ascending: true })
+      .limit(120);
+    fallbackQuery = workspaceId
+      ? fallbackQuery.eq("workspace_id", workspaceId)
+      : fallbackQuery.is("workspace_id", null);
+    const fallbackPayments = await fallbackQuery;
+    if (!fallbackPayments.error) {
+      const statements = (result.data ?? []).map(row => {
+        const resolved = resolveHistoricalInvoiceTotal(row as Pick<
+          StoredCardInvoice,
+          | "provider_invoice_total"
+          | "manual_invoice_total"
+          | "confirmed_invoice_total"
+          | "calculated_invoice_total"
+          | "total_source"
+        >);
+        return {
+          id: String(row.id),
+          cardId: String(row.card_id),
+          expectedAmount: Number(resolved.total ?? row.current_display_total ?? 0),
+          closingDate: String(row.closing_date),
+          dueDate: String(row.due_date),
+          cancelled: String(row.status) === "cancelled",
+        };
+      });
+      for (const rawPayment of fallbackPayments.data ?? []) {
+        const payment = rawPayment as unknown as FinancialTransaction;
+        if (/(PARCIAL|MINIM[OA]|FINANCI|ROTATIV)/i.test(payment.description)) {
+          explicitPartialTransactionIds.add(payment.id);
+          continue;
+        }
+        if (allocatedTransactionIds.has(payment.id)) continue;
+        const identified = identifyCreditCardPaymentTransaction(payment);
+        if (!identified.isCandidate || !identified.paymentDate || identified.amount <= 0) continue;
+        const eligibleStatements = statements.filter(statement =>
+          !(paymentsByStatement.get(statement.id)?.length) &&
+          identified.paymentDate! > statement.closingDate.slice(0, 10) &&
+          identified.paymentDate! <= statement.dueDate.slice(0, 10),
+        );
+        const candidates = findCreditCardPaymentCandidates({
+          transaction: payment,
+          statements: eligibleStatements,
+        });
+        const best = candidates[0];
+        if (!best || best.score < 50 || candidates[1]?.score === best.score) continue;
+        const list = paymentsByStatement.get(best.statementId) ?? [];
+        list.push({
+          payment_date: identified.paymentDate,
+          bank_transaction_id: payment.id,
+          allocated_amount: identified.amount,
+          is_third_party: false,
+          payment_source: "bank_transaction",
+        });
+        paymentsByStatement.set(best.statementId, list);
+        allocatedTransactionIds.add(payment.id);
+      }
+    }
+  }
   return (result.data ?? []).flatMap(row => {
     const status = String(row.status) as StoredCardInvoice["status"];
     const payments = paymentsByStatement.get(String(row.id)) ?? [];
     const confirmedPaymentAmount = Number(row.confirmed_payment_amount ?? 0);
+    const legacyPaidAmount = Number(row.paid_amount ?? 0);
     const paidAmount = confirmedPaymentAmount > 0
       ? confirmedPaymentAmount
-      : payments.reduce((sum, payment) => sum + Math.abs(Number(payment.allocated_amount ?? 0)), 0);
+      : payments.length
+        ? payments.reduce((sum, payment) => sum + Math.abs(Number(payment.allocated_amount ?? 0)), 0)
+        : legacyPaidAmount;
     const paymentDate = payments.map(payment => payment.payment_date).sort().at(-1) ??
-      (row.payment_confirmed_at ? String(row.payment_confirmed_at).slice(0, 10) : null);
+      (row.payment_confirmed_at ? String(row.payment_confirmed_at).slice(0, 10) : null) ??
+      (row.paid_at ? String(row.paid_at).slice(0, 10) : null);
     const resolved = resolveHistoricalInvoiceTotal(
       row as Pick<
         StoredCardInvoice,
@@ -164,6 +260,21 @@ export async function getCreditCardInvoiceAnalyticsEntries(
         | "total_source"
       >,
     );
+    const paymentStatus = row.payment_status ? String(row.payment_status) : null;
+    const rawConfirmation = row.payment_confirmation_status
+      ? String(row.payment_confirmation_status)
+      : null;
+    const explicitPartialPayment = officialPartialStatementIds.has(String(row.id)) ||
+      payments.some(payment => payment.bank_transaction_id &&
+        explicitPartialTransactionIds.has(payment.bank_transaction_id));
+    const bankPaymentConfirmsHistory = paidAmount > 0 && status !== "open" &&
+      !explicitPartialPayment;
+    const effectiveConfirmation = ["paid", "overpaid", "manually_confirmed"]
+      .includes(rawConfirmation ?? "")
+      ? rawConfirmation
+      : status === "paid" || paymentStatus === "paid" || bankPaymentConfirmsHistory
+        ? "paid"
+        : rawConfirmation;
     return [{
       id: String(row.id),
       cardId: String(row.card_id),
@@ -179,9 +290,13 @@ export async function getCreditCardInvoiceAnalyticsEntries(
       reliableTotal: row.last_reliable_invoice_total == null ? null : Number(row.last_reliable_invoice_total),
       estimatedTotal: row.calculated_invoice_total == null ? null : Number(row.calculated_invoice_total),
       paidAmount: paidAmount > 0 ? paidAmount : null,
-      paymentConfirmationStatus: row.payment_confirmation_status ? String(row.payment_confirmation_status) : null,
-      paymentConfirmationSource: row.payment_confirmation_source ? String(row.payment_confirmation_source) : null,
-      isConfirmed: ["paid", "manually_confirmed", "overpaid"].includes(String(row.payment_confirmation_status ?? "")),
+      paymentConfirmationStatus: effectiveConfirmation,
+      paymentConfirmationSource: row.payment_confirmation_source
+        ? String(row.payment_confirmation_source)
+        : bankPaymentConfirmsHistory ? "bank_transaction" : null,
+      paymentStatus,
+      explicitPartialPayment,
+      isConfirmed: ["paid", "manually_confirmed", "overpaid"].includes(effectiveConfirmation ?? ""),
       totalSource: resolved.source,
     }];
   });

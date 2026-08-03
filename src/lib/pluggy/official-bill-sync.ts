@@ -6,6 +6,7 @@ import {databaseFailure,maskId} from "./diagnostics";
 import {findPluggyIdentityByItem,retrievePluggyBill} from "./client";
 import {IntegrationSyncError,normalizeIntegrationError} from "./errors";
 import type {PluggyBill,PluggyIdentity} from "./types";
+import type {DataCompleteness} from "./resilience";
 
 type DbClient=Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>;
 
@@ -19,8 +20,10 @@ export async function persistOfficialBills(input:{
   connectionId:string;
   billsByProviderAccount:Map<string,PluggyBill[]>;
   cardMap:Map<string,string>;
+  completeness?:DataCompleteness;
 }){
  const {supabase,ownerId,connectionId,billsByProviderAccount,cardMap}=input;
+ const completeness=input.completeness??"complete";
  let billCount=0,paymentCount=0,chargeCount=0;
  for(const [providerAccountId,providerBills] of billsByProviderAccount){
   const cardId=cardMap.get(providerAccountId);if(!cardId)continue;
@@ -43,7 +46,7 @@ export async function persistOfficialBills(input:{
    }
    const closing=normalized.closingDate??normalized.dueDate;
    const reference=referenceMonth(closing,normalized.dueDate);
-   const existing=await supabase.from("card_invoices").select("id,provider_updated_at")
+   const existing=await supabase.from("card_invoices").select("id,provider_updated_at,last_complete_sync_at,last_reliable_snapshot_at")
     .eq("owner_id",ownerId).eq("provider","pluggy")
     .eq("provider_bill_id",normalized.providerBillId).maybeSingle();
    if(existing.error)databaseFailure(existing.error,"bills_fetch","card_invoices.provider_lookup");
@@ -75,15 +78,16 @@ export async function persistOfficialBills(input:{
     provider:"pluggy",provider_bill_id:bill.id,
     provider_account_id:providerAccountId,
     provider_invoice_total:normalized.providerInvoiceTotal,
-    last_reliable_invoice_total:normalized.providerInvoiceTotal,
-    current_display_total:normalized.providerInvoiceTotal,
     minimum_payment_amount:normalized.minimumPaymentAmount,
     currency_code:normalized.currencyCode,
     allows_installments:normalized.allowsInstallments,
-    data_completeness:"complete",provider_status:"available",
+    data_completeness:completeness,provider_status:"available",
     last_sync_at:new Date().toISOString(),
-    last_complete_sync_at:new Date().toISOString(),
-    stale_since:null,last_provider_error:null,
+    last_complete_sync_at:completeness==="complete"
+      ? new Date().toISOString()
+      : existing.data?.last_complete_sync_at??null,
+    stale_since:completeness==="partial"?new Date().toISOString():null,
+    last_provider_error:null,
     raw_breakdown_metadata:{
       paymentCount:normalized.payments.length,
       financeChargeCount:normalized.financeCharges.length,
@@ -94,8 +98,13 @@ export async function persistOfficialBills(input:{
      last_remote_updated_at:bill.updatedAt??null,
      last_sync_attempt_at:new Date().toISOString(),
      last_successful_sync_at:new Date().toISOString(),
-     last_reliable_snapshot_at:new Date().toISOString(),
-     sync_status:"updated",value_change_reason:"bank_total_changed",
+     last_reliable_snapshot_at:completeness==="complete"
+      ? new Date().toISOString()
+      : existing.data?.last_reliable_snapshot_at??null,
+     sync_status:completeness==="complete"?"updated":"partially_updated",
+     value_change_reason:completeness==="complete"
+      ? "bank_total_changed"
+      : "partial_sync_preserved",
      value_change_source:"pluggy_bill",
      updated_at:new Date().toISOString(),
    };
@@ -193,7 +202,8 @@ export async function refreshOfficialBill(input:{
    supabase:input.supabase,ownerId:input.ownerId,
    connectionId:String(card.data.bank_connection_id),
     billsByProviderAccount:new Map([[accountId,[bill]]]),
-    cardMap:new Map([[accountId,String(local.data.card_id)]]),
+   cardMap:new Map([[accountId,String(local.data.card_id)]]),
+   completeness:"complete",
   });
  }catch(error){
   const normalized=normalizeIntegrationError(error);

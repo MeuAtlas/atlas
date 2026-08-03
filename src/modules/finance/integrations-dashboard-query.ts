@@ -39,7 +39,7 @@ export async function getFinanceIntegrationsDashboard(input: {
       withQueryFallback(
         "provider_incidents",
         input.supabase.from("bank_connections")
-          .select("id,last_complete_sync_at,last_sync_at,provider_status,data_completeness,incident_message,stale_since,partial_data_count")
+          .select("id,last_complete_sync_at,last_sync_at,last_sync_attempt_at,last_any_success_at,last_integral_success_at,connection_sync_status,provider_status,data_completeness,incident_message,stale_since,partial_data_count")
           .eq("owner_id", input.userId).eq("provider", "pluggy")
           .neq("status", "disabled"),
         [],
@@ -138,6 +138,16 @@ export async function getFinanceIntegrationsDashboard(input: {
       lastSuccessfulSyncAt: row.last_successful_sync_at ? String(row.last_successful_sync_at) : null,
       lastCompleteSyncAt: providerHealth?.last_complete_sync_at ? String(providerHealth.last_complete_sync_at) : null,
       lastSyncAt: providerHealth?.last_sync_at ? String(providerHealth.last_sync_at) : null,
+      lastSyncAttemptAt: providerHealth?.last_sync_attempt_at ? String(providerHealth.last_sync_attempt_at) : null,
+      lastAnySuccessAt: providerHealth?.last_any_success_at
+        ? String(providerHealth.last_any_success_at)
+        : row.last_successful_sync_at ? String(row.last_successful_sync_at) : null,
+      lastIntegralSuccessAt: providerHealth?.last_integral_success_at
+        ? String(providerHealth.last_integral_success_at)
+        : providerHealth?.last_complete_sync_at ? String(providerHealth.last_complete_sync_at) : null,
+      connectionSyncStatus: providerHealth?.connection_sync_status
+        ? String(providerHealth.connection_sync_status)
+        : "needs_attention",
       providerStatus: providerHealth?.provider_status ? String(providerHealth.provider_status) : "waiting",
       dataCompleteness: providerHealth?.data_completeness ? String(providerHealth.data_completeness) : "unknown",
       incidentMessage: providerHealth?.incident_message ? String(providerHealth.incident_message) : null,
@@ -147,7 +157,7 @@ export async function getFinanceIntegrationsDashboard(input: {
       diagnostics: diagnostics.get(String(row.id)) ?? ensureDiagnostic(String(row.id)),
     };
   });
-  const runs: RecentSyncActivity[] = history.data
+  let runs: RecentSyncActivity[] = history.data
     .filter(row => connectionIds.includes(String(row.bank_connection_id)))
     .map(row => ({
       id: String(row.id),
@@ -168,6 +178,7 @@ export async function getFinanceIntegrationsDashboard(input: {
       warningCodes: Array.isArray(row.warning_codes) ? row.warning_codes.map(String) : [],
       errorCode: row.error_code ? String(row.error_code) : null,
       safeMessage: row.error_message ? String(row.error_message) : null,
+      productResults: [],
     }));
   const accountFreshnessById = new Map(accountFreshness.data.map(row => [String(row.id), row]));
   const resources: IntegrationResourceInput[] = resourceRows.data
@@ -203,6 +214,28 @@ export async function getFinanceIntegrationsDashboard(input: {
           : {}),
       },
     }));
+  runs = runs.map(run => ({
+    ...run,
+    productResults: resources
+      .filter(resource => resource.syncRunId === run.id)
+      .filter(resource => !["item", "connector"].includes(resource.resourceType))
+      .map(resource => ({
+        id: resource.id,
+        name: resource.resourceType === "accounts" ? "Conta corrente"
+          : resource.resourceType === "transactions" ? "Movimentações"
+          : resource.resourceType === "credit_cards" ? "Cartões"
+          : resource.resourceType === "bills" ? "Faturas"
+          : resource.resourceType === "loans" ? "Empréstimos"
+          : resource.resourceType === "investments" ? "Investimentos"
+          : "Identidade",
+        status: resource.status === "succeeded" ? "updated"
+          : resource.status === "succeeded_with_warnings" ? "partial"
+          : resource.status === "preserved" ? "preserved"
+          : "unavailable",
+        received: resource.received,
+        preserved: resource.preserved,
+      })),
+  }));
   const cardDiagnostics: AdvancedCardDiagnostic[] = cardRows.data.map(row => ({
     id: String(row.id),
     name: String((row.credit_cards as unknown as { name?: string } | null)?.name ?? "Cartão"),

@@ -82,18 +82,24 @@ export function InvoiceConsumptionAnalytics({ analytics }: { analytics: InvoiceH
             <div className="invoice-consumption-chart" role="list" aria-label="Faturas por mês de pagamento">
               {points.map(point => {
                 const item = point.item;
+                const formattedTotal = point.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                const valueLabel = item.status === "paid" ? "Valor pago" : "Valor da fatura";
                 return (
                   <div className={item.status} key={point.month} role="listitem">
                     <details className="invoice-consumption-tooltip">
                       <summary
                         style={{ "--invoice-bar-height": `${Math.max(5, (point.total / maximum) * 100)}%` } as CSSProperties}
-                        aria-label={`${item.monthLabel}: ${point.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}, ${item.statusLabel}`}
+                        aria-label={`${item.monthLabel}: ${formattedTotal}, ${item.statusLabel}`}
+                        data-tooltip-value={formattedTotal}
                       >
                         <span />
                       </summary>
                       <div>
                         <b>{item.tooltip.title}</b>
-                        <strong><Money value={point.total} /></strong>
+                        <span className="invoice-consumption-tooltip-value">
+                          {valueLabel}
+                          <em><Money value={point.total} /></em>
+                        </span>
                         <span>Situação <em>{item.tooltip.statusLabel}</em></span>
                         {item.tooltip.paymentLabel ? <span>Pagamento <em>{item.tooltip.paymentLabel}</em></span> : null}
                         {item.tooltip.cycleLabel ? <span>Ciclo de compras <em>{item.tooltip.cycleLabel}</em></span> : null}
@@ -103,7 +109,7 @@ export function InvoiceConsumptionAnalytics({ analytics }: { analytics: InvoiceH
                         {item.invoiceCount > 1 ? <small>{item.invoiceCount} faturas consolidadas neste mês</small> : null}
                       </div>
                     </details>
-                    <small>{shortMonth(point.month)}</small>
+                    <small data-mobile-label={shortMonth(point.month).split("/")[0]}>{shortMonth(point.month)}</small>
                   </div>
                 );
               })}

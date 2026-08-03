@@ -91,6 +91,8 @@ export type InvoiceHistoryAnalyticsEntry = Pick<
   estimatedTotal?: number | null;
   paymentConfirmationStatus?: string | null;
   paymentConfirmationSource?: string | null;
+  paymentStatus?: string | null;
+  explicitPartialPayment?: boolean;
   isConfirmed?: boolean;
 };
 
@@ -193,8 +195,15 @@ export function getStatementCashMonth(statement: InvoiceHistoryAnalyticsEntry) {
 function chartStatus(statement: InvoiceHistoryAnalyticsEntry): StatementHistoryStatus {
   if (statement.status === "cancelled" || statement.paymentConfirmationStatus === "cancelled") return "cancelled";
   const confirmation = statement.paymentConfirmationStatus;
-  if (["paid", "manually_confirmed", "overpaid"].includes(confirmation ?? "") ||
-      (!confirmation && statement.status === "paid")) return "paid";
+  const paid = amountOrNull(statement.paidAmount);
+  if (statement.status === "paid" || statement.paymentStatus === "paid") return "paid";
+  if (
+    paid !== null &&
+    paid > 0 &&
+    statement.status !== "open" &&
+    !statement.explicitPartialPayment
+  ) return "paid";
+  if (["paid", "manually_confirmed", "overpaid"].includes(confirmation ?? "")) return "paid";
   if (confirmation === "partially_paid" || statement.status === "partially_paid") return "partially_paid";
   if (["payment_detected", "payment_mismatch"].includes(confirmation ?? "")) return "payment_detected";
   if (statement.status === "open" || confirmation === "open") return "open";

@@ -38,3 +38,44 @@ test("migration 074 usa o maior valor entre confirmação e estimativa", () => {
   );
   assert.match(policy, /where status='open'/);
 });
+
+test("migration 097 restaura e preserva snapshot maior durante parcial", () => {
+  const policy = readFileSync(
+    "supabase/migrations/202608030097_preserve_newer_open_statement_on_partial_bill.sql",
+    "utf8",
+  );
+  assert.match(policy, /partial_bank_reduction/);
+  assert.match(policy, /new\.data_completeness='partial'/);
+  assert.match(policy, /bank_total<baseline/);
+  assert.match(policy, /partial_bill_lower_than_reliable_snapshot/);
+  assert.match(policy, /credit_card_statement_value_history/);
+  assert.match(policy, /history\.previous_display_total_amount>history\.new_display_total_amount/);
+  assert.doesNotMatch(policy, /delete from public\.(card_invoices|credit_card_statement_value_history)/i);
+});
+
+test("migration 098 repara somente a transição conhecida do incidente", () => {
+  const repair = readFileSync(
+    "supabase/migrations/202608030098_restore_incident_open_statement_snapshot.sql",
+    "utf8",
+  );
+  assert.match(repair, /id='0219faee-6359-4071-ac45-8a0fa3423764'::uuid/);
+  assert.match(repair, /current_display_total=7082\.45/);
+  assert.match(repair, /last_reliable_invoice_total=7082\.45/);
+  assert.match(repair, /current_display_total=7669\.72/);
+  assert.match(repair, /data_completeness='partial'/);
+  assert.doesNotMatch(repair, /delete from public\./i);
+});
+
+test("migration 099 remove somente aliases de confirmação incoerentes", () => {
+  const repair = readFileSync(
+    "supabase/migrations/202608030099_clear_stale_incident_confirmation_aliases.sql",
+    "utf8",
+  );
+  assert.match(repair, /source='calculated'/);
+  assert.match(repair, /total_source='calculated_transactions'/);
+  assert.match(repair, /provider_invoice_total is null/);
+  assert.match(repair, /manual_invoice_total=null/);
+  assert.match(repair, /confirmed_invoice_total=null/);
+  assert.match(repair, /current_display_total=7669\.72/);
+  assert.doesNotMatch(repair, /delete from public\./i);
+});

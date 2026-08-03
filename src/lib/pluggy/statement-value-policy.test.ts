@@ -60,3 +60,25 @@ test("Bill oficial, inclusive zero, sempre tem prioridade",()=>{
  }
 });
 
+test("Bill menor não reduz snapshot durante sincronização parcial",()=>{
+ const value=resolveStatementDisplayAmount({
+  bankTotalAmount:7082.45,calculatedTotalAmount:7082.45,
+  calculationCompleteness:"partial",lastReliableTotalAmount:7669.72,
+  previousDisplayTotalAmount:7669.72,bankTotalCanReduce:false,
+ });
+ assert.equal(value.displayTotalAmount,7669.72);
+ assert.equal(value.lastReliableTotalAmount,7669.72);
+ assert.equal(value.source,"reliable_snapshot");
+ assert.equal(value.reason,"partial_sync_preserved");
+ assert.equal(value.preserved,true);
+});
+
+test("Bill maior continua sendo incorporada durante sincronização parcial",()=>{
+ const value=resolveStatementDisplayAmount({
+  bankTotalAmount:7769.72,calculationCompleteness:"partial",
+  lastReliableTotalAmount:7669.72,previousDisplayTotalAmount:7669.72,
+  bankTotalCanReduce:false,
+ });
+ assert.equal(value.displayTotalAmount,7769.72);
+ assert.equal(value.source,"bank_bill");
+});

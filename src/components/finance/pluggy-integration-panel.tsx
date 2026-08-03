@@ -154,9 +154,6 @@ export function IntegrationsPageHeader({
         <h1>{dashboard.header.title}</h1>
         <p>{dashboard.header.subtitle}</p>
       </div>
-      {dashboard.primaryConnection ? (
-        <SyncAction connectionId={dashboard.primaryConnection.id} />
-      ) : null}
     </header>
   );
 }
@@ -252,8 +249,8 @@ export function SyncedProductsPanel({
   onProduct: (product: IntegrationProductSummary) => void;
 }) {
   return (
-    <section className="integrations-section synced-products-panel">
-      <header><div><p className="eyebrow">COBERTURA</p><h2>Produtos sincronizados</h2></div><span>{products.length}</span></header>
+      <section className="integrations-section synced-products-panel">
+       <header><div><p className="eyebrow">COBERTURA</p><h2>Cobertura da atualização</h2></div><span>{products.length}</span></header>
       {products.length ? (
         <div>{products.map(product => <SyncedProductRow key={product.id} product={product} onOpen={() => onProduct(product)} />)}</div>
       ) : <p className="integrations-empty-line">A conexão ainda não retornou produtos financeiros.</p>}
@@ -460,9 +457,21 @@ export function SyncRunDetailsModal({ run, onClose }: { run: RecentSyncActivity;
           <div><dt>Indisponíveis</dt><dd>{run.resourcesFailed}</dd></div>
           <div><dt>Registros novos</dt><dd>{run.recordsInserted.toLocaleString("pt-BR")}</dd></div>
           <div><dt>Atualizados</dt><dd>{run.recordsUpdated.toLocaleString("pt-BR")}</dd></div>
-        </dl>
+         </dl>
+        {run.productResults?.length ? (
+          <section className="integration-run-products">
+            <h3>Cobertura da atualização</h3>
+            {run.productResults.map(product => (
+              <div key={product.id}>
+                <span className={`product-state-dot ${product.status}`} aria-hidden="true" />
+                <span><b>{product.name}</b><small>{product.received ? `${product.received.toLocaleString("pt-BR")} registros recebidos` : "Nenhuma atualização recebida"}</small></span>
+                <strong>{productStatus(product.status)}</strong>
+              </div>
+            ))}
+          </section>
+        ) : null}
         {run.warningCodes.length ? <p className="integration-safe-message">Alguns recursos permaneceram com o último estado confiável.</p> : null}
-        {run.safeMessage ? <p className="integration-safe-message">{run.safeMessage}{run.errorCode ? ` (${run.errorCode})` : ""}</p> : null}
+        {run.safeMessage ? <p className="integration-safe-message">{run.safeMessage}</p> : null}
       </AtlasModalBody>
     </AtlasModal>
   );

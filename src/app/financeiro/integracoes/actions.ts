@@ -7,6 +7,7 @@ import { getPluggyItem, testPluggyConnection } from "@/lib/pluggy/client";
 import { databaseFailure,logIntegrationFailure } from "@/lib/pluggy/diagnostics";
 import { publicPluggyMessage } from "@/lib/pluggy/errors";
 import { syncPluggyItem } from "@/lib/pluggy/sync";
+import { invalidatePluggySyncCaches } from "@/lib/pluggy/sync-cache";
 import type { PluggyResourceType } from "@/lib/pluggy/incremental-sync";
 import { invalidateOpenInvoiceCache } from "@/modules/finance/open-invoice-cache";
 import { invalidateIntegrationsCache } from "@/modules/finance/integrations-cache";
@@ -30,6 +31,21 @@ async function refreshIntegrationTags(
  }
  invalidateIntegrationsCache(workspaceId??userId,connectionId);
 }
+async function invalidateSyncResult(
+ supabase:Awaited<ReturnType<typeof requireFinanceAccess>>["supabase"],
+ userId:string,
+ connectionId:string,
+ summary:Awaited<ReturnType<typeof syncPluggyItem>>["summary"],
+){
+ const connection=await supabase.from("bank_connections")
+  .select("workspace_id").eq("id",connectionId).eq("owner_id",userId)
+  .maybeSingle();
+ await invalidatePluggySyncCaches({
+  supabase,ownerId:userId,integrationId:connectionId,
+  workspaceId:connection.data?.workspace_id?String(connection.data.workspace_id):null,
+  summary,
+ });
+}
 function refreshSyncedResources(summary:Awaited<ReturnType<typeof syncPluggyItem>>["summary"]){
  revalidatePath("/financeiro/integracoes");
  const succeeded=new Set(summary.resources.filter(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status)).map(resource=>resource.resourceType));
@@ -38,15 +54,16 @@ function refreshSyncedResources(summary:Awaited<ReturnType<typeof syncPluggyItem
  if(succeeded.has("loans"))revalidatePath("/financeiro/emprestimos");
 }
 function syncFeedback(result:Awaited<ReturnType<typeof syncPluggyItem>>){
- const bankTransactions=result.summary.resources.filter(resource=>resource.resourceType==="transactions"&&resource.entityType==="bank_account");
- const inserted=bankTransactions.reduce((sum,resource)=>sum+resource.inserted,0);
- const cardsPreserved=result.summary.resources.some(resource=>resource.resourceType==="credit_cards"&&["preserved","unavailable","failed"].includes(resource.status));
- const billsPreserved=result.summary.resources.some(resource=>resource.resourceType==="bills"&&["preserved","unavailable","failed"].includes(resource.status));
- if(result.summary.overallStatus==="completed")return inserted?`Sincronização concluída. ${inserted} nova(s) movimentação(ões) bancária(s) adicionada(s).`:"A conta corrente e os demais recursos estão atualizados.";
- const preserved=[cardsPreserved?"os cartões":null,billsPreserved?"as faturas":null].filter(Boolean).join(" e ");
- return inserted
-  ? `Sincronização concluída parcialmente. A conta corrente recebeu ${inserted} nova(s) movimentação(ões). ${preserved?`${preserved} permaneceram com os últimos dados confiáveis.`:"Os recursos indisponíveis foram preservados."}`
-  : `Parte dos dados foi atualizada. ${preserved?`${preserved} permaneceram com os últimos dados confiáveis.`:"Os recursos indisponíveis foram preservados."}`;
+ const names:Record<string,string>={accounts:"contas",transactions:"movimentações",credit_cards:"cartões",bills:"faturas",loans:"empréstimos",investments:"investimentos",identity:"identidade"};
+ const unique=(values:string[])=>[...new Set(values)];
+ const join=(values:string[])=>values.length<2?(values[0]??""):`${values.slice(0,-1).join(", ")} e ${values.at(-1)}`;
+ const updated=unique(result.summary.resources.filter(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status)).map(resource=>names[resource.resourceType]??"dados"));
+ const preserved=unique(result.summary.resources.filter(resource=>["preserved","unavailable","failed"].includes(resource.status)).map(resource=>names[resource.resourceType]??"dados"));
+ if(result.summary.overallStatus==="completed")return "Sincronização concluída. Os dados disponíveis foram atualizados.";
+ const messages=["Sincronização concluída parcialmente."];
+ if(updated.length)messages.push(`Produtos atualizados: ${join(updated)}.`);
+ if(preserved.length)messages.push(`Sem atualização: ${join(preserved)}. Os últimos dados confiáveis foram preservados.`);
+ return messages.join(" ");
 }
 async function refreshOpenInvoiceCache(supabase:Awaited<ReturnType<typeof requireFinanceAccess>>["supabase"],userId:string){
  const result=await supabase.from("card_invoices").select("id,workspace_id").eq("owner_id",userId).eq("status","open");
@@ -71,21 +88,21 @@ export async function linkItemAction(_state:IntegrationActionState,data:FormData
 }
 
 export async function syncItemAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
- const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const connectionId=field(data,"connection_id",50);const result=await syncPluggyItem(supabase,user.id,connectionId,false,{triggerType:"manual"});await refreshOpenInvoiceCache(supabase,user.id);refreshSyncedResources(result.summary);await refreshIntegrationTags(supabase,user.id,connectionId);return okay(syncFeedback(result))}catch(error){logIntegrationFailure(error,{operation:"sync.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
+ const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const connectionId=field(data,"connection_id",50);const result=await syncPluggyItem(supabase,user.id,connectionId,false,{triggerType:"manual"});await refreshOpenInvoiceCache(supabase,user.id);refreshSyncedResources(result.summary);await invalidateSyncResult(supabase,user.id,connectionId,result.summary);return okay(syncFeedback(result))}catch(error){logIntegrationFailure(error,{operation:"sync.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
 }
 export async function fullSyncItemAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
- const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const connectionId=field(data,"connection_id",50);const result=await syncPluggyItem(supabase,user.id,connectionId,true,{triggerType:"full_resync"});await refreshOpenInvoiceCache(supabase,user.id);refreshSyncedResources(result.summary);await refreshIntegrationTags(supabase,user.id,connectionId);return okay(syncFeedback(result))}catch(error){logIntegrationFailure(error,{operation:"sync.full.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
+ const {supabase,user}=await requireFinanceAccess();const started=Date.now();try{const connectionId=field(data,"connection_id",50);const result=await syncPluggyItem(supabase,user.id,connectionId,true,{triggerType:"full_resync"});await refreshOpenInvoiceCache(supabase,user.id);refreshSyncedResources(result.summary);await invalidateSyncResult(supabase,user.id,connectionId,result.summary);return okay(syncFeedback(result))}catch(error){logIntegrationFailure(error,{operation:"sync.full.action",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Action Failure]"});return fail(error)}
 }
 export async function retryResourceAction(_state:IntegrationActionState,data:FormData):Promise<IntegrationActionState>{
  const {supabase,user}=await requireFinanceAccess();const started=Date.now();
  try{
   const resource=field(data,"resource_type",40) as PluggyResourceType;
-  const allowed:PluggyResourceType[]=["accounts","transactions","credit_cards","bills","loans","investments"];
+  const allowed:PluggyResourceType[]=["accounts","transactions","credit_cards","bills","loans","investments","identity"];
   if(!allowed.includes(resource))return {status:"error",message:"Recurso inválido para nova tentativa."};
   const connectionId=field(data,"connection_id",50);
   const result=await syncPluggyItem(supabase,user.id,connectionId,false,{triggerType:"retry",resourceTypes:[resource]});
   refreshSyncedResources(result.summary);
-  await refreshIntegrationTags(supabase,user.id,connectionId);
+  await invalidateSyncResult(supabase,user.id,connectionId,result.summary);
   return okay(`${resource==="transactions"?"Movimentações":"Recurso"} atualizado em uma tentativa independente.`);
  }catch(error){logIntegrationFailure(error,{operation:"sync.resource.retry",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Resource Retry Failure]"});return fail(error)}
 }
@@ -98,7 +115,7 @@ export async function recoverPluggyTransactionsAction(_state:IntegrationActionSt
    recoveryWindowDays:90,
   });
   refreshSyncedResources(result.summary);
-  await refreshIntegrationTags(supabase,user.id,connectionId);
+  await invalidateSyncResult(supabase,user.id,connectionId,result.summary);
   return okay(syncFeedback(result));
  }catch(error){
   logIntegrationFailure(error,{operation:"sync.recovery",stage:"sync",durationMs:Date.now()-started,user:user.id,label:"[Atlas Pluggy Recovery Failure]"});

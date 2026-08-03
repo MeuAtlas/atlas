@@ -481,6 +481,44 @@ test("pagamento confirmado mantém agosto pago e avança a próxima fatura abert
   assert.equal(analytics.currentTotal, 1610.5);
 });
 
+test("pagamento bancário confirma histórico cujo total era apenas estimado", () => {
+  const analytics = buildInvoiceHistoryAnalytics([{
+    id: "estimated-paid", cardId: "mastercard", dueDate: "2026-05-10",
+    status: "partially_paid", total: 9000,
+    totalSource: "calculated_transactions", paidAmount: 8571.48,
+    paymentDate: "2026-05-08", paymentConfirmationStatus: "partially_paid",
+    paymentConfirmationSource: "bank_transaction",
+  }], null);
+  assert.deepEqual(
+    analytics.months.map(item => [item.month, item.total, item.item.status]),
+    [["2026-05", 8571.48, "paid"]],
+  );
+  assert.equal(analytics.median, 8571.48);
+});
+
+test("parcial permanece apenas quando há evidência explícita", () => {
+  const analytics = buildInvoiceHistoryAnalytics([{
+    id: "explicit-partial", cardId: "mastercard", dueDate: "2026-05-10",
+    status: "partially_paid", total: 9000, totalSource: "provider_bill",
+    paidAmount: 4500, paymentDate: "2026-05-08",
+    paymentConfirmationStatus: "partially_paid",
+    explicitPartialPayment: true,
+  }], null);
+  assert.equal(analytics.months[0].item.status, "partially_paid");
+  assert.equal(analytics.months[0].item.participatesInMedian, false);
+});
+
+test("status pago legado não é mascarado por confirmação estimada", () => {
+  const analytics = buildInvoiceHistoryAnalytics([{
+    id: "legacy-paid", cardId: "mastercard", dueDate: "2026-04-10",
+    status: "paid", total: 9352.54, totalSource: "calculated_transactions",
+    paidAmount: 9352.54, paymentDate: "2026-04-10",
+    paymentStatus: "paid", paymentConfirmationStatus: "estimated",
+  }], null);
+  assert.equal(analytics.months[0].item.status, "paid");
+  assert.equal(analytics.months[0].item.participatesInMedian, true);
+});
+
 test("data do pagamento confirmado tem prioridade sobre vencimento e meses iguais são consolidados", () => {
   const analytics = buildInvoiceHistoryAnalytics([
     {

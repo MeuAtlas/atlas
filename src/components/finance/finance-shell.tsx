@@ -9,28 +9,23 @@ import { ModuleSwitcher } from "@/components/atlas/module-switcher";
 import { ThemeToggle } from "@/components/atlas/theme-toggle";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { FinanceTabs } from "./finance-tabs";
+import { FinanceNotifications } from "./finance-notifications";
 import { FinanceWorkspaceProvider } from "./finance-workspace-context";
+import type { ProviderHealth } from "./provider-health-alert";
 import type { AtlasModule, Profile, Workspace } from "@/types/atlas";
-
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 9a6 6 0 0 1 12 0c0 7 3 7 3 8H3c0-1 3-1 3-8Z" />
-      <path d="M10 21h4" />
-    </svg>
-  );
-}
 
 export function FinanceShell({
   children,
   profile,
   workspaces,
   modules,
+  providerHealth,
 }: {
   children: ReactNode;
   profile: Profile;
   workspaces: Workspace[];
   modules: AtlasModule[];
+  providerHealth: ProviderHealth[];
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -53,13 +48,7 @@ export function FinanceShell({
           </Link>
           <ModuleSwitcher modules={modules} currentSlug="financeiro" />
           <div className="finance-profile">
-            <button
-              type="button"
-              className="finance-notifications"
-              aria-label="Notificações"
-            >
-              <BellIcon />
-            </button>
+            <FinanceNotifications connections={providerHealth} />
             <ThemeToggle />
             <span>{name}</span>
             <LogoutButton />

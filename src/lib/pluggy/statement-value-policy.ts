@@ -45,6 +45,7 @@ export function resolveStatementDisplayAmount(input: {
   previousDisplayTotalAmount?: unknown;
   manualTotalAmount?: unknown;
   changeReason?: StatementChangeReason | null;
+  bankTotalCanReduce?: boolean;
 }) {
   const bank = money(input.bankTotalAmount);
   const calculated = money(input.calculatedTotalAmount);
@@ -54,6 +55,20 @@ export function resolveStatementDisplayAmount(input: {
   const baseline = lastReliable ?? previousDisplay;
   const reason = input.changeReason ?? "unknown";
 
+  if (
+    bank !== null &&
+    baseline !== null &&
+    bank < baseline &&
+    input.bankTotalCanReduce === false
+  ) {
+    return {
+      displayTotalAmount: baseline,
+      lastReliableTotalAmount: lastReliable ?? baseline,
+      source: "reliable_snapshot" as StatementTotalSource,
+      preserved: true,
+      reason: "partial_sync_preserved" as StatementChangeReason,
+    };
+  }
   if (bank !== null) {
     return {
       displayTotalAmount: bank,

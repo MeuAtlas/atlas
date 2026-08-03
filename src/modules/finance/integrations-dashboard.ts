@@ -1,5 +1,6 @@
 export type IntegrationOverallStatus =
   | "updated"
+  | "updated_with_warnings"
   | "partial"
   | "attention"
   | "disconnected"
@@ -87,6 +88,13 @@ export type RecentSyncActivity = {
   warningCodes: string[];
   errorCode: string | null;
   safeMessage: string | null;
+  productResults?: Array<{
+    id: string;
+    name: string;
+    status: IntegrationProductStatus;
+    received: number;
+    preserved: number;
+  }>;
 };
 
 export type AdvancedCardDiagnostic = {
@@ -149,6 +157,10 @@ export type IntegrationConnectionInput = {
   lastSuccessfulSyncAt: string | null;
   lastCompleteSyncAt: string | null;
   lastSyncAt: string | null;
+  lastSyncAttemptAt?: string | null;
+  lastAnySuccessAt?: string | null;
+  lastIntegralSuccessAt?: string | null;
+  connectionSyncStatus?: string;
   providerStatus: string;
   dataCompleteness: string;
   incidentMessage: string | null;
@@ -196,9 +208,12 @@ export type IntegrationDashboardInput = {
 const authenticationSignals = ["auth", "credential", "mfa", "login"];
 const visibleResources = new Set([
   "accounts",
+  "transactions",
   "credit_cards",
+  "bills",
   "loans",
   "investments",
+  "identity",
 ]);
 
 export function nextDailySyncAt(now = new Date()) {
@@ -243,8 +258,8 @@ export function resolveIntegrationHealthStatus(input: {
       title: "Sincronizando",
       description: "Os dados financeiros estão sendo atualizados agora.",
       severity: "progress",
-      lastSuccessfulSyncAt: connection.lastSuccessfulSyncAt,
-      lastFullSyncAt: connection.lastCompleteSyncAt,
+      lastSuccessfulSyncAt: connection.lastAnySuccessAt ?? connection.lastSuccessfulSyncAt,
+      lastFullSyncAt: connection.lastIntegralSuccessAt ?? connection.lastCompleteSyncAt,
       nextScheduledSyncAt,
       requiresAction: false,
       actionLabel: null,
@@ -256,7 +271,7 @@ export function resolveIntegrationHealthStatus(input: {
     ["Conta corrente", "Movimentações"].includes(product.type) &&
     product.status === "unavailable" && !product.lastSuccessfulSyncAt,
   );
-  if (authenticationRequired || connection.status === "error" || unavailableCritical) {
+  if (authenticationRequired || connection.connectionSyncStatus === "needs_attention" || connection.connectionSyncStatus === "error" || unavailableCritical) {
     return {
       overallStatus: "attention",
       title: "Requer atenção",
@@ -264,25 +279,42 @@ export function resolveIntegrationHealthStatus(input: {
         ? "A instituição precisa de uma nova autenticação para continuar atualizando."
         : "Uma fonte essencial não conseguiu atualizar os dados.",
       severity: "danger",
-      lastSuccessfulSyncAt: connection.lastSuccessfulSyncAt,
-      lastFullSyncAt: connection.lastCompleteSyncAt,
+      lastSuccessfulSyncAt: connection.lastAnySuccessAt ?? connection.lastSuccessfulSyncAt,
+      lastFullSyncAt: connection.lastIntegralSuccessAt ?? connection.lastCompleteSyncAt,
       nextScheduledSyncAt,
       requiresAction: true,
       actionLabel: "Ver detalhes",
       actionHref: null,
     };
   }
-  const partial = connection.dataCompleteness === "partial" ||
+  const partial = connection.connectionSyncStatus !== "updated_with_warnings" && (
+    connection.connectionSyncStatus === "partially_updated" ||
+    connection.dataCompleteness === "partial" ||
     ["warning", "completed_with_warnings"].includes(connection.syncStatus) ||
-    products.some(product => ["partial", "preserved", "unavailable"].includes(product.status));
+    products.some(product => ["partial", "preserved", "unavailable"].includes(product.status))
+  );
   if (partial) {
     return {
       overallStatus: "partial",
       title: "Atualizada parcialmente",
       description: "Os produtos disponíveis foram atualizados e os demais mantiveram o último estado confiável.",
       severity: "warning",
-      lastSuccessfulSyncAt: connection.lastSuccessfulSyncAt,
-      lastFullSyncAt: connection.lastCompleteSyncAt,
+      lastSuccessfulSyncAt: connection.lastAnySuccessAt ?? connection.lastSuccessfulSyncAt,
+      lastFullSyncAt: connection.lastIntegralSuccessAt ?? connection.lastCompleteSyncAt,
+      nextScheduledSyncAt,
+      requiresAction: false,
+      actionLabel: "Ver detalhes",
+      actionHref: null,
+    };
+  }
+  if (connection.connectionSyncStatus === "updated_with_warnings") {
+    return {
+      overallStatus: "updated_with_warnings",
+      title: "Atualizada com avisos",
+      description: "Os produtos financeiros principais foram atualizados. Um produto adicional ficou indisponível.",
+      severity: "warning",
+      lastSuccessfulSyncAt: connection.lastAnySuccessAt ?? connection.lastSuccessfulSyncAt,
+      lastFullSyncAt: connection.lastIntegralSuccessAt ?? connection.lastCompleteSyncAt,
       nextScheduledSyncAt,
       requiresAction: false,
       actionLabel: "Ver detalhes",
@@ -294,8 +326,8 @@ export function resolveIntegrationHealthStatus(input: {
     title: "Atualizada",
     description: "Todos os produtos financeiros relevantes estão atuais.",
     severity: "success",
-    lastSuccessfulSyncAt: connection.lastSuccessfulSyncAt,
-    lastFullSyncAt: connection.lastCompleteSyncAt,
+    lastSuccessfulSyncAt: connection.lastAnySuccessAt ?? connection.lastSuccessfulSyncAt,
+    lastFullSyncAt: connection.lastIntegralSuccessAt ?? connection.lastCompleteSyncAt,
     nextScheduledSyncAt,
     requiresAction: false,
     actionLabel: null,
@@ -310,6 +342,7 @@ function productType(resource: IntegrationResourceInput) {
   if (resource.resourceType === "bills") return "Faturas";
   if (resource.resourceType === "investments") return "Investimentos";
   if (resource.resourceType === "loans") return "Empréstimos";
+  if (resource.resourceType === "identity") return "Identidade";
   return "Produto financeiro";
 }
 
@@ -337,6 +370,38 @@ function productStatus(resource: IntegrationResourceInput): IntegrationProductSt
 function durationMs(run: RecentSyncActivity) {
   if (!run.completedAt) return null;
   return Math.max(0, new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime());
+}
+
+function buildPartialMessage(products: IntegrationProductSummary[]) {
+  const label = (product: IntegrationProductSummary) => ({
+    accounts: "contas",
+    transactions: "movimentações",
+    credit_cards: "cartões",
+    bills: "faturas",
+    investments: "investimentos",
+    loans: "empréstimos",
+    identity: "identidade",
+  })[product.resourceType] ?? "dados";
+  const unique = (values: string[]) => [...new Set(values)];
+  const updated = unique(products
+    .filter(product => ["updated", "partial"].includes(product.status))
+    .map(label));
+  const preserved = unique(products
+    .filter(product => ["preserved", "unavailable"].includes(product.status))
+    .map(label));
+  const join = (values: string[]) => values.length < 2
+    ? values[0] ?? ""
+    : `${values.slice(0, -1).join(", ")} e ${values.at(-1)}`;
+  const sentences = [];
+  if (updated.length) sentences.push(`Produtos atualizados: ${join(updated)}.`);
+  if (preserved.length) sentences.push(
+    `${join(preserved)} não foram atualizados; os últimos dados válidos foram preservados.`,
+  );
+  if (!preserved.length) sentences.push(
+    "Os produtos sem nova cobertura mantiveram o último estado confiável.",
+  );
+  return sentences.join(" ") ||
+    "Parte dos dados foi atualizada. As informações que não chegaram foram preservadas.";
 }
 
 export function buildFinanceIntegrationsDashboard(
@@ -372,17 +437,10 @@ export function buildFinanceIntegrationsDashboard(
         return typeof candidateName === "string" && typeof resourceMetadataName === "string" &&
           candidateName.trim() === resourceMetadataName.trim();
       });
-      const relatedStatus = relatedResources.map(productStatus);
       const transactionResource = relatedResources.find(candidate =>
         candidate.resourceType === "transactions") ?? null;
       const ownStatus = productStatus(resource);
-      const status: IntegrationProductStatus = relatedStatus.includes("authentication_required")
-        ? "authentication_required"
-        : relatedStatus.includes("unavailable")
-          ? "partial"
-          : relatedStatus.some(value => ["partial", "preserved"].includes(value))
-            ? "partial"
-            : ownStatus;
+      const status: IntegrationProductStatus = ownStatus;
       return {
         id: resource.id,
         connectionId: resource.connectionId,
@@ -465,15 +523,15 @@ export function buildFinanceIntegrationsDashboard(
       name: connection.connectorName || "Instituição conectada",
       provider: "MeuPluggy",
       health,
-      lastUpdateAt: connection.lastSyncAt ?? connection.lastProviderUpdateAt,
-      lastFullSyncAt: connection.lastCompleteSyncAt,
+      lastUpdateAt: connection.lastAnySuccessAt ?? connection.lastSuccessfulSyncAt,
+      lastFullSyncAt: connection.lastIntegralSuccessAt ?? connection.lastCompleteSyncAt,
       nextScheduledSyncAt,
       accountCount: latestRun?.resourcesSucceeded ? Math.max(latestRun.resourcesSucceeded > 0 ? 1 : 0, 0) : 0,
       cardCount: connection.diagnostics.creditAccounts,
       investmentCount: products.filter(product => product.resourceType === "investments").length,
       loanCount: products.filter(product => product.resourceType === "loans").length,
       partialMessage: health.overallStatus === "partial"
-        ? "A conta corrente e os demais produtos disponíveis foram atualizados. Alguns dados permaneceram com o último estado confiável."
+        ? buildPartialMessage(products)
         : null,
     } : null,
     products,

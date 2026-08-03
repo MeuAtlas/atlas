@@ -46,7 +46,11 @@ test("após o pagamento mantém agosto azul e posiciona a abertura em setembro",
 
   assert.match(html, /class="paid"/);
   assert.match(html, /ago\/2026/);
+  assert.match(html, /Valor pago/);
+  assert.match(html, /data-tooltip-value="R\$\s*7\.702,14"/);
+  assert.doesNotMatch(html, /title="Valor pago/);
   assert.match(html, /class="open"/);
   assert.match(html, /set\/2026/);
+  assert.match(html, /Valor da fatura/);
   assert.match(html, /Pagamento\s*<em>10\/08\/2026<\/em>/);
 });

@@ -73,7 +73,10 @@ export type PluggyProductWarning = {
 
 export type PluggyProductStatus = {
   product: string;
+  isAvailable: boolean;
   isUpdated: boolean;
+  isPartial: boolean;
+  hasValidPayload: boolean;
   lastUpdatedAt: string | null;
   warnings: PluggyProductWarning[];
 };
@@ -84,6 +87,56 @@ export type ParsedPluggySyncStatus = {
   isPartial: boolean;
   products: PluggyProductStatus[];
 };
+
+export type PluggyProductSyncResult = {
+  product: string;
+  isAvailable: boolean;
+  isUpdated: boolean;
+  isPartial: boolean;
+  hasValidPayload: boolean;
+  lastAttemptAt: string | null;
+  lastSuccessfulSyncAt: string | null;
+  lastRemoteUpdatedAt: string | null;
+  recordsReceived: number;
+  recordsInserted: number;
+  recordsUpdated: number;
+  recordsDeleted: number;
+  recordsPreserved: number;
+  warningCode: string | null;
+  warningMessage: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  result:
+    | "updated"
+    | "partially_updated"
+    | "preserved"
+    | "stale"
+    | "failed"
+    | "not_available";
+};
+
+export type ParsedPluggySyncResult = {
+  itemStatus: string | null;
+  executionStatus: string | null;
+  overallResult:
+    | "success"
+    | "partial_success"
+    | "failed"
+    | "waiting"
+    | "needs_user_action";
+  products: PluggyProductSyncResult[];
+  startedAt: string | null;
+  finishedAt: string | null;
+  rawStatusDetail: unknown;
+};
+
+export type ConnectionSyncStatus =
+  | "updated"
+  | "partially_updated"
+  | "updated_with_warnings"
+  | "needs_attention"
+  | "error"
+  | "syncing";
 
 const canonicalProductNames: Record<string, string> = {
   account: "accounts",
@@ -136,11 +189,25 @@ export function parsePluggyItemSyncStatus(item: {
     ? item.statusDetail as Record<string, unknown>
     : {};
   const products = Object.entries(detail).flatMap(([product, raw]) => {
+    if (raw === null) {
+      return [{
+        product: canonicalProductName(product),
+        isAvailable: false,
+        isUpdated: false,
+        isPartial: false,
+        hasValidPayload: false,
+        lastUpdatedAt: null,
+        warnings: [],
+      }];
+    }
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
     const value = raw as Record<string, unknown>;
     return [{
       product: canonicalProductName(product),
+      isAvailable: true,
       isUpdated: value.isUpdated === true,
+      isPartial: value.isUpdated !== true,
+      hasValidPayload: false,
       lastUpdatedAt: typeof value.lastUpdatedAt === "string"
         ? value.lastUpdatedAt
         : null,
@@ -155,6 +222,119 @@ export function parsePluggyItemSyncStatus(item: {
       .includes(normalizedExecution ?? ""),
     products,
   };
+}
+
+function resourceProduct(resource: PluggyResourceSyncResult) {
+  return resource.resourceType === "credit_cards"
+    ? "creditCards"
+    : resource.resourceType;
+}
+
+export function parsePluggySyncResult(input: {
+  item: { status?: unknown; executionStatus?: unknown; statusDetail?: unknown };
+  statusDetail?: unknown;
+  collectedResources?: PluggyResourceSyncResult[];
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}): ParsedPluggySyncResult {
+  const parsed = parsePluggyItemSyncStatus({
+    ...input.item,
+    statusDetail: input.statusDetail ?? input.item.statusDetail,
+  });
+  const resources = input.collectedResources ?? [];
+  const productNames = new Set([
+    ...parsed.products.map(product => product.product),
+    ...resources
+      .filter(resource => !["item", "connector"].includes(resource.resourceType))
+      .map(resourceProduct),
+  ]);
+  const products = [...productNames].map(productName => {
+    const provider = parsed.products.find(product => product.product === productName);
+    const matches = resources.filter(resource => resourceProduct(resource) === productName);
+    const useful = matches.filter(resource =>
+      ["succeeded", "succeeded_with_warnings"].includes(resource.status));
+    const partial = useful.some(resource => resource.status === "succeeded_with_warnings");
+    const received = matches.reduce((total, resource) => total + resource.received, 0);
+    const warning = matches.find(resource => resource.warningCodes.length)?.warningCodes[0] ??
+      provider?.warnings[0]?.code ?? null;
+    const failure = matches.find(resource => resource.errorCode)?.errorCode ?? null;
+    const available = provider?.isAvailable ?? matches.length > 0;
+    const hasValidPayload = useful.length > 0;
+    const updated = hasValidPayload && !partial &&
+      matches.every(resource => !["failed", "unavailable", "preserved"].includes(resource.status));
+    const result: PluggyProductSyncResult["result"] = !available
+      ? "not_available"
+      : partial || (hasValidPayload && !updated)
+        ? "partially_updated"
+        : updated
+          ? "updated"
+          : matches.some(resource => resource.status === "preserved")
+            ? "preserved"
+            : matches.some(resource => resource.status === "failed")
+              ? "failed"
+              : "stale";
+    return {
+      product: productName,
+      isAvailable: available,
+      isUpdated: updated,
+      isPartial: result === "partially_updated",
+      hasValidPayload,
+      lastAttemptAt: input.finishedAt ?? null,
+      lastSuccessfulSyncAt: useful.length ? input.finishedAt ?? null : null,
+      lastRemoteUpdatedAt: provider?.lastUpdatedAt ?? null,
+      recordsReceived: received,
+      recordsInserted: matches.reduce((total, resource) => total + resource.inserted, 0),
+      recordsUpdated: matches.reduce((total, resource) => total + resource.updated, 0),
+      recordsDeleted: 0,
+      recordsPreserved: matches.reduce((total, resource) => total + resource.preserved, 0),
+      warningCode: warning,
+      warningMessage: provider?.warnings[0]?.message ?? null,
+      errorCode: failure,
+      errorMessage: null,
+      result,
+    };
+  });
+  const execution = parsed.executionStatus?.toUpperCase() ?? "";
+  const itemStatus = parsed.itemStatus?.toUpperCase() ?? "";
+  const overallResult: ParsedPluggySyncResult["overallResult"] =
+    ["UPDATING", "PENDING", "RUNNING", "PROCESSING"].includes(itemStatus) ||
+      ["PENDING", "RUNNING", "PROCESSING"].includes(execution)
+      ? "waiting"
+      : ["WAITING_USER_INPUT", "WAITING_USER_ACTION", "LOGIN_ERROR"].includes(itemStatus)
+        ? "needs_user_action"
+        : execution === "SUCCESS"
+          ? "success"
+          : execution === "PARTIAL_SUCCESS" || products.some(product => product.hasValidPayload)
+            ? "partial_success"
+            : "failed";
+  return {
+    itemStatus: parsed.itemStatus,
+    executionStatus: parsed.executionStatus,
+    overallResult,
+    products,
+    startedAt: input.startedAt ?? null,
+    finishedAt: input.finishedAt ?? null,
+    rawStatusDetail: input.statusDetail ?? input.item.statusDetail ?? null,
+  };
+}
+
+export function deriveConnectionSyncStatus(
+  products: PluggyProductSyncResult[],
+  essentialProducts: string[],
+): ConnectionSyncStatus {
+  const essentials = products.filter(product =>
+    essentialProducts.includes(product.product) && product.isAvailable);
+  const essentialUpdated = essentials.filter(product =>
+    ["updated", "partially_updated"].includes(product.result) &&
+    product.hasValidPayload);
+  const essentialIncomplete = essentials.filter(product =>
+    product.result !== "updated");
+  if (!essentials.length || !essentialUpdated.length) return "needs_attention";
+  if (essentialIncomplete.length) return "partially_updated";
+  const secondaryWarning = products.some(product =>
+    !essentialProducts.includes(product.product) && product.isAvailable &&
+    ["partially_updated", "preserved", "stale", "failed"].includes(product.result));
+  return secondaryWarning ? "updated_with_warnings" : "updated";
 }
 
 export function pluggyProductIsUpdated(

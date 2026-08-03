@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { DismissibleAlert } from "@/components/atlas/dismissible-alert";
-import {
-  createProviderAlertIncidentId,
-  type DismissibleAlertSeverity,
-} from "@/components/atlas/dismissible-alert-state";
+import { createProviderAlertIncidentId } from "@/components/atlas/dismissible-alert-state";
 import {
   syncItemAction,
   type IntegrationActionState,
@@ -47,12 +44,16 @@ function Retry({ connectionId }: { connectionId: string }) {
   );
 }
 
-function severityFor(connection: ProviderHealth): DismissibleAlertSeverity {
+export function isCriticalProviderHealth(connection: ProviderHealth) {
   return /auth|login|consent|reauth|disconnected|action_required/i.test(
     connection.providerStatus,
-  )
-    ? "critical"
-    : "warning";
+  );
+}
+
+export function isProviderHealthAffected(connection: ProviderHealth) {
+  return connection.providerStatus !== "available" ||
+    connection.dataCompleteness !== "complete" ||
+    ["failed", "completed_with_warnings", "warning"].includes(connection.syncStatus);
 }
 
 export function ProviderHealthAlerts({
@@ -61,12 +62,7 @@ export function ProviderHealthAlerts({
   connections: ProviderHealth[];
 }) {
   const affected = connections.filter(
-    (connection) =>
-      connection.providerStatus !== "available" ||
-      connection.dataCompleteness !== "complete" ||
-      ["failed", "completed_with_warnings", "warning"].includes(
-        connection.syncStatus,
-      ),
+    connection => isProviderHealthAffected(connection) && isCriticalProviderHealth(connection),
   );
   if (!affected.length) return null;
   return (
@@ -76,15 +72,7 @@ export function ProviderHealthAlerts({
         const name = santander
           ? "Santander"
           : connection.connectorName || "provedor";
-        const waiting = connection.providerStatus === "waiting";
-        const unavailable =
-          connection.providerStatus === "unavailable" ||
-          connection.syncStatus === "failed";
-        const title = waiting
-          ? `Dados do ${name} aguardando nova sincronização`
-          : unavailable
-            ? `Dados do ${name} temporariamente indisponíveis`
-            : `Dados do ${name} parcialmente indisponíveis`;
+        const title = `Conexão do ${name} requer atenção`;
         const incidentId = createProviderAlertIncidentId({
           provider: "pluggy",
           institution: name,
@@ -102,9 +90,9 @@ export function ProviderHealthAlerts({
             id={incidentId}
             key={incidentId}
             className="provider-health-alert"
-            severity={severityFor(connection)}
+            severity="critical"
             title={title}
-            message="O conector de cartões da Pluggy está passando por instabilidade. Algumas compras, faturas e parcelamentos podem estar incompletos."
+            message="A conexão precisa de autenticação ou consentimento para voltar a atualizar os dados."
             details={
               <>
                 Última sincronização confiável:{" "}

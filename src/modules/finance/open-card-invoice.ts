@@ -102,7 +102,24 @@ export function resolveOpenInvoiceTotal(input: OpenInvoiceTotalAliases) {
     reliable: input.providerReliable === true,
     updatedAt: input.providerUpdatedAt ?? null,
   };
+  const partialBaseline = input.persistedDataCompleteness === "partial"
+    ? [persistedDisplay, lastReliable]
+        .filter((amount): amount is number => amount !== null)
+        .reduce<number | null>((highest, amount) =>
+          highest === null ? amount : Math.max(highest, amount), null)
+    : null;
   if (providerCandidate.amount !== null && providerCandidate.reliable) {
+    if (
+      partialBaseline !== null &&
+      providerCandidate.amount < partialBaseline
+    ) {
+      return {
+        amount: partialBaseline,
+        source: "last_reliable" as const,
+        reliable: true,
+        updatedAt: input.lastReliableUpdatedAt ?? input.calculatedUpdatedAt ?? null,
+      };
+    }
     return providerCandidate;
   }
 

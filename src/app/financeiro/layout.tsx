@@ -56,6 +56,7 @@ export default async function Layout({
       profile={access.profile}
       workspaces={shellData.workspaces}
       modules={shellData.modules}
+      providerHealth={connections}
     >
       <ProviderHealthAlerts connections={connections} />
       {children}

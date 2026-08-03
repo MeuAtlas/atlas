@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 import {
   buildTransactionFingerprint,
   classifyPluggyRetry,
+  deriveConnectionSyncStatus,
   incrementalWindowStart,
   interpretPluggyItemStatus,
   parsePluggyItemSyncStatus,
+  parsePluggySyncResult,
   pluggyProductIsUpdated,
   resolveOverallSyncStatus,
   shouldApplyRemoteRecord,
@@ -169,6 +171,71 @@ test("missing product on PARTIAL_SUCCESS is not assumed updated", () => {
   assert.equal(pluggyProductIsUpdated(parsed, "transactions"), false);
 });
 
+test("partial success imports valid card products and preserves failed bank products", () => {
+  const finishedAt = "2026-08-03T16:15:00Z";
+  const parsed = parsePluggySyncResult({
+    item: {
+      status: "UPDATED",
+      executionStatus: "PARTIAL_SUCCESS",
+      statusDetail: {
+        accounts: { isUpdated: false, lastUpdatedAt: "2026-08-02T00:43:00Z" },
+        transactions: { isUpdated: false, lastUpdatedAt: "2026-08-02T00:43:00Z" },
+        creditCards: { isUpdated: true, lastUpdatedAt: finishedAt },
+        bills: { isUpdated: true, lastUpdatedAt: finishedAt },
+        loans: null,
+      },
+    },
+    finishedAt,
+    collectedResources: [
+      resource({ resourceType: "accounts", status: "preserved", dataFreshness: "stale", preserved: 1 }),
+      resource({ resourceType: "transactions", status: "preserved", dataFreshness: "stale", preserved: 500 }),
+      resource({ resourceType: "credit_cards", received: 2, updated: 2 }),
+      resource({ resourceType: "bills", received: 2, updated: 2 }),
+    ],
+  });
+  assert.equal(parsed.overallResult, "partial_success");
+  assert.equal(parsed.products.find(product => product.product === "creditCards")?.result, "updated");
+  assert.equal(parsed.products.find(product => product.product === "bills")?.lastSuccessfulSyncAt, finishedAt);
+  assert.equal(parsed.products.find(product => product.product === "transactions")?.result, "preserved");
+  assert.equal(parsed.products.find(product => product.product === "loans")?.result, "not_available");
+  assert.equal(
+    deriveConnectionSyncStatus(parsed.products, ["accounts", "transactions", "creditCards", "bills"]),
+    "partially_updated",
+  );
+});
+
+test("secondary product failure produces warning without requiring attention", () => {
+  const products = parsePluggySyncResult({
+    item: { status: "UPDATED", executionStatus: "PARTIAL_SUCCESS" },
+    collectedResources: [
+      resource({ resourceType: "accounts", received: 1, updated: 1 }),
+      resource({ resourceType: "transactions", received: 20, updated: 4 }),
+      resource({ resourceType: "loans", status: "preserved", dataFreshness: "stale", preserved: 1 }),
+    ],
+  }).products;
+  assert.equal(
+    deriveConnectionSyncStatus(products, ["accounts", "transactions"]),
+    "updated_with_warnings",
+  );
+});
+
+test("valid rows from interrupted pagination advance product success but not integral status", () => {
+  const products = parsePluggySyncResult({
+    item: { status: "UPDATED", executionStatus: "PARTIAL_SUCCESS" },
+    collectedResources: [resource({
+      resourceType: "transactions",
+      status: "succeeded_with_warnings",
+      dataFreshness: "partially_current",
+      received: 100,
+      inserted: 6,
+      warningCodes: ["pluggy_pagination_incomplete"],
+    })],
+  }).products;
+  assert.equal(products[0]?.result, "partially_updated");
+  assert.equal(products[0]?.hasValidPayload, true);
+  assert.equal(deriveConnectionSyncStatus(products, ["transactions"]), "partially_updated");
+});
+
 test("remote precedence blocks an older provider snapshot", () => {
   assert.equal(shouldApplyRemoteRecord({
     localRemoteUpdatedAt: "2026-08-02T12:00:00Z",
@@ -207,6 +274,52 @@ test("migration cria freshness, retry, RLS e lock sem exclusão em massa", () =>
   assert.match(migration, /owner_id = auth\.uid\(\)/);
   assert.match(migration, /for update/);
   assert.doesNotMatch(migration, /\btruncate\b|\bdelete from public\.(financial_transactions|card_purchases)\b/i);
+});
+
+test("migration separates attempt, any success and integral success timestamps", () => {
+  const migration = readFileSync(
+    "supabase/migrations/202608030096_product_level_partial_sync.sql",
+    "utf8",
+  );
+  assert.match(migration, /last_sync_attempt_at/);
+  assert.match(migration, /last_any_success_at/);
+  assert.match(migration, /last_integral_success_at/);
+  assert.match(migration, /connection_sync_status/);
+  assert.match(migration, /succeeded_with_warnings'[\s\S]*records_received > 0/);
+});
+
+test("credit card refresh is independent from accounts and bill fields are preserved separately", () => {
+  const source = readFileSync("src/lib/pluggy/sync.ts", "utf8");
+  assert.match(source, /const providerValuesReliable=creditCardsProductUpdated/);
+  assert.match(source, /if\(!billsProductUpdated\)for\(const field of billFields\)row\[field\]=undefined/);
+  assert.doesNotMatch(source, /accountsProductUpdated&&creditCardsProductUpdated/);
+});
+
+test("specific item refresh rejection falls back to the current provider state", () => {
+  const source = readFileSync("src/lib/pluggy/sync.ts", "utf8");
+  assert.match(source, /normalized\.status===400&&\/item\\s\+\(\?:can'\?t\|cannot\)\\s\+be\\s\+updated\/i/);
+  assert.match(source, /if\(!updateRejected\)throw error;\s*return getPluggyItem\(itemId\)/);
+  assert.match(source, /itemInterpretation\.hardFailure&&!hasUpdatedProduct/);
+});
+
+test("connection metadata uses the canonical run clock for optimistic locking", () => {
+  const source = readFileSync("src/lib/pluggy/sync.ts", "utf8");
+  assert.match(source, /financial_sync_runs"\)\.select\("started_at"\)/);
+  assert.match(source, /\.eq\("last_sync_started_at",runStartedAt\)/);
+  assert.doesNotMatch(source, /\.lte\("last_sync_started_at",startedAt\)/);
+});
+
+test("cache invalidation is scoped by updated financial product", () => {
+  const source = readFileSync("src/lib/pluggy/sync-cache.ts", "utf8");
+  for (const tag of [
+    "pluggy-item:",
+    "financial-accounts:",
+    "financial-transactions:",
+    "financial-credit-cards:",
+    "financial-bills:",
+    "financial-reports:",
+  ]) assert.match(source, new RegExp(tag));
+  assert.match(source, /revalidateTag\(tag, \{ expire: 0 \}\)/);
 });
 
 test("interface traduz status e detalha recursos preservados", () => {

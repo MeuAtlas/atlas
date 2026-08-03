@@ -102,6 +102,19 @@ test("conexão parcialmente atualizada preserva o último estado confiável", ()
   assert.match(dashboard.primaryConnection?.partialMessage ?? "", /último estado confiável/);
 });
 
+test("falha somente em produto secundário mantém principais atualizados com aviso", () => {
+  const warningConnection = {
+    ...connection,
+    syncStatus: "completed_with_warnings",
+    dataCompleteness: "partial",
+    connectionSyncStatus: "updated_with_warnings",
+  };
+  const dashboard = buildFinanceIntegrationsDashboard(input({ connections: [warningConnection] }));
+  assert.equal(dashboard.primaryConnection?.health.overallStatus, "updated_with_warnings");
+  assert.equal(dashboard.primaryConnection?.health.requiresAction, false);
+  assert.equal(dashboard.primaryConnection?.health.title, "Atualizada com avisos");
+});
+
 test("conexão com autenticação vencida requer atenção", () => {
   const health = resolveIntegrationHealthStatus({
     connection: { ...connection, connectionErrorMessage: "MFA expired" },
