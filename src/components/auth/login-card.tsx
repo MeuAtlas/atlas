@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { ArrowIcon, BackIcon, EyeIcon, EyeOffIcon, KeyIcon, LockIcon, MailIcon, ShieldIcon } from "@/components/atlas/icons";
+import { useClientNavigation } from "@/components/navigation/client-navigation";
 import { createClient } from "@/lib/supabase/client";
 
 import { FormField } from "./form-field";
@@ -36,6 +37,7 @@ function initialNotice(error: string | null) {
 
 export function LoginCard() {
   const searchParams = useSearchParams();
+  const navigate = useClientNavigation();
   const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,9 +52,9 @@ export function LoginCard() {
     if (field) setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
-  function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (submitting) {
-      event.preventDefault();
       return;
     }
 
@@ -64,11 +66,40 @@ export function LoginCard() {
     setErrors(nextErrors);
     setNotice("");
     if (nextErrors.email || nextErrors.password) {
-      event.preventDefault();
       return;
     }
 
     setSubmitting(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error) {
+        const normalizedError = `${error.code ?? ""} ${error.message}`.toLowerCase();
+        const reason = normalizedError.includes("rate_limit") ||
+          normalizedError.includes("rate limit") ||
+          normalizedError.includes("too many")
+          ? "rate_limited"
+          : normalizedError.includes("email_not_confirmed") ||
+              normalizedError.includes("email not confirmed")
+            ? "email_not_confirmed"
+            : normalizedError.includes("invalid_credentials") ||
+                normalizedError.includes("invalid login credentials")
+              ? "invalid_credentials"
+              : "unavailable";
+        setNotice(initialNotice(reason));
+        setSubmitting(false);
+        return;
+      }
+
+      navigate("/auth/continue", "replace");
+    } catch {
+      setNotice(initialNotice("unavailable"));
+      setSubmitting(false);
+    }
   }
 
   async function handleRecovery(event: FormEvent<HTMLFormElement>) {

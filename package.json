@@ -15,7 +15,8 @@
     "test:invoice-pdf-extraction": "tsx --test src/modules/finance/invoice-import/pdf-extraction.test.ts",
     "test:pdfjs-node": "node scripts/test-pdf-extraction.mjs",
     "test:typography": "tsx --test src/components/ui/atlas-text.test.ts src/components/finance/finance-overview.test.ts",
-    "typography:audit": "node scripts/audit-typography.mjs"
+    "typography:audit": "node scripts/audit-typography.mjs",
+    "auth:reset-password": "node --env-file=.env.local scripts/reset-user-password.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

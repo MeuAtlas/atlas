@@ -10,6 +10,8 @@ test("login has a native POST fallback that works before React hydration", () =>
   assert.match(loginCard, /method="post"/);
   assert.match(loginCard, /name="email"/);
   assert.match(loginCard, /name="password"/);
+  assert.match(loginCard, /auth\.signInWithPassword/);
+  assert.match(loginCard, /navigate\("\/auth\/continue", "replace"\)/);
   assert.match(route, /export async function POST/);
   assert.match(route, /auth\.signInWithPassword/);
   assert.match(route, /redirectTo\("\/auth\/continue"\)/);
