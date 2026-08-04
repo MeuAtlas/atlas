@@ -49,7 +49,7 @@ async function invalidateSyncResult(
 function refreshSyncedResources(summary:Awaited<ReturnType<typeof syncPluggyItem>>["summary"]){
  revalidatePath("/financeiro/integracoes");
  const succeeded=new Set(summary.resources.filter(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status)).map(resource=>resource.resourceType));
- if(succeeded.has("accounts")||succeeded.has("transactions")){revalidatePath("/financeiro");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/movimentacoes");revalidatePath("/financeiro/planejamento");revalidatePath("/financeiro/relatorios")}
+ if(succeeded.has("accounts")||succeeded.has("transactions")){revalidatePath("/financeiro");revalidatePath("/financeiro/contas");revalidatePath("/financeiro/movimentacoes");revalidatePath("/financeiro/planejamento");revalidatePath("/financeiro/relatorios");revalidatePath("/financeiro/relatorios/[year]/[month]","page")}
  if(succeeded.has("credit_cards")||succeeded.has("bills")){revalidatePath("/financeiro");revalidatePath("/financeiro/cartoes");revalidatePath("/financeiro/planejamento");revalidatePath("/financeiro/relatorios");revalidatePath("/financeiro/relatorios/[year]/[month]","page")}
  if(succeeded.has("loans"))revalidatePath("/financeiro/emprestimos");
 }
@@ -59,6 +59,11 @@ function syncFeedback(result:Awaited<ReturnType<typeof syncPluggyItem>>){
  const join=(values:string[])=>values.length<2?(values[0]??""):`${values.slice(0,-1).join(", ")} e ${values.at(-1)}`;
  const updated=unique(result.summary.resources.filter(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status)).map(resource=>names[resource.resourceType]??"dados"));
  const preserved=unique(result.summary.resources.filter(resource=>["preserved","unavailable","failed"].includes(resource.status)).map(resource=>names[resource.resourceType]??"dados"));
+ const transactionResources=result.summary.resources.filter(resource=>resource.resourceType==="transactions");
+ const importedTransactions=transactionResources.reduce((total,resource)=>total+resource.inserted,0);
+ if(importedTransactions===1)return "1 nova movimentação foi importada.";
+ if(importedTransactions>1)return `${importedTransactions} novas movimentações foram importadas.`;
+ if(transactionResources.length&&transactionResources.every(resource=>["succeeded","succeeded_with_warnings"].includes(resource.status))&&result.summary.overallStatus==="completed")return "As movimentações já estavam atualizadas.";
  if(result.summary.overallStatus==="completed")return "Sincronização concluída. Os dados disponíveis foram atualizados.";
  const messages=["Sincronização concluída parcialmente."];
  if(updated.length)messages.push(`Produtos atualizados: ${join(updated)}.`);

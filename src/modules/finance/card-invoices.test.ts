@@ -10,6 +10,7 @@ import {
   getCurrentBillSummary,
   getCurrentInvoiceSummary,
   getEstimatedInvoiceDetails,
+  hasCardPurchaseCyclePostingEvidence,
   isPendingPurchaseCarriedIntoOpenCycle,
   purchaseCompetenceDate,
   selectStoredInvoiceSnapshot,
@@ -685,6 +686,87 @@ test("referência definitiva impede carregar compra pendente para o ciclo seguin
   );
   assert.equal(current.purchases.length, 0);
   assert.equal(current.calculatedInvoiceTotal, 0);
+});
+
+test("parcela antiga pertence à fatura pela data em que foi lançada", () => {
+  const santander = {
+    ...card("mastercard"),
+    closing_day: 3,
+    due_day: 10,
+  };
+  const installment = purchase({
+    id: "old-installment-posted-now",
+    card_id: "mastercard",
+    invoice_id: "stale-previous-invoice",
+    purchase_date: "2026-02-12",
+    competence_date: "2026-02-12",
+    posting_date: "2026-07-18",
+    installment_number: 6,
+    installment_count: 10,
+    installment_amount: 85,
+  });
+  const current = buildCurrentCardInvoices(
+    [santander],
+    [installment],
+    new Date("2026-07-30T15:00:00Z"),
+  )[0];
+
+  assert.equal(
+    hasCardPurchaseCyclePostingEvidence(installment, current.cycle!),
+    true,
+  );
+  assert.deepEqual(current.purchases.map(item => item.id), [
+    "old-installment-posted-now",
+  ]);
+  assert.equal(current.calculatedInvoiceTotal, 85);
+});
+
+test("compra anterior ao corte entra quando o processamento ocorreu na nova fatura", () => {
+  const santander = {
+    ...card("mastercard"),
+    closing_day: 3,
+    due_day: 10,
+  };
+  const lateSettlement = purchase({
+    id: "late-settlement",
+    card_id: "mastercard",
+    purchase_date: "2026-07-02",
+    competence_date: "2026-07-02",
+    posting_date: "2026-07-04",
+    installment_amount: 120,
+  });
+  const current = buildCurrentCardInvoices(
+    [santander],
+    [lateSettlement],
+    new Date("2026-07-30T15:00:00Z"),
+  )[0];
+
+  assert.deepEqual(current.purchases.map(item => item.id), ["late-settlement"]);
+});
+
+test("billId oficial atual vence data antiga e vínculo local desatualizado", () => {
+  const currentBillCard = officialCard("mastercard", 85);
+  const installment = purchase({
+    id: "official-old-installment",
+    card_id: "mastercard",
+    invoice_id: "stale-previous-invoice",
+    provider_bill_id: "mastercard-bill-2026-08",
+    invoice_reference: "mastercard-bill-2026-08",
+    purchase_date: "2026-01-10",
+    competence_date: "2026-01-10",
+    installment_number: 7,
+    installment_count: 12,
+    installment_amount: 85,
+  });
+  const current = buildCurrentCardInvoices(
+    [currentBillCard],
+    [installment],
+    new Date("2026-08-10T15:00:00Z"),
+  )[0];
+
+  assert.deepEqual(current.purchases.map(item => item.id), [
+    "official-old-installment",
+  ]);
 });
 
 test("status diferencia fechamento, vencimento e pagamento", () => {

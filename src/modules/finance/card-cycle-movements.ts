@@ -51,6 +51,77 @@ export interface CardCycleMovement {
   createdAt?: string | null;
 }
 
+export type CardPurchaseCycleEvidence = {
+  invoiceId?: string | null;
+  providerBillId?: string | null;
+  billForecastDate?: string | null;
+  postingDate?: string | null;
+  competenceDate?: string | null;
+  purchaseDate: string;
+};
+
+export type CardCycleIdentity = {
+  id: string;
+  providerBillId?: string | null;
+  referenceMonth: string;
+  cycleStartDate: string;
+  cycleEndDate: string;
+  trustProviderAssignment?: boolean;
+};
+
+const withinCycle = (
+  value: string | null | undefined,
+  cycle: CardCycleIdentity,
+) => Boolean(
+  value &&
+  value.slice(0, 10) >= cycle.cycleStartDate &&
+  value.slice(0, 10) <= cycle.cycleEndDate,
+);
+
+const withinClosedCycleGrace = (
+  value: string | null | undefined,
+  cycle: CardCycleIdentity,
+) => {
+  if (!value || !cycle.trustProviderAssignment) return false;
+  const graceStart = new Date(`${cycle.cycleStartDate}T12:00:00Z`);
+  graceStart.setUTCDate(graceStart.getUTCDate() - 2);
+  const date = value.slice(0, 10);
+  return date >= graceStart.toISOString().slice(0, 10) &&
+    date < cycle.cycleStartDate;
+};
+
+export function cardPurchaseBelongsToCycle(
+  purchase: CardPurchaseCycleEvidence,
+  cycle: CardCycleIdentity,
+) {
+  if (purchase.invoiceId && purchase.invoiceId !== cycle.id) return false;
+  if (cycle.trustProviderAssignment && purchase.invoiceId) return true;
+  if (
+    purchase.providerBillId &&
+    cycle.providerBillId &&
+    purchase.providerBillId !== cycle.providerBillId
+  ) return false;
+  if (cycle.trustProviderAssignment && purchase.providerBillId) {
+    return Boolean(
+      cycle.providerBillId && purchase.providerBillId === cycle.providerBillId,
+    );
+  }
+  if (purchase.postingDate) {
+    return withinCycle(purchase.postingDate, cycle) ||
+      withinClosedCycleGrace(purchase.postingDate, cycle);
+  }
+  if (cycle.trustProviderAssignment && purchase.billForecastDate) {
+    return purchase.billForecastDate.slice(0, 7) ===
+      cycle.referenceMonth.slice(0, 7);
+  }
+  if (purchase.competenceDate) {
+    return withinCycle(purchase.competenceDate, cycle) ||
+      withinClosedCycleGrace(purchase.competenceDate, cycle);
+  }
+  return withinCycle(purchase.purchaseDate, cycle) ||
+    withinClosedCycleGrace(purchase.purchaseDate, cycle);
+}
+
 const debitEntryTypes = new Set([
   "purchase",
   "installment_purchase",

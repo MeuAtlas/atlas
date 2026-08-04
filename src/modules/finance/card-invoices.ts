@@ -203,6 +203,20 @@ export function isPendingPurchaseCarriedIntoOpenCycle(
   return date >= graceStart && date < cycle.cycleStart;
 }
 
+export function hasCardPurchaseCyclePostingEvidence(
+  purchase: CardPurchase,
+  cycle: BillingCycle,
+) {
+  const forecastMonth = purchase.bill_forecast_date?.slice(0, 7);
+  if (forecastMonth && forecastMonth === cycle.referenceMonth) return true;
+  const postingDate = purchase.posting_date?.slice(0, 10);
+  return Boolean(
+    postingDate &&
+      postingDate >= cycle.cycleStart &&
+      postingDate <= cycle.cycleEnd,
+  );
+}
+
 const normalizedDescription = (purchase: CardPurchase) =>
   (purchase.merchant || purchase.description)
     .normalize("NFD")
@@ -775,19 +789,20 @@ export function buildCurrentCardInvoices(
             (purchase.provider_bill_id || purchase.invoice_reference) &&
             !matchesProviderBill,
           );
-          // The provider may retain an old transaction date after settlement,
-          // but a persisted invoice/bill link is authoritative for membership.
-          if (belongsToAnotherStoredInvoice || belongsToAnotherProviderBill) {
+          // Bill and posting evidence are authoritative. The purchase date may
+          // be the original date of an installment or a late-settled purchase.
+          if (matchesProviderBill) return true;
+          if (belongsToAnotherProviderBill) {
             return false;
           }
+          if (hasCardPurchaseCyclePostingEvidence(purchase, cycle)) return true;
+          if (belongsToAnotherStoredInvoice) return false;
           if (purchase.transaction_role === "invoice_payment") {
             return (
-              matchesProviderBill ||
               (date > cycle.cycleEnd && date <= cycle.dueDate)
             );
           }
           return (
-            matchesProviderBill ||
             isPendingPurchaseCarriedIntoOpenCycle(purchase, cycle) ||
             (date >= cycle.cycleStart && date <= cycle.cycleEnd)
           );

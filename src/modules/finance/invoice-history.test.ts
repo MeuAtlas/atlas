@@ -3,14 +3,18 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   decodeInvoiceHistoryCursor,
+  discardUndatedRecentStatementPayments,
   encodeInvoiceHistoryCursor,
   buildInvoiceHistoryAnalytics,
   filterHistoricalInvoices,
   inferFullInvoicePayment,
   isHistoricalInvoice,
+  isRecentUnconfirmedProjectableStatement,
   normalizeHistoricalInvoice,
+  preferFreshStatementProjection,
   resolveHistoricalInvoiceTotal,
   sortHistoricalInvoices,
+  type InvoiceHistoryAnalyticsEntry,
 } from "./invoice-history";
 import type {
   CardPurchase,
@@ -481,6 +485,74 @@ test("pagamento confirmado mantém agosto pago e avança a próxima fatura abert
   assert.equal(analytics.currentTotal, 1610.5);
 });
 
+test("pagamento de julho sem data não é repetido na fatura de agosto", () => {
+  const statements = discardUndatedRecentStatementPayments([
+    {
+      id: "july-paid", cardId: "mastercard", dueDate: "2026-07-10", status: "paid",
+      total: 11517.22, totalSource: "confirmed_by_full_payment", paidAmount: 11517.22,
+      paymentDate: "2026-07-04", paymentConfirmationStatus: "paid",
+      paymentConfirmationSource: "bank_transaction", paymentStatus: "paid", isConfirmed: true,
+    },
+    {
+      id: "august-stale", cardId: "mastercard", dueDate: "2026-08-10", status: "paid",
+      total: 6044.53, totalSource: "calculated_transactions", paidAmount: 11517.22,
+      paymentDate: null, paymentConfirmationStatus: "paid",
+      paymentConfirmationSource: "bank_transaction", paymentStatus: "paid", isConfirmed: true,
+    },
+  ], "2026-08-04");
+  const analytics = buildInvoiceHistoryAnalytics(statements, null);
+
+  assert.deepEqual(analytics.months.map(item => [
+    item.month,
+    item.total,
+    item.item.status,
+  ]), [
+    ["2026-07", 11517.22, "paid"],
+    ["2026-08", 6044.53, "closed_unpaid"],
+  ]);
+  assert.equal(statements[1].paidAmount, null);
+  assert.equal(statements[1].isConfirmed, false);
+  assert.equal(analytics.median, 11517.22);
+});
+
+test("proteção contra repetição não reescreve pagamentos históricos sem data", () => {
+  const statements = discardUndatedRecentStatementPayments([
+    {
+      id: "dated", cardId: "visa", dueDate: "2026-11-10", status: "paid",
+      total: 371.94, totalSource: "provider_bill", paidAmount: 371.94,
+      paymentDate: "2026-11-08", paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+    {
+      id: "historical-undated", cardId: "visa", dueDate: "2026-12-10", status: "paid",
+      total: 296.50, totalSource: "provider_bill", paidAmount: 371.94,
+      paymentDate: null, paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+  ], "2027-02-01");
+
+  assert.equal(statements[1].paidAmount, 371.94);
+  assert.equal(statements[1].status, "paid");
+});
+
+test("Bill recente sem data nem débito não aumenta o valor pago de julho", () => {
+  const statements = discardUndatedRecentStatementPayments([
+    {
+      id: "july-master", cardId: "mastercard", dueDate: "2026-07-10", status: "paid",
+      total: 11517.22, totalSource: "confirmed_by_full_payment", paidAmount: 11517.22,
+      paymentDate: "2026-07-04", paymentConfirmationStatus: "paid", isConfirmed: true,
+    },
+    {
+      id: "july-visa", cardId: "visa", dueDate: "2026-07-10", status: "partially_paid",
+      total: null, totalSource: "unavailable", paidAmount: 155,
+      paymentDate: null, paymentConfirmationStatus: "partially_paid", isConfirmed: false,
+    },
+  ], "2026-08-04");
+  const analytics = buildInvoiceHistoryAnalytics(statements, null);
+
+  assert.deepEqual(analytics.months.map(item => [item.month, item.total]), [
+    ["2026-07", 11517.22],
+  ]);
+});
+
 test("pagamento bancário confirma histórico cujo total era apenas estimado", () => {
   const analytics = buildInvoiceHistoryAnalytics([{
     id: "estimated-paid", cardId: "mastercard", dueDate: "2026-05-10",
@@ -593,4 +665,76 @@ test("migrations aplicam escopo e reprocessamento idempotente do pagamento", () 
   );
   assert.match(unclassifiedPaymentMigration, /transaction_role = 'invoice_payment'/);
   assert.match(unclassifiedPaymentMigration, /get diagnostics changed_count = row_count/);
+});
+
+test("recent unconfirmed invoice uses the fresh movement projection", () => {
+  const statement: InvoiceHistoryAnalyticsEntry = {
+    id: "august-stale", cardId: "mastercard", dueDate: "2026-08-10",
+    status: "closed", total: 6044.53,
+    totalSource: "calculated_transactions", estimatedTotal: 6044.53,
+    isConfirmed: false,
+  };
+
+  assert.equal(
+    isRecentUnconfirmedProjectableStatement(statement, "2026-08-04"),
+    true,
+  );
+  assert.deepEqual(
+    preferFreshStatementProjection(statement, 8743.31, "2026-08-04"),
+    { ...statement, total: 8743.31, estimatedTotal: 8743.31 },
+  );
+});
+
+test("fresh projection completes an unconfirmed provider total but preserves stronger evidence", () => {
+  const official: InvoiceHistoryAnalyticsEntry = {
+    id: "official", cardId: "mastercard", dueDate: "2026-08-10",
+    status: "closed", total: 6044.53, totalSource: "provider_bill",
+    isConfirmed: false,
+  };
+  const confirmed: InvoiceHistoryAnalyticsEntry = {
+    ...official, id: "confirmed", totalSource: "calculated_transactions",
+    isConfirmed: true,
+  };
+  const manual: InvoiceHistoryAnalyticsEntry = {
+    ...official, id: "manual", totalSource: "manual_bank_confirmation",
+  };
+
+  assert.deepEqual(
+    preferFreshStatementProjection(official, 8743.31, "2026-08-04"),
+    {
+      ...official,
+      total: 8743.31,
+      estimatedTotal: 8743.31,
+      totalSource: "calculated_transactions",
+    },
+  );
+  assert.deepEqual(
+    preferFreshStatementProjection(official, 5000, "2026-08-04"),
+    { ...official, estimatedTotal: 5000 },
+  );
+  assert.equal(
+    preferFreshStatementProjection(confirmed, 8743.31, "2026-08-04"),
+    confirmed,
+  );
+  assert.equal(
+    preferFreshStatementProjection(manual, 8743.31, "2026-08-04"),
+    manual,
+  );
+});
+
+test("open invoice remains projectable even with a stale confirmation flag", () => {
+  const statement: InvoiceHistoryAnalyticsEntry = {
+    id: "september-open", cardId: "mastercard", dueDate: "2026-09-10",
+    status: "open", total: 289.31, totalSource: "provider_bill",
+    isConfirmed: true,
+  };
+  assert.deepEqual(
+    preferFreshStatementProjection(statement, 1610.5, "2026-08-04"),
+    {
+      ...statement,
+      total: 1610.5,
+      estimatedTotal: 1610.5,
+      totalSource: "calculated_transactions",
+    },
+  );
 });

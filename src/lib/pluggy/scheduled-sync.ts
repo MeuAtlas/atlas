@@ -83,6 +83,7 @@ export function pathsForUpdatedPluggyResources(summary: PluggySyncSummary) {
   }
   if (resources.has("transactions")) {
     paths.add("/financeiro");
+    paths.add("/financeiro/contas");
     paths.add("/financeiro/movimentacoes");
     paths.add("/financeiro/planejamento");
     paths.add("/financeiro/relatorios");

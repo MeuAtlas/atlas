@@ -11,7 +11,7 @@ export function databaseFailure(error:{code?:string;message?:string;details?:str
 
 export function logIntegrationFailure(error:unknown,context:{operation?:string;stage:string;durationMs:number;user:string;item?:string;label?:string}){
   const normalized=normalizeIntegrationError(error);
-  const diagnostic={operation:normalized.operation??context.operation??"sync",stage:normalized.stage??context.stage,name:normalized.name,message:normalized.message,causeMessage:normalized.causeMessage,code:normalized.code,status:normalized.status,durationMs:context.durationMs,user:maskId(context.user),item:context.item?maskId(context.item):undefined,stack:normalized.stack};
+  const diagnostic={operation:normalized.operation??context.operation??"sync",stage:normalized.stage??context.stage,name:normalized.name,message:normalized.message,causeMessage:normalized.causeMessage,providerMessage:normalized.providerMessage,responseBody:normalized.responseBodySanitized,code:normalized.code,status:normalized.status,durationMs:normalized.durationMs??context.durationMs,user:maskId(context.user),item:context.item?maskId(context.item):undefined,stack:normalized.stack};
   console.error(context.label??"[Atlas Pluggy Sync Failure]",JSON.stringify(diagnostic));
   return normalized;
 }

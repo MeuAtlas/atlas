@@ -43,11 +43,13 @@ test("manual-field lookups are chunked below PostgREST header limits", () => {
 
 test("partial products are gated independently and empty partial pages are not successful", () => {
   const source = readFileSync("src/lib/pluggy/sync.ts", "utf8");
+  const pagination = readFileSync("src/lib/pluggy/transactions-pagination.ts", "utf8");
   for (const product of ["accounts", "transactions", "creditCards", "bills", "investments", "loans"]) {
     assert.match(source, new RegExp(`pluggyProductIsUpdated\\(parsedItemStatus,\\"${product}\\"\\)`));
   }
   assert.match(source, /pluggy_partial_empty_transactions/);
-  assert.match(source, /pluggy_pagination_repeated_cursor/);
+  assert.match(source, /listAllPluggyTransactions/);
+  assert.match(pagination, /pluggy_pagination_repeated_cursor/);
 });
 
 test("transaction webhooks share the central pipeline and deletion is logical", () => {

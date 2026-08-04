@@ -45,6 +45,9 @@ export async function invalidatePluggySyncCaches(input: {
   for (const path of pathsForUpdatedPluggyResources(input.summary)) {
     revalidatePath(path);
   }
+  if (changedResources.has("transactions")) {
+    revalidatePath("/financeiro/relatorios/[year]/[month]", "page");
+  }
 
   const invoiceResourceChanged = input.summary.resources.some(
     resource =>

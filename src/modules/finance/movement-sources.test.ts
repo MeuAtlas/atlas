@@ -313,11 +313,30 @@ test("integração: ciclo aberto sem Bill recupera Pluggy por competência e pro
   );
   assert.ok(data.cardPurchases.every(item => item.description !== "Pagamento de fatura"));
   assert.ok(data.cardPurchases.every(item => item.invoice_id === null));
-  const openFilter = calls.find(call =>
-    call.table === "card_purchases" &&
-    call.method === "or"
-  );
-  assert.match(String(openFilter?.args[0]), /purchase_date\.gte\.2026-07-04/);
-  assert.match(String(openFilter?.args[0]), /competence_date\.gte\.2026-07-04/);
-  assert.match(String(openFilter?.args[0]), /invoice_id\.is\.null/);
+  const cardCalls = calls.filter(call => call.table === "card_purchases");
+  assert.ok(cardCalls.some(call =>
+    call.method === "eq" &&
+    call.args[0] === "invoice_id" &&
+    call.args[1] === "cycle-open"
+  ));
+  assert.ok(cardCalls.some(call =>
+    call.method === "eq" &&
+    call.args[0] === "bill_forecast_date" &&
+    call.args[1] === "2026-08-01"
+  ));
+  assert.ok(cardCalls.some(call =>
+    call.method === "gte" &&
+    call.args[0] === "posting_date" &&
+    call.args[1] === "2026-07-04"
+  ));
+  assert.ok(cardCalls.some(call =>
+    call.method === "gte" &&
+    call.args[0] === "purchase_date" &&
+    call.args[1] === "2026-07-02"
+  ));
+  assert.ok(cardCalls.some(call =>
+    call.method === "gte" &&
+    call.args[0] === "competence_date" &&
+    call.args[1] === "2026-07-04"
+  ));
 });

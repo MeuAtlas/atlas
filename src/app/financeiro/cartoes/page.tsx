@@ -146,6 +146,7 @@ export default async function Page({
     if (!["open", "estimated", "partially_paid"].includes(entry.status)) return entry;
     const current = resolvedInvoices.get(entry.cardId)?.resolved;
     if (!current?.displayTotal) return entry;
+    if (entry.total !== null && entry.total >= current.displayTotal) return entry;
     return { ...entry, total: current.displayTotal, reliableTotal: current.displayTotal };
   });
   const invoiceAnalytics = buildInvoiceHistoryAnalytics(

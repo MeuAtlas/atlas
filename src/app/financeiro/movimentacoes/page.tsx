@@ -28,6 +28,9 @@ import {
 import {
   getMovementPersonContexts,
 } from "@/modules/finance/person-reimbursements-query";
+import {
+  getMovementExpenseEstablishmentContexts,
+} from "@/modules/finance/expense-establishments";
 
 const PAGE_SIZE = 40;
 
@@ -124,13 +127,16 @@ export default async function MovementsPage({
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const items = filtered.slice(offset, offset + PAGE_SIZE);
-  const personContexts = workspaceId
-    ? await getMovementPersonContexts(
-        supabase,
-        workspaceId,
-        items.filter(item => item.sourceKind === "transaction").map(item => item.id),
-      )
-    : {};
+  const transactionItemIds = items
+    .filter(item => item.sourceKind === "transaction").map(item => item.id);
+  const [personContexts, establishmentContexts] = workspaceId
+    ? await Promise.all([
+        getMovementPersonContexts(supabase, workspaceId, transactionItemIds),
+        getMovementExpenseEstablishmentContexts(
+          supabase, workspaceId, transactionItemIds,
+        ),
+      ])
+    : [{}, {}];
   const activeAccounts = data.accounts
     .filter(account => account.status === "active")
     .map(account => ({
@@ -263,6 +269,7 @@ export default async function MovementsPage({
           } : null;
         }).filter(candidate => candidate !== null))}
       personContexts={personContexts}
+      establishmentContexts={establishmentContexts}
     />
   );
 }

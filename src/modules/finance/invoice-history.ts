@@ -155,6 +155,12 @@ export type InvoiceHistoryAnalytics = {
   currentPosition: "above" | "below" | "equal" | "unavailable";
 };
 
+const CONFIRMED_PAYMENT_STATUSES = new Set([
+  "paid",
+  "overpaid",
+  "manually_confirmed",
+]);
+
 const amountOrNull = (value: number | string | null | undefined) => {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
@@ -163,6 +169,90 @@ const amountOrNull = (value: number | string | null | undefined) => {
 
 const roundedMoney = (value: number) =>
   Math.round((value + Number.EPSILON) * 100) / 100;
+
+/**
+ * Recent snapshots can carry paid_amount copied from another cycle or a Bill
+ * payment without a corresponding bank movement. For the current and previous
+ * month, payment needs a date. Older history remains untouched because some
+ * providers omit the original payment date outside their transaction window.
+ */
+export function discardUndatedRecentStatementPayments(
+  statements: InvoiceHistoryAnalyticsEntry[],
+  today = new Date().toISOString().slice(0, 10),
+) {
+  const [year, month] = today.slice(0, 7).split("-").map(Number);
+  const recentCutoff = new Date(Date.UTC(year, month - 2, 1))
+    .toISOString().slice(0, 10);
+
+  return statements.map(statement => {
+    const paid = amountOrNull(statement.paidAmount);
+    const isUndatedRecentPayment =
+      !statement.paymentDate &&
+      paid !== null &&
+      paid > 0 &&
+      statement.dueDate.slice(0, 10) >= recentCutoff;
+    if (!isUndatedRecentPayment) return statement;
+
+    return {
+      ...statement,
+      status: statement.status === "paid" || statement.status === "partially_paid"
+        ? "closed" as const
+        : statement.status,
+      paidAmount: null,
+      paymentConfirmationStatus: CONFIRMED_PAYMENT_STATUSES.has(
+        statement.paymentConfirmationStatus ?? "",
+      )
+        ? null
+        : statement.paymentConfirmationStatus,
+      paymentConfirmationSource: null,
+      paymentStatus: statement.paymentStatus === "paid"
+        ? null
+        : statement.paymentStatus,
+      isConfirmed: false,
+    };
+  });
+}
+
+export function isRecentUnconfirmedProjectableStatement(
+  statement: InvoiceHistoryAnalyticsEntry,
+  today = new Date().toISOString().slice(0, 10),
+) {
+  const [year, month] = today.slice(0, 7).split("-").map(Number);
+  const recentCutoff = new Date(Date.UTC(year, month - 2, 1))
+    .toISOString().slice(0, 10);
+  return (
+    statement.dueDate.slice(0, 10) >= recentCutoff &&
+    (!statement.isConfirmed || statement.status === "open") &&
+    ![
+      "manual_pdf_confirmation",
+      "manual_bank_confirmation",
+      "confirmed_by_full_payment",
+    ].includes(statement.totalSource)
+  );
+}
+
+export function preferFreshStatementProjection(
+  statement: InvoiceHistoryAnalyticsEntry,
+  projectedTotal: number | null,
+  today = new Date().toISOString().slice(0, 10),
+) {
+  if (
+    projectedTotal === null ||
+    projectedTotal <= 0 ||
+    !isRecentUnconfirmedProjectableStatement(statement, today)
+  ) return statement;
+  const projection = roundedMoney(projectedTotal);
+  const current = amountOrNull(statement.total);
+  if (current !== null && current >= projection) {
+    return { ...statement, estimatedTotal: projection };
+  }
+  return {
+    ...statement,
+    total: projection,
+    estimatedTotal: projection,
+    totalSource: "calculated_transactions" as const,
+  };
+}
 
 function median(values: number[]) {
   if (!values.length) return null;
@@ -232,7 +322,14 @@ export function getStatementChartDisplayAmount(statement: InvoiceHistoryAnalytic
     return { amount: paid, source: "paid_amount" as const };
   }
   const official = amountOrNull(statement.total);
-  if (official !== null && official > 0) return { amount: official, source: "bank_total" as const };
+  if (official !== null && official > 0) {
+    return {
+      amount: official,
+      source: statement.totalSource === "calculated_transactions"
+        ? "estimated_total" as const
+        : "bank_total" as const,
+    };
+  }
   const reliable = amountOrNull(statement.reliableTotal);
   if (reliable !== null && reliable > 0) return { amount: reliable, source: "reliable_total" as const };
   const estimated = amountOrNull(statement.estimatedTotal);

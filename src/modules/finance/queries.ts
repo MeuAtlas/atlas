@@ -8,9 +8,12 @@ import { requireQuery,withQueryFallback } from "@/lib/supabase/query-fallback";
 import { shiftFinanceMonth, type FinanceMonthPeriod } from "./monthly-result";
 import {
   decodeInvoiceHistoryCursor,
+  discardUndatedRecentStatementPayments,
   encodeInvoiceHistoryCursor,
   HISTORICAL_INVOICE_STATUSES,
+  isRecentUnconfirmedProjectableStatement,
   normalizeHistoricalInvoice,
+  preferFreshStatementProjection,
   resolveHistoricalInvoiceTotal,
   sortHistoricalInvoices,
   type CreditCardInvoiceHistoryResult,
@@ -23,6 +26,7 @@ import {
   type CardCycleRow,
 } from "./card-cycles";
 import {
+  cardPurchaseBelongsToCycle,
   getClosedCardCycleMovements,
   getOpenCardCycleMovements,
   resolveInvoiceEntryEffect,
@@ -237,7 +241,7 @@ export async function getCreditCardInvoiceAnalyticsEntries(
       }
     }
   }
-  return (result.data ?? []).flatMap(row => {
+  const entries = (result.data ?? []).flatMap(row => {
     const status = String(row.status) as StoredCardInvoice["status"];
     const payments = paymentsByStatement.get(String(row.id)) ?? [];
     const confirmedPaymentAmount = Number(row.confirmed_payment_amount ?? 0);
@@ -300,6 +304,54 @@ export async function getCreditCardInvoiceAnalyticsEntries(
       totalSource: resolved.source,
     }];
   });
+  const cleanedEntries = discardUndatedRecentStatementPayments(entries);
+  const projectedTotals = new Map<string, number>();
+  await Promise.all(cleanedEntries.map(async entry => {
+    if (
+      !isRecentUnconfirmedProjectableStatement(entry) ||
+      !entry.cycleStartDate ||
+      !entry.cycleEndDate
+    ) return;
+    try {
+      const movements = await getMovementsData(supabase, userId, {
+        from: entry.cycleStartDate,
+        to: entry.cycleEndDate,
+        type: "card",
+        cycleId: entry.id,
+      });
+      const breakdown = calculateOpenCardCycleBreakdown({
+        movements: movements.cardPurchases.map(purchase => ({
+          id: purchase.id,
+          amount: Math.abs(Number(purchase.amount_brl) || 0),
+          effect:
+            purchase.transaction_role === "refund" ||
+            Number(purchase.installment_amount) < 0
+              ? "credit" as const
+              : "debit" as const,
+          entryType: purchase.entry_type,
+          source: purchase.source,
+          reconciliationStatus: purchase.reconciliation_status,
+          installmentNumber: purchase.installment_number,
+          installmentTotal: purchase.installment_count,
+          description: purchase.description,
+          cardId: purchase.card_id,
+          competenceMonth: purchase.competence_month,
+        })),
+        confirmedOpenTotal: null,
+        installmentsDataStatus: movements.installmentsDataStatus,
+      });
+      if (breakdown.detailedTotal > 0) {
+        projectedTotals.set(entry.id, breakdown.detailedTotal);
+      }
+    } catch {
+      // Preserve the stored snapshot when live movement details are unavailable.
+    }
+  }));
+  return cleanedEntries.map(entry =>
+    preferFreshStatementProjection(
+      entry,
+      projectedTotals.get(entry.id) ?? null,
+    ));
 }
 
 export async function getCardInvoiceHistory(
@@ -694,16 +746,18 @@ export async function getMovementsData(
     status: string;
     source: string;
     document_id: string | null;
+    provider_bill_id: string | null;
     official_total: number | string | null;
     provider_invoice_total: number | string | null;
     manual_invoice_total: number | string | null;
     confirmed_invoice_total: number | string | null;
+    data_completeness: string | null;
   };
   let selectedCycle: SelectedMovementCycle | null = null;
   if (isCardScope && scope.cycleId) {
     const cycle = await supabase
       .from("card_invoices")
-      .select("id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,status,source,document_id,official_total,provider_invoice_total,manual_invoice_total,confirmed_invoice_total")
+      .select("id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,status,source,document_id,provider_bill_id,official_total,provider_invoice_total,manual_invoice_total,confirmed_invoice_total,data_completeness")
       .eq("owner_id", userId)
       .eq("id", scope.cycleId)
       .maybeSingle();
@@ -726,6 +780,11 @@ export async function getMovementsData(
   const isPdfCycle = Boolean(
     selectedCycle?.document_id || selectedCycle?.source === "pdf",
   );
+  const cutoffGraceFrom = (() => {
+    const date = new Date(`${period.from}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - 2);
+    return date.toISOString().slice(0, 10);
+  })();
   const isOpenCycle = Boolean(
     selectedCycle &&
     ["open", "partial"].includes(selectedCycle.status) &&
@@ -752,7 +811,7 @@ export async function getMovementsData(
   const cycleCardIds =
     cycleAccountResolution?.cardIds ?? (selectedCycle ? [selectedCycle.card_id] : []);
   const transactionSelect = "id,external_id,description,amount,amount_brl,original_amount,original_currency,original_currency_code,exchange_rate,foreign_iof_amount,conversion_source,converted_at,transaction_type,transaction_role,source_type,financial_origin,cash_flow_kind,bank_direction,financial_nature,financial_role,provider_category,classification_source,classification_confidence,manually_confirmed,manual_override_at,status,competence_date,realized_at,provider_posted_at,bank_posted_at,effective_at,user_effective_at,created_at,source,account_id,credit_card_id,invoice_id,payment_source,transfer_group_id,destination_account_id,category_id,review_status,financial_accounts:financial_accounts!financial_transactions_account_id_fkey(name,institution_name),credit_cards:credit_cards!financial_transactions_credit_card_id_fkey(name,last_four_digits),financial_categories:financial_categories!financial_transactions_category_id_fkey(name)";
-  const purchaseSelect = "id,external_id,provider_bill_id,description,total_amount,installment_amount,amount_brl,provider_signed_amount,installment_number,installment_count,purchase_date,posting_date,competence_date,created_at,source,source_type,financial_origin,transaction_role,entry_type,related_foreign_purchase_id,status,review_status,instrument_id,instrument_review_status,provider_category,merchant,currency,original_amount,original_currency_code,exchange_rate,foreign_iof_amount,conversion_source,conversion_confidence,converted_at,provider_metadata,card_id,invoice_id,category_id,credit_cards:credit_cards!card_purchases_card_id_fkey(name,institution_name,last_four_digits),credit_card_instruments:credit_card_instruments!card_purchases_instrument_id_fkey(display_name,last_four_digits,card_kind),financial_categories:financial_categories!card_purchases_category_id_fkey(name)";
+  const purchaseSelect = "id,external_id,provider_bill_id,description,total_amount,installment_amount,amount_brl,provider_signed_amount,installment_number,installment_count,purchase_date,posting_date,competence_date,created_at,source,source_type,financial_origin,transaction_role,entry_type,related_foreign_purchase_id,status,review_status,instrument_id,instrument_review_status,provider_category,merchant,currency,original_amount,original_currency_code,exchange_rate,foreign_iof_amount,conversion_source,conversion_confidence,converted_at,provider_metadata,card_id,invoice_id,invoice_reference,bill_forecast_date,category_id,credit_cards:credit_cards!card_purchases_card_id_fkey(name,institution_name,last_four_digits),credit_card_instruments:credit_card_instruments!card_purchases_instrument_id_fkey(display_name,last_four_digits,card_kind),financial_categories:financial_categories!card_purchases_category_id_fkey(name)";
   const emptyResult = Promise.resolve({ data: [], error: null });
   const transactionsQuery = isCardScope
     ? selectedCycle && isOpenCycle
@@ -775,27 +834,70 @@ export async function getMovementsData(
       .lte("competence_date", period.to)
       .order("competence_date", { ascending: false })
       .limit(400);
-  const purchasesQuery = (() => {
+  const purchasesQuery = (async () => {
     if (isCardScope && !selectedCycle) return emptyResult;
-    let query = supabase
+    const baseQuery = () => supabase
       .from("card_purchases")
       .select(purchaseSelect)
       .eq("owner_id", userId);
     if (isCardScope && selectedCycle) {
-      query = query.in("card_id", cycleCardIds);
-      query = isOpenCycle
-        ? query.or(
-          `invoice_id.eq.${selectedCycle.id},and(invoice_id.is.null,purchase_date.gte.${period.from},purchase_date.lte.${period.to}),and(invoice_id.is.null,competence_date.gte.${period.from},competence_date.lte.${period.to})`,
-        )
-        : query.or(
+      if (isPdfCycle) {
+        return await baseQuery().in("card_id", cycleCardIds).or(
           `invoice_id.eq.${selectedCycle.id},and(invoice_id.is.null,competence_date.gte.${period.from},competence_date.lte.${period.to})`,
+        ).order("competence_date", { ascending: false }).limit(800);
+      }
+      const forCycle = () => baseQuery().in("card_id", cycleCardIds);
+      const candidateQueries = [
+        forCycle().eq("invoice_id", selectedCycle.id).limit(800),
+      ];
+      if (selectedCycle.provider_bill_id) {
+        candidateQueries.push(
+          forCycle().eq("provider_bill_id", selectedCycle.provider_bill_id).limit(800),
         );
-    } else {
-      query = query
+      }
+      let forecastQuery = forCycle()
+        .eq("bill_forecast_date", selectedCycle.reference_month);
+      let postingQuery = forCycle()
+        .gte("posting_date", period.from)
+        .lte("posting_date", period.to);
+      if (selectedCycle.provider_bill_id) {
+        forecastQuery = forecastQuery.is("provider_bill_id", null);
+        postingQuery = postingQuery.is("provider_bill_id", null);
+      }
+      let purchaseDateQuery = forCycle()
+        .is("invoice_id", null)
+        .gte("purchase_date", cutoffGraceFrom)
+        .lte("purchase_date", period.to);
+      let competenceDateQuery = forCycle()
+        .is("invoice_id", null)
         .gte("competence_date", period.from)
         .lte("competence_date", period.to);
+      if (selectedCycle.provider_bill_id) {
+        purchaseDateQuery = purchaseDateQuery.is("provider_bill_id", null);
+        competenceDateQuery = competenceDateQuery.is("provider_bill_id", null);
+      }
+      candidateQueries.push(
+        forecastQuery.limit(800),
+        postingQuery.limit(800),
+        purchaseDateQuery.limit(800),
+        competenceDateQuery.limit(800),
+      );
+      const candidates = await Promise.all(candidateQueries);
+      const error = candidates.find(result => result.error)?.error ?? null;
+      if (error) return { data: null, error };
+      const rows = new Map<string, unknown>();
+      for (const result of candidates) {
+        for (const row of result.data ?? []) {
+          rows.set(String((row as { id: string }).id), row);
+        }
+      }
+      return { data: [...rows.values()], error: null };
     }
-    return query.order("competence_date", { ascending: false }).limit(800);
+    return await baseQuery()
+        .gte("competence_date", period.from)
+        .lte("competence_date", period.to)
+        .order("competence_date", { ascending: false })
+        .limit(800);
   })();
   const invoiceEntriesQuery = isCardScope && selectedCycle && isPdfCycle
     ? supabase
@@ -820,7 +922,7 @@ export async function getMovementsData(
   const occurrenceMonth = selectedCycle
     ? resolveCycleCompetenceMonth(selectedCycle)
     : "";
-  const occurrencesQuery = isCardScope && selectedCycle && isOpenCycle
+  const occurrencesQuery = isCardScope && selectedCycle && !isPdfCycle
     ? supabase
       .from("card_installment_occurrences")
       .select("id,card_id,bill_id,invoice_entry_id,competence_month,installment_number,total_installments,amount,status,due_date,source,confidence,installment_plan_id,card_installment_plans(card_last_four,merchant_normalized,description_reference)")
@@ -872,7 +974,24 @@ export async function getMovementsData(
     for (const purchase of resolved.cardPurchases) {
       if (
         purchase.transaction_role === "invoice_payment" ||
-        ["forecast", "cancelled"].includes(purchase.status)
+        ["forecast", "cancelled"].includes(purchase.status) ||
+        (isOpenCycle && !cardPurchaseBelongsToCycle({
+          invoiceId: purchase.invoice_id,
+          providerBillId: purchase.provider_bill_id,
+          billForecastDate: purchase.bill_forecast_date,
+          postingDate: purchase.posting_date,
+          competenceDate: purchase.competence_date,
+          purchaseDate: purchase.purchase_date,
+        }, {
+          id: selectedCycle.id,
+          providerBillId: selectedCycle.provider_bill_id,
+          referenceMonth: selectedCycle.reference_month,
+          cycleStartDate: selectedCycle.cycle_start_date,
+          cycleEndDate: selectedCycle.cycle_end_date,
+          trustProviderAssignment:
+            isPdfCycle ||
+            !["open", "partial"].includes(selectedCycle.status),
+        }))
       ) {
         continue;
       }

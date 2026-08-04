@@ -3,6 +3,7 @@ import { readPluggyConfig } from "./config-core";
 import { PluggyApiError, PluggyError, sanitizeDiagnostic } from "./errors";
 import { ApiKeyCache } from "./key-cache";
 import type { JsonRecord, PluggyAccount, PluggyBill, PluggyIdentity, PluggyInvestment, PluggyItem, PluggyLoan, PluggyPage, PluggyRequestOptions, PluggyTransaction } from "./types";
+import { buildPluggyTransactionsUrl, listAllPluggyTransactions as collectAllPluggyTransactions, normalizePluggyTransactionsPage, type ListPluggyTransactionsInput } from "./transactions-pagination";
 
 const API_URL="https://api.pluggy.ai";
 const cache=new ApiKeyCache();
@@ -12,11 +13,13 @@ function config(){ const value=readPluggyConfig(process.env); if(!value.configur
 export function getPluggyConfigurationStatus(){ return { configured:readPluggyConfig(process.env).configured }; }
 
 async function parse(response:Response):Promise<unknown>{ const text=await response.text(); if(!text)return {}; try{return JSON.parse(text)}catch{return {}} }
-function responseError(payload:unknown,status:number,operation:string,retryable:boolean){
+function responseError(payload:unknown,status:number,operation:string,retryable:boolean,durationMs?:number){
  const candidate=typeof payload==="object"&&payload!==null?payload as Record<string,unknown>:{};
  const message=sanitizeDiagnostic(typeof candidate.message==="string"?candidate.message:typeof candidate.error==="string"?candidate.error:"")??`Pluggy respondeu com HTTP ${status}.`;
  const code=typeof candidate.code==="string"?candidate.code:typeof candidate.errorCode==="string"?candidate.errorCode:typeof candidate.codeDescription==="string"?candidate.codeDescription:undefined;
- return new PluggyApiError(message,{status,code,operation,retryable});
+ let responseBodySanitized:string|undefined;
+ try{responseBodySanitized=sanitizeDiagnostic(JSON.stringify(payload))}catch{}
+ return new PluggyApiError(message,{status,code,operation,retryable,providerMessage:message,responseBodySanitized,durationMs});
 }
 function retryAfter(response:Response,attempt:number){ const seconds=Number(response.headers.get("retry-after")); return Number.isFinite(seconds)&&seconds>0?Math.min(seconds*1000,5000):350*(attempt+1); }
 
@@ -45,6 +48,7 @@ async function authenticate(force=false){
 export async function pluggyRequest<T>(path:string,options:PluggyRequestOptions={}):Promise<T>{
   const method=options.method??"GET"; const url=new URL(path,API_URL); Object.entries(options.query??{}).forEach(([key,value])=>{if(value!==undefined)url.searchParams.set(key,String(value))});
   const operation=`${method} ${url.pathname}`;
+  const requestStarted=Date.now();
   for(let attempt=0;attempt<3;attempt++){
     const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),options.timeoutMs??20_000);
     try{
@@ -56,7 +60,7 @@ export async function pluggyRequest<T>(path:string,options:PluggyRequestOptions=
       if(response.status===401&&attempt===0){cache.clear();continue}
       const retryable=method==="GET"&&(response.status===429||response.status>=500);
       if(retryable&&attempt<2){await wait(retryAfter(response,attempt));continue}
-      throw responseError(payload,response.status,operation,retryable);
+      throw responseError(payload,response.status,operation,retryable,Date.now()-requestStarted);
     }catch(error){
       const retryable=method==="GET"&&(!(error instanceof PluggyApiError)||error.retryable);
       if(retryable&&attempt<2){await wait(350*(attempt+1));continue}
@@ -94,7 +98,12 @@ export async function listPluggyLoans(itemId:string){
  throw new PluggyError("Loan pagination exceeded the safety limit","pluggy_pagination_limit",undefined,true);
 }
 export const getPluggyLoans=listPluggyLoans;
-export const getPluggyTransactions=(accountId:string,after?:string,dateFrom?:string,dateTo?:string)=>pluggyRequest<PluggyPage<PluggyTransaction>>("/v2/transactions",{query:{accountId,after,dateFrom,dateTo,pageSize:500}});
+export async function getPluggyTransactions(input:ListPluggyTransactionsInput){
+ const payload=await pluggyRequest<unknown>(buildPluggyTransactionsUrl(input));
+ return normalizePluggyTransactionsPage(payload);
+}
+export const listAllPluggyTransactions=(input:Omit<ListPluggyTransactionsInput,"after">)=>
+ collectAllPluggyTransactions(input,getPluggyTransactions);
 export const getPluggyTransaction=(transactionId:string)=>pluggyRequest<PluggyTransaction>(`/transactions/${encodeURIComponent(transactionId)}`);
 export async function listPluggyBills(accountId:string){
  const rows:PluggyBill[]=[];

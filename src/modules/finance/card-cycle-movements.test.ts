@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  cardPurchaseBelongsToCycle,
   deduplicateCardMovements,
   getClosedCardCycleMovements,
   getOpenCardCycleMovements,
@@ -247,4 +248,72 @@ test("seletores de ciclo mantêm PDF como base fechada e o removem da aberta", (
       .sort(),
     ["pdf", "pluggy"],
   );
+});
+
+test("purchase before cycle start is not repeated only because of lookup grace", () => {
+  const cycle = {
+    id: "september",
+    providerBillId: "bill-september",
+    referenceMonth: "2026-09-01",
+    cycleStartDate: "2026-08-04",
+    cycleEndDate: "2026-09-03",
+  };
+  assert.equal(cardPurchaseBelongsToCycle({
+    purchaseDate: "2026-08-03",
+    competenceDate: "2026-08-03",
+    postingDate: "2026-08-03",
+    billForecastDate: "2026-09-01",
+  }, cycle), false);
+  assert.equal(cardPurchaseBelongsToCycle({
+    purchaseDate: "2026-08-03",
+    postingDate: "2026-08-04",
+  }, cycle), true);
+});
+
+test("closed cycle keeps two-day processing grace without leaking into open cycle", () => {
+  const closedCycle = {
+    id: "august",
+    referenceMonth: "2026-08-01",
+    cycleStartDate: "2026-07-04",
+    cycleEndDate: "2026-08-03",
+    trustProviderAssignment: true,
+  };
+  const openCycle = {
+    id: "september",
+    referenceMonth: "2026-09-01",
+    cycleStartDate: "2026-08-04",
+    cycleEndDate: "2026-09-03",
+    trustProviderAssignment: false,
+  };
+  assert.equal(cardPurchaseBelongsToCycle({
+    purchaseDate: "2026-07-02",
+    competenceDate: "2026-07-02",
+  }, closedCycle), true);
+  assert.equal(cardPurchaseBelongsToCycle({
+    purchaseDate: "2026-08-03",
+    competenceDate: "2026-08-03",
+  }, openCycle), false);
+});
+
+test("explicit invoice evidence has priority over dates for every cycle", () => {
+  const cycle = {
+    id: "august",
+    providerBillId: "bill-august",
+    referenceMonth: "2026-08-01",
+    cycleStartDate: "2026-07-04",
+    cycleEndDate: "2026-08-03",
+    trustProviderAssignment: true,
+  };
+  assert.equal(cardPurchaseBelongsToCycle({
+    invoiceId: "august",
+    purchaseDate: "2026-07-02",
+  }, cycle), true);
+  assert.equal(cardPurchaseBelongsToCycle({
+    invoiceId: "september",
+    purchaseDate: "2026-07-20",
+  }, cycle), false);
+  assert.equal(cardPurchaseBelongsToCycle({
+    providerBillId: "bill-august",
+    purchaseDate: "2026-07-02",
+  }, cycle), true);
 });

@@ -844,7 +844,13 @@ test("consulta é limitada ao período e aos campos da lista", () => {
   assert.match(query, /\["forecast", "cancelled"\]\.includes\(transaction\.status\)/);
   assert.match(query, /\.from\("card_invoices"\)[\s\S]*?\.eq\("owner_id",\s*userId\)[\s\S]*?\.eq\("id",\s*scope\.cycleId\)/);
   assert.match(query, /\.from\("invoice_entries"\)[\s\S]*?\.eq\("bill_id",\s*selectedCycle\.id\)[\s\S]*?\.in\("entry_type"/);
-  assert.match(query, /invoice_id\.eq\.\$\{selectedCycle\.id\},and\(invoice_id\.is\.null,purchase_date\.gte\.\$\{period\.from\},purchase_date\.lte\.\$\{period\.to\}\),and\(invoice_id\.is\.null,competence_date\.gte\.\$\{period\.from\},competence_date\.lte\.\$\{period\.to\}\)/);
+  assert.match(query, /eq\("provider_bill_id", selectedCycle\.provider_bill_id\)/);
+  assert.match(query, /eq\("bill_forecast_date", selectedCycle\.reference_month\)/);
+  assert.match(query, /gte\("posting_date", period\.from\)[\s\S]*lte\("posting_date", period\.to\)/);
+  assert.match(query, /gte\("purchase_date", cutoffGraceFrom\)[\s\S]*lte\("purchase_date", period\.to\)/);
+  assert.match(query, /eq\("invoice_id", selectedCycle\.id\)/);
+  assert.match(query, /new Map<string, unknown>\(\)/);
+  assert.match(query, /occurrencesQuery = isCardScope && selectedCycle && !isPdfCycle/);
   assert.match(query, /card_installment_occurrences/);
   assert.equal(restoredInvoicePaymentQueries.length, 4);
   assert.doesNotMatch(query, /financial_investments|financial_loans/);

@@ -6,6 +6,9 @@ export type NormalizedIntegrationError = {
   operation?: string;
   stage?: string;
   causeMessage?: string;
+  providerMessage?: string;
+  responseBodySanitized?: string;
+  durationMs?: number;
   stack?: string;
 };
 
@@ -23,9 +26,9 @@ function stringField(value:unknown){return typeof value==="string"&&value.trim()
 function numberField(value:unknown){return typeof value==="number"&&Number.isFinite(value)?value:undefined}
 
 export class PluggyApiError extends Error {
-  readonly code?:string;readonly status?:number;readonly operation?:string;readonly retryable:boolean;
-  constructor(message:string,options:{code?:string;status?:number;operation?:string;retryable?:boolean;cause?:unknown}={}){
-    super(sanitizeDiagnostic(message)??"Erro na API Pluggy.",{cause:options.cause});this.name="PluggyApiError";this.code=options.code;this.status=options.status;this.operation=options.operation;this.retryable=options.retryable??false;
+  readonly code?:string;readonly status?:number;readonly operation?:string;readonly retryable:boolean;readonly providerMessage?:string;readonly responseBodySanitized?:string;readonly durationMs?:number;
+  constructor(message:string,options:{code?:string;status?:number;operation?:string;retryable?:boolean;providerMessage?:string;responseBodySanitized?:string;durationMs?:number;cause?:unknown}={}){
+    super(sanitizeDiagnostic(message)??"Erro na API Pluggy.",{cause:options.cause});this.name="PluggyApiError";this.code=options.code;this.status=options.status;this.operation=options.operation;this.retryable=options.retryable??false;this.providerMessage=sanitizeDiagnostic(options.providerMessage);this.responseBodySanitized=sanitizeDiagnostic(options.responseBodySanitized);this.durationMs=options.durationMs;
   }
 }
 
@@ -47,7 +50,8 @@ export function normalizeIntegrationError(error:unknown):NormalizedIntegrationEr
     let causeMessage:string|undefined;
     if(candidate.cause instanceof Error)causeMessage=sanitizeDiagnostic(candidate.cause.message);
     else if(typeof candidate.cause==="object"&&candidate.cause!==null&&"message" in candidate.cause)causeMessage=stringField((candidate.cause as {message?:unknown}).message);
-    return {name:candidate.name||"Error",message:sanitizeDiagnostic(candidate.message)??"Erro sem mensagem.",code:stringField(candidate.code),status:numberField(candidate.status),operation:stringField(candidate.operation),stage:stringField(candidate.stage),causeMessage,stack:process.env.NODE_ENV==="development"?candidate.stack:undefined};
+    const providerMessage=stringField((candidate as {providerMessage?:unknown}).providerMessage);const responseBodySanitized=stringField((candidate as {responseBodySanitized?:unknown}).responseBodySanitized);const durationMs=numberField((candidate as {durationMs?:unknown}).durationMs);
+    return {name:candidate.name||"Error",message:sanitizeDiagnostic(candidate.message)??"Erro sem mensagem.",code:stringField(candidate.code),status:numberField(candidate.status),operation:stringField(candidate.operation),stage:stringField(candidate.stage),causeMessage,...(providerMessage?{providerMessage}:{}),...(responseBodySanitized?{responseBodySanitized}:{}),...(durationMs!==undefined?{durationMs}:{}),stack:process.env.NODE_ENV==="development"?candidate.stack:undefined};
   }
   if(typeof error==="object"&&error!==null){
     const candidate=error as Record<string,unknown>;
