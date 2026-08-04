@@ -3,7 +3,7 @@ import type { ExtractedPdfDocument, InvoiceParser, ParsedInvoice } from "../type
 
 export class SantanderInvoiceParser implements InvoiceParser {
   readonly name = "santander";
-  readonly version = "2.0.0";
+  readonly version = "2.1.0";
   readonly priority = 100;
 
   canParse(document: ExtractedPdfDocument) {

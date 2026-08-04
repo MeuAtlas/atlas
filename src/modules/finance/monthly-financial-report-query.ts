@@ -258,7 +258,13 @@ function toStatement(
   cardNames: Map<string, string>,
   payments: MonthlyStatementPayment[] = [],
 ): MonthlyStatement {
-  const official = row.official_total_amount ?? row.confirmed_invoice_total ?? row.manual_invoice_total ?? row.provider_invoice_total;
+  const official = row.pdf_total_amount ??
+    row.pluggy_bill_total_amount ??
+    row.official_total_amount ??
+    (row.total_source === "manual_pdf_confirmation" ? row.manual_invoice_total : null) ??
+    row.provider_invoice_total ??
+    row.manual_total_amount ??
+    row.confirmed_invoice_total;
   const calculated = row.calculated_total_amount ?? row.calculated_invoice_total ?? row.total_amount ?? 0;
   const expected = Number(row.expected_statement_amount ?? official ?? calculated ?? 0);
   const shares = statementPurchaseShares(row);

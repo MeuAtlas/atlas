@@ -73,13 +73,18 @@ export function resolveInvoiceTransactionDate(
   return dateToIso(raw, year);
 }
 
-function entryType(section: SantanderSection, description: string, amount: number): InvoiceEntryType {
+function entryType(
+  section: SantanderSection,
+  description: string,
+  amount: number,
+  hasInstallment: boolean,
+): InvoiceEntryType {
   const normalized = normalizeMerchant(description);
   if (/PAGAMENTO DE FATURA|PGTO FATURA/.test(normalized)) return "payment";
   if (/\bIOF\b/.test(normalized)) return "tax";
   if (/ANUIDADE|TARIFA/.test(normalized)) return "fee";
   if (/JUROS|ENCARGO/.test(normalized)) return "interest";
-  if (section === "installments") return "installment_purchase";
+  if (section === "installments" && hasInstallment) return "installment_purchase";
   if (amount < 0 && /ESTORNO|DEVOLUCAO/.test(normalized)) return "refund";
   if (amount < 0 || section === "payments") return "credit";
   return "purchase";
@@ -145,7 +150,12 @@ function transactionFromLine(input: {
     input.state.activeSection,
   );
   input.state.lastTransactionDate = transactionDate;
-  const type = entryType(input.state.activeSection, descriptionRaw, amount);
+  const type = entryType(
+    input.state.activeSection,
+    descriptionRaw,
+    amount,
+    installment !== null,
+  );
   const signedAmount = ["payment", "credit", "refund"].includes(type)
     ? -Math.abs(amount)
     : Math.abs(amount);

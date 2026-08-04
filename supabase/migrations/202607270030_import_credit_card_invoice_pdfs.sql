@@ -276,7 +276,7 @@ begin
   closing_date:=coalesce((p_review->'parsed'->>'closingDate')::date,due_date-interval '10 days');
   cycle_end:=coalesce((p_review->'parsed'->>'cycleEndDate')::date,closing_date);
   cycle_start:=coalesce((p_review->'parsed'->>'cycleStartDate')::date,(cycle_end-interval '1 month'+interval '1 day')::date);
-  reference_month:=date_trunc('month',due_date)::date;
+  reference_month:=date_trunc('month',coalesce(closing_date,cycle_end,due_date))::date;
   official:=round(((p_review->'parsed'->>'officialTotalCents')::numeric)/100,2);
 
   insert into public.card_invoices(
@@ -300,7 +300,7 @@ begin
     'closed','manual_pdf_confirmation','pdf',doc.id,coalesce(p_review->'parsed'->>'currencyCode','BRL'),
     (p_review->'parsed'->>'confidence')::numeric,true,'complete',now()
   )
-  on conflict(card_id,reference_month) do update set
+  on conflict on constraint card_invoices_card_id_reference_month_key do update set
     document_id=excluded.document_id,manual_invoice_total=excluded.manual_invoice_total,
     official_total=excluded.official_total,total_amount=excluded.total_amount,
     current_display_total=excluded.current_display_total,last_reliable_invoice_total=excluded.last_reliable_invoice_total,
@@ -352,14 +352,25 @@ begin
     );
     entry_count:=entry_count+1;
 
-    if entry->>'entryType'='installment_purchase' and entry->'installment' is not null then
+    if entry->>'entryType'='installment_purchase'
+      and jsonb_typeof(entry->'installment')='object'
+      and case
+        when coalesce(entry->'installment'->>'current','') ~ '^[0-9]+$'
+          and coalesce(entry->'installment'->>'total','') ~ '^[0-9]+$'
+        then (entry->'installment'->>'current')::integer between 1 and 120
+          and (entry->'installment'->>'total')::integer between 2 and 120
+          and (entry->'installment'->>'total')::integer >= (entry->'installment'->>'current')::integer
+        else false
+      end
+    then
       current_n:=(entry->'installment'->>'current')::integer;
       total_n:=(entry->'installment'->>'total')::integer;
       installment_amount:=abs(round((entry->>'amountCents')::numeric/100,2));
-      fingerprint:=encode(extensions.digest(
-        concat_ws('|',doc.workspace_id,doc.card_id,coalesce(entry->>'cardLastFour',''),
-          entry->>'merchantNormalized',installment_amount,total_n,coalesce(entry->>'currencyCode','BRL')),
-        'sha256'),'hex');
+      fingerprint:=concat_ws('|','atlas:installment:v2',doc.card_id,
+        coalesce(entry->>'cardLastFour',''),entry->>'merchantNormalized',
+        coalesce(nullif(entry->>'transactionDate',''),
+          (reference_month-(current_n-1)*interval '1 month')::date::text),
+        total_n,coalesce(entry->>'currencyCode','BRL'));
       insert into public.card_installment_plans(
         workspace_id,owner_id,card_id,card_last_four,merchant_normalized,description_reference,
         installment_amount,currency_code,total_installments,first_known_installment,
@@ -375,6 +386,7 @@ begin
         coalesce((entry->'installment'->>'confidence')::numeric,0),fingerprint,true
       )
       on conflict(workspace_id,card_id,matching_fingerprint) do update set
+        installment_amount=excluded.installment_amount,
         latest_known_installment=greatest(public.card_installment_plans.latest_known_installment,excluded.latest_known_installment),
         posted_installments=greatest(public.card_installment_plans.posted_installments,excluded.posted_installments),
         remaining_installments=greatest(0,excluded.total_installments-greatest(public.card_installment_plans.latest_known_installment,excluded.latest_known_installment)),
@@ -403,6 +415,7 @@ begin
           bill_id=coalesce(excluded.bill_id,public.card_installment_occurrences.bill_id),
           invoice_entry_id=coalesce(excluded.invoice_entry_id,public.card_installment_occurrences.invoice_entry_id),
           status=case when excluded.status='posted' then 'posted' else public.card_installment_occurrences.status end,
+          amount=excluded.amount,
           due_date=excluded.due_date
         returning id into occurrence_id;
         occurrence_count:=occurrence_count+1;

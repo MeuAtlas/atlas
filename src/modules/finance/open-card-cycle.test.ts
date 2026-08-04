@@ -109,6 +109,44 @@ test("parcela com data original antiga entra pela competência de agosto", () =>
   assert.equal(occurrence.installmentNumber, 2);
 });
 
+test("correção de centavos preserva a identidade do mesmo parcelamento", () => {
+  const beforeCorrection = buildPostedInstallmentOccurrence({
+    ...previous,
+    amount: 75.15,
+    originalDate: "2025-09-14",
+    currentInstallment: 2,
+    totalInstallments: 13,
+  }, "2025-11-01", 10)!;
+  const afterCorrection = buildPostedInstallmentOccurrence({
+    ...previous,
+    amount: 75.07,
+    originalDate: "2025-09-14",
+    currentInstallment: 3,
+    totalInstallments: 13,
+  }, "2025-12-01", 10)!;
+  assert.equal(
+    beforeCorrection.matchingFingerprint,
+    afterCorrection.matchingFingerprint,
+  );
+  assert.notEqual(beforeCorrection.amount, afterCorrection.amount);
+});
+
+test("compras distintas no mesmo estabelecimento continuam separadas pela data original", () => {
+  const first = buildPostedInstallmentOccurrence({
+    ...previous,
+    originalDate: "2025-09-14",
+    currentInstallment: 1,
+    totalInstallments: 13,
+  }, "2025-10-01", 10)!;
+  const second = buildPostedInstallmentOccurrence({
+    ...previous,
+    originalDate: "2025-09-15",
+    currentInstallment: 1,
+    totalInstallments: 13,
+  }, "2025-10-01", 10)!;
+  assert.notEqual(first.matchingFingerprint, second.matchingFingerprint);
+});
+
 test("última parcela não gera ocorrência seguinte", () => {
   assert.equal(buildNextInstallmentOccurrence({
     ...previous,

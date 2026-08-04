@@ -129,6 +129,11 @@ test("API retorna existing tipado em vez de duplicate genérico", () => {
     "utf8",
   );
   assert.match(route, /uploadInvoicePdf/);
+  assert.match(route, /reprocessInvoiceDocument/);
+  assert.match(
+    route,
+    /\["continue_processing", "continue_review", "retry"\]\.includes\(result\.action\)/,
+  );
   assert.match(route, /nextStep:/);
   assert.doesNotMatch(route, /duplicate_pdf/);
   assert.match(resolver, /status: "existing"/);
@@ -138,6 +143,18 @@ test("API retorna existing tipado em vez de duplicate genérico", () => {
   assert.doesNotMatch(documentRoute, /storage_path: document\.storage_path/);
   assert.doesNotMatch(documentRoute, /extracted_text: document\.extracted_text/);
   assert.doesNotMatch(documentRoute, /file_hash: document\.file_hash/);
+});
+
+test("processamento valida a competência antes de liberar a revisão", () => {
+  const source = readFileSync(
+    "src/modules/finance/invoice-import/repository.ts",
+    "utf8",
+  );
+  const validation = source.indexOf("await validateTargetStatementPeriod");
+  const persistence = source.indexOf("await persistReviewAtomically", validation);
+  assert.ok(validation >= 0 && persistence > validation);
+  assert.match(source, /TARGET_STATEMENT_MISMATCH/);
+  assert.match(source, /TARGET_STATEMENT_PERIOD_NOT_IDENTIFIED/);
 });
 
 test("replace envia o novo arquivo antes de remover o antigo", () => {

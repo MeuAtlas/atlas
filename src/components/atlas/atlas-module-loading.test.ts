@@ -12,9 +12,18 @@ const component = readFileSync(
   "utf8",
 );
 const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
+const skeletonTypes = [
+  "overview",
+  "transactions",
+  "accounts",
+  "cards",
+  "loans",
+  "planning",
+  "reports",
+  "integrations",
+] as const;
 const loadingFiles = {
   overview: "src/app/financeiro/loading.tsx",
-  transactions: "src/app/financeiro/movimentacoes/loading.tsx",
   accounts: "src/app/financeiro/contas/loading.tsx",
   cards: "src/app/financeiro/cartoes/loading.tsx",
   loans: "src/app/financeiro/emprestimos/loading.tsx",
@@ -53,11 +62,11 @@ test("planeta é SVG decorativo e não adiciona imagem raster", () => {
 });
 
 test("cada variante produz um skeleton estrutural próprio", () => {
-  for (const type of Object.keys(loadingFiles)) {
+  for (const type of skeletonTypes) {
     const html = renderToStaticMarkup(
       createElement(AtlasModuleLoading, {
         title: "Carregando",
-        skeletonType: type as keyof typeof loadingFiles,
+        skeletonType: type,
       }),
     );
     assert.match(html, new RegExp(`data-skeleton="${type}"`));
@@ -67,7 +76,6 @@ test("cada variante produz um skeleton estrutural próprio", () => {
 test("loadings reutilizam o componente central, salvo dashboard executivo estrutural", () => {
   const expected = {
     overview: "Preparando sua visão financeira",
-    transactions: "Carregando movimentações",
     accounts: "Carregando suas contas",
     cards: "Carregando cartões",
     loans: "Carregando empréstimos",

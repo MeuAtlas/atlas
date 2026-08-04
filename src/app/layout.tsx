@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
+import { PwaRuntime } from "@/components/pwa/pwa-runtime";
 
 import "./globals.css";
 
@@ -18,8 +19,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   applicationName: "Atlas",
   title: "Atlas",
-  description: "Seu espaço pessoal, privado e seguro.",
+  description: "Seu espaço pessoal para organizar finanças, agenda, tarefas, documentos e decisões.",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Atlas",
+    statusBarStyle: "black-translucent",
+  },
   icons: {
     icon: [
       {
@@ -37,9 +43,9 @@ export const metadata: Metadata = {
     ],
     apple: [
       {
-        url: "/icons/atlas-app-icon-light.png",
+        url: "/icons/atlas-apple-touch-icon.png",
         type: "image/png",
-        sizes: "1024x1024",
+        sizes: "180x180",
       },
     ],
   },
@@ -49,6 +55,17 @@ export const metadata: Metadata = {
     email: false,
     address: false,
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#dcecff" },
+    { media: "(prefers-color-scheme: dark)", color: "#07111f" },
+  ],
 };
 
 const themeScript = `
@@ -90,7 +107,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full">
-        <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
+        <PwaRuntime>
+          <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
+        </PwaRuntime>
       </body>
     </html>
   );

@@ -652,6 +652,15 @@ export function InvoiceImportReview({
     () => new Map(entries.map((entry, index) => [entry.id, index])),
     [entries],
   );
+  const pdfCardSubtotals = useMemo(
+    () => new Map(
+      (review.parsed.cardSections ?? []).map(section => [
+        section.cardLastFour,
+        section.subtotalBRLCents,
+      ]),
+    ),
+    [review.parsed.cardSections],
+  );
   const visibleEntries = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
     return entries
@@ -701,6 +710,60 @@ export function InvoiceImportReview({
   return (
     <div className="invoice-review">
       <ReviewSummary review={review} metrics={metrics} actions={actions} />
+      {review.statementComparison ? (
+        <section className="invoice-review-details invoice-total-comparison" aria-label="Comparação dos totais">
+          <h2>Qual total deve ser confirmado?</h2>
+          <p>
+            O PDF e o Bill da integração são preservados separadamente para
+            auditoria. Escolha a fonte válida para este fechamento.
+          </p>
+          <label>
+            <input
+              type="radio"
+              name="confirmed-total-source"
+              checked={review.statementComparison.selectedTotalSource === "statement_pdf"}
+              onChange={() => onChange({
+                ...review,
+                statementComparison: {
+                  ...review.statementComparison!,
+                  selectedTotalSource: "statement_pdf",
+                },
+              })}
+            />
+            PDF · {review.statementComparison.pdfTotalCents == null
+              ? "não identificado"
+              : formatCents(review.statementComparison.pdfTotalCents)}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="confirmed-total-source"
+              disabled={review.statementComparison.pluggyBillTotalCents === null}
+              checked={review.statementComparison.selectedTotalSource === "pluggy_bill"}
+              onChange={() => onChange({
+                ...review,
+                statementComparison: {
+                  ...review.statementComparison!,
+                  selectedTotalSource: "pluggy_bill",
+                },
+              })}
+            />
+            Pluggy Bill · {review.statementComparison.pluggyBillTotalCents == null
+              ? "não disponível"
+              : formatCents(review.statementComparison.pluggyBillTotalCents)}
+          </label>
+          {review.statementComparison.pdfTotalCents !== null &&
+          review.statementComparison.pluggyBillTotalCents !== null &&
+          review.statementComparison.pdfTotalCents !== review.statementComparison.pluggyBillTotalCents ? (
+            <p className="invoice-review-warning" role="status">
+              Diferença de {formatCents(Math.abs(
+                review.statementComparison.pdfTotalCents -
+                review.statementComparison.pluggyBillTotalCents,
+              ))}. A escolha ficará registrada na fatura.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       <ReviewDetails review={review} updateParsed={updateParsed} />
       <ReviewFilters
         search={search}
@@ -734,11 +797,24 @@ export function InvoiceImportReview({
               <header>
                 <div>
                   <strong>{group.key === "unknown" ? "Cartão não identificado" : `Cartão final ${group.key}`}</strong>
-                  <span>{group.entries.length} lançamentos</span>
+                  <span>
+                    {group.entries.length} {group.entries.length === 1
+                      ? "lançamento"
+                      : "lançamentos"}
+                  </span>
                 </div>
-                <strong>{formatCents(group.entries
-                  .filter(entry => !entry.isIgnored)
-                  .reduce((sum, entry) => sum + entry.amountCents, 0))}</strong>
+                <div>
+                  <span>{pdfCardSubtotals.get(group.key) !== null &&
+                    pdfCardSubtotals.get(group.key) !== undefined
+                    ? "Subtotal no PDF"
+                    : "Total dos lançamentos"}</span>
+                  <strong>{formatCents(
+                    pdfCardSubtotals.get(group.key) ??
+                    group.entries
+                      .filter(entry => !entry.isIgnored)
+                      .reduce((sum, entry) => sum + entry.amountCents, 0),
+                  )}</strong>
+                </div>
               </header>
             ) : null}
             <div>

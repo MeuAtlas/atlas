@@ -16,6 +16,7 @@ export type CardCycleSource =
 export interface AvailableCardCycle {
   cycleId: string;
   billId: string | null;
+  referenceMonth: string;
   kind: CardCycleKind;
   label: string;
   compactLabel: string;
@@ -75,6 +76,45 @@ export interface CardCycleRow {
     institution_name: string | null;
     last_four_digits: string | null;
   } | null;
+}
+
+export interface ConfirmedPdfCycleDocument {
+  id: string;
+  parsed_payload: unknown;
+  confirmed_at?: string | null;
+}
+
+export function restoreConfirmedPdfCycleAxes(
+  rows: CardCycleRow[],
+  documents: ConfirmedPdfCycleDocument[],
+) {
+  const byId = new Map(documents.map(document => [document.id, document]));
+  return rows.map(row => {
+    if (!row.document_id) return row;
+    const document = byId.get(row.document_id);
+    if (!document || document.confirmed_at === null) return row;
+    const payload = document.parsed_payload as {
+      parsed?: {
+        cycleStartDate?: string | null;
+        cycleEndDate?: string | null;
+        closingDate?: string | null;
+        dueDate?: string | null;
+      };
+    } | null;
+    const parsed = payload?.parsed;
+    if (!parsed) return row;
+    const closingDate = parsed.closingDate ?? parsed.cycleEndDate ?? row.closing_date;
+    const cycleEndDate = parsed.cycleEndDate ?? closingDate ?? row.cycle_end_date;
+    return {
+      ...row,
+      cycle_start_date: parsed.cycleStartDate ?? row.cycle_start_date,
+      cycle_end_date: cycleEndDate,
+      closing_date: closingDate,
+      due_date: parsed.dueDate ?? row.due_date,
+      status: ["open", "estimated"].includes(row.status ?? "") ? "closed" : row.status,
+      source: "pdf",
+    };
+  });
 }
 
 const sourcePriority: Record<CardCycleSource, number> = {
@@ -148,7 +188,21 @@ export function normalizeAvailableCardCycles(
       selected.set(key, row);
     }
   }
-  return [...selected.values()]
+  const exactCycles = [...selected.values()];
+  const relevantCycles = exactCycles.filter(row => {
+    if (cycleSource(row) !== "calculated" || cycleStatus(row.status) !== "open") {
+      return true;
+    }
+    const reference = (row.due_date ?? row.reference_month).slice(0, 7);
+    return !exactCycles.some(other =>
+      other.id !== row.id &&
+      other.card_id === row.card_id &&
+      cycleStatus(other.status) === "open" &&
+      (other.due_date ?? other.reference_month).slice(0, 7) === reference &&
+      sourcePriority[cycleSource(other)] > sourcePriority.calculated
+    );
+  });
+  return relevantCycles
     .map(row => {
       const cycleStartDate = row.cycle_start_date!;
       const cycleEndDate = row.cycle_end_date!;
@@ -168,6 +222,7 @@ export function normalizeAvailableCardCycles(
       ].filter(Boolean).join(" · ") || "Cartão";
       return {
         cycleId: row.id,
+        referenceMonth: row.reference_month,
         billId:
           row.document_id || row.provider_bill_id ||
           ["pdf", "pluggy_bill"].includes(row.source ?? "")
@@ -190,9 +245,9 @@ export function normalizeAvailableCardCycles(
         officialTotal:
           numberOrNull(row.confirmed_open_total) ??
           numberOrNull(row.official_total) ??
+          numberOrNull(row.provider_invoice_total) ??
           (cycleSource(row) === "pluggy_bill"
-            ? numberOrNull(row.provider_invoice_total) ??
-              numberOrNull(row.total_amount)
+            ? numberOrNull(row.total_amount)
             : cycleSource(row) === "manual"
               ? numberOrNull(row.confirmed_invoice_total) ??
                 numberOrNull(row.manual_invoice_total)

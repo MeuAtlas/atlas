@@ -8,6 +8,7 @@ import type { CardPurchase } from "./types";
 const cycle = {
   cycleId: "0219faee-6359-4071-ac45-8a0fa3423764",
   billId: null,
+  referenceMonth: "2026-08-01",
   kind: "open",
   label: "Fatura vigente",
   compactLabel: "Jul–Ago",

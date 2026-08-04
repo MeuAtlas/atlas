@@ -420,6 +420,7 @@ test("URL canônica existente não navega e URL antiga navega uma única vez", (
 const currentCycle: AvailableCardCycle = {
   cycleId: "cycle-current",
   billId: "bill-current",
+  referenceMonth: "2026-07-01",
   kind: "open",
   label: "Atual",
   compactLabel: "Atual — 26/06 a 25/07",
@@ -749,6 +750,23 @@ test("ciclo aberto vazio não mostra zero falso e preserva último total confiá
   );
 });
 
+test("fatura fechada sem total oficial não promove projeção antiga", () => {
+  const summary = calculateMovementSummaryByFilter([], "card", {
+    ...currentCycle,
+    source: "calculated",
+    kind: "paid",
+    status: "paid",
+    isCurrent: false,
+    officialTotal: null,
+    lastReliableTotal: 6_044.53,
+  });
+  assert.deepEqual(summary.cards.map(card => [card.label, card.value]), [
+    ["Total oficial", null],
+    ["Compras e encargos", null],
+    ["Créditos e estornos", null],
+  ]);
+});
+
 test("deduplicação mantém uma compra representada nas duas fontes", () => {
   const bankCopy = normalizeFinancialTransaction(transaction({
     id: "legacy-copy",
@@ -784,6 +802,19 @@ test("interface remove abas e cards altos e mantém drawer acessível", () => {
   assert.match(source, /<option value="card">Cartões<\/option>/);
   assert.doesNotMatch(source, /<option value="inflow">/);
   assert.match(source, /navigateIfChanged\(router, currentPath, nextPath\)/);
+  assert.match(source, /const navigate = useClientNavigation\(\)/);
+  assert.match(source, /aria-pressed=\{active\}/);
+  assert.match(source, /filters\.cycle \|\| defaultCardCycleId/);
+  assert.match(source, /cycle\.status === "open" \? `\$\{month\} · em aberto` : month/);
+  assert.match(source, /cycle\.dueDate \? `vence \$\{dayMonth\(cycle\.dueDate\)\}`/);
+  assert.match(source, /<p>Selecione uma fatura\.<\/p>/);
+  assert.doesNotMatch(source, /cycle => cycle\.isCurrent \? "Fatura atual"/);
+  assert.match(source, /if \(cycle\.kind === "estimated"\) return "Projeção"/);
+  assert.doesNotMatch(
+    source,
+    /value:\s*"all",\s*label:\s*"Todas"/,
+  );
+  assert.doesNotMatch(page, /key=\{buildMovementQueryKey\(filters\)\}/);
   assert.equal(source.match(/router\.refresh\(\)/g)?.length, 1);
   assert.match(source, /onClick=\{\(\) => router\.refresh\(\)\}/);
   assert.doesNotMatch(source, /setInterval|refetchInterval|polling/);
@@ -850,8 +881,9 @@ test("consulta é limitada ao período e aos campos da lista", () => {
   assert.match(query, /gte\("purchase_date", cutoffGraceFrom\)[\s\S]*lte\("purchase_date", period\.to\)/);
   assert.match(query, /eq\("invoice_id", selectedCycle\.id\)/);
   assert.match(query, /new Map<string, unknown>\(\)/);
-  assert.match(query, /occurrencesQuery = isCardScope && selectedCycle && !isPdfCycle/);
-  assert.match(query, /card_installment_occurrences/);
+  assert.match(query, /if \(isCardScope && \(isPdfCycle \|\| isClosedWithoutPdf\)\) return emptyResult/);
+  assert.doesNotMatch(query, /\.from\("card_installment_occurrences"\)/);
+  assert.match(query, /\.eq\("source", "pluggy"\)/);
   assert.equal(restoredInvoicePaymentQueries.length, 4);
   assert.doesNotMatch(query, /financial_investments|financial_loans/);
 });
@@ -888,11 +920,19 @@ test("interface alterna período bancário e fatura real com estado vazio respon
   const css = readFileSync("src/app/globals.css", "utf8");
   assert.match(source, /export function BankPeriodSelect/);
   assert.match(source, /export function CardBillSelect/);
+  assert.match(source, /<optgroup label=\{group\}/);
+  assert.match(source, /cycleCardLabel/);
+  assert.match(source, /Mastercard/);
+  assert.match(source, /Todos os cartões desta fatura/);
   assert.match(source, /name="cycle"/);
   assert.match(source, /type === "card" \? \(/);
   assert.match(source, /Nenhuma fatura disponível/);
   assert.match(source, /Confirmada por PDF/);
-  assert.match(source, /Projeção atual/);
+  assert.match(source, /return "Projeção"/);
+  assert.match(source, /Projeção Pluggy/);
+  assert.match(source, /Movimentações: somente Pluggy/);
+  assert.match(source, /Atualiza após cada sincronização/);
+  assert.doesNotMatch(source, /label: "Parcelas projetadas"/);
   assert.match(source, /Diferença/);
   assert.match(css, /\.movement-card-bill/);
   assert.match(css, /@media\(max-width:640px\)[\s\S]*\.movement-card-bill/);

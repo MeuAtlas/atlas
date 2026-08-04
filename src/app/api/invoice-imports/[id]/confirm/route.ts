@@ -36,6 +36,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       "/financeiro/cartoes/importar-fatura",
       "/financeiro/movimentacoes",
       "/financeiro/planejamento",
+      "/financeiro/relatorios",
+      "/financeiro/relatorio-mensal",
     ].forEach(path => revalidatePath(path));
     return NextResponse.json({ result });
   } catch (error) {

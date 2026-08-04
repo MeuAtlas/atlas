@@ -1,4 +1,38 @@
 import { z } from "zod";
+import type { ParsedInvoiceEntry } from "./types";
+
+export function invoiceDueDateMatchesReferenceMonth(
+  dueDate: string | null | undefined,
+  referenceMonth: string,
+) {
+  return Boolean(
+    dueDate && `${dueDate.slice(0, 7)}-01` === referenceMonth,
+  );
+}
+
+export function invoicePeriodMatchesReferenceMonth(
+  invoice: {
+    closingDate?: string | null;
+    cycleEndDate?: string | null;
+    dueDate?: string | null;
+  },
+  referenceMonth: string,
+) {
+  const referenceDate = invoice.closingDate ?? invoice.cycleEndDate ?? invoice.dueDate;
+  return Boolean(
+    referenceDate && `${referenceDate.slice(0, 7)}-01` === referenceMonth,
+  );
+}
+
+export function normalizeInvoiceEntryInstallments(
+  entries: ParsedInvoiceEntry[],
+): ParsedInvoiceEntry[] {
+  return entries.map(entry =>
+    entry.entryType === "installment_purchase" && entry.installment === null
+      ? { ...entry, entryType: "purchase" }
+      : entry,
+  );
+}
 
 const installmentSchema = z.object({
   current: z.number().int().min(1).max(120),
@@ -103,4 +137,10 @@ export const invoiceReviewSchema = z.object({
     differenceCents: z.number().int().nullable(),
     status: z.enum(["matched","different","unavailable"]),
   }),
+  statementComparison: z.object({
+    statementId: z.string().uuid(),
+    pluggyBillTotalCents: z.number().int().min(0).nullable(),
+    pdfTotalCents: z.number().int().min(0).nullable(),
+    selectedTotalSource: z.enum(["statement_pdf", "pluggy_bill"]),
+  }).optional(),
 });

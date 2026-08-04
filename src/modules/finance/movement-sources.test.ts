@@ -99,11 +99,13 @@ test("consulta usa colunas e relações reais de card_purchases", () => {
   const end = source.indexOf("export async function getFinanceData", start);
   const query = source.slice(start, end);
   assert.match(query, /installment_count/);
-  assert.match(query, /card_installment_occurrences[\s\S]*total_installments/);
+  assert.doesNotMatch(query, /\.from\("card_installment_occurrences"\)/);
+  assert.match(query, /\.eq\("source", "pluggy"\)/);
   assert.match(query, /card_purchases_instrument_id_fkey/);
   assert.doesNotMatch(query, /card_purchases_card_instrument_id_fkey/);
   assert.match(query, /Promise\.allSettled/);
-  assert.match(query, /competence_date\.gte\.\$\{period\.from\}/);
+  assert.match(query, /if \(isCardScope && \(isPdfCycle \|\| isClosedWithoutPdf\)\) return emptyResult/);
+  assert.match(query, /\.gte\("competence_date", period\.from\)/);
 });
 
 test("interface mantém lista, aviso parcial e retry", () => {
@@ -116,6 +118,23 @@ test("interface mantém lista, aviso parcial e retry", () => {
   assert.match(source, /router\.refresh\(\)/);
   assert.match(source, /Ver cartões/);
   assert.match(source, /movement-list-compact/);
+});
+
+test("fatura fechada sem PDF orienta o envio no lugar das movimentações", () => {
+  const source = readFileSync(
+    "src/components/finance/movements-browser.tsx",
+    "utf8",
+  );
+  assert.match(source, /Envie o PDF para gerar as movimentações desta fatura/);
+  assert.match(source, /valor total oficial da Pluggy continua sendo exibido/);
+  assert.match(
+    source,
+    /A Pluggy ainda não enviou o valor oficial de fechamento desta fatura/,
+  );
+  assert.match(
+    source,
+    /importar-fatura\?statement=\$\{selectedCycle\.cycleId\}/,
+  );
 });
 
 test("integração: getMovementsData resolve banco e degrada cartão sem lançar", async () => {
@@ -160,7 +179,7 @@ test("integração: getMovementsData resolve banco e degrada cartão sem lançar
   assert.equal(data.warnings[0].code, "PGRST200");
 });
 
-test("integração: ciclo aberto sem Bill recupera Pluggy por competência e projeção", async () => {
+test("integração: ciclo aberto usa somente compras atuais da Pluggy", async () => {
   const calls: Array<{ table: string; method: string; args: unknown[] }> = [];
   const openCycle = {
     id: "cycle-open",
@@ -219,6 +238,20 @@ test("integração: ciclo aberto sem Bill recupera Pluggy por competência e pro
         source: "pluggy",
         credit_card_id: "card-account",
       },
+      {
+        id: "manual-transaction",
+        external_id: "manual-only",
+        description: "Ajuste manual que não pertence à projeção",
+        amount: 999,
+        transaction_type: "expense",
+        transaction_role: "consumption",
+        cash_flow_kind: "consumption",
+        bank_direction: "outflow",
+        competence_date: "2026-07-22",
+        status: "realized",
+        source: "manual",
+        credit_card_id: "card-account",
+      },
     ]),
     card_purchases: result([{
       id: "pluggy-open",
@@ -244,6 +277,22 @@ test("integração: ciclo aberto sem Bill recupera Pluggy por competência e pro
       category_id: null,
       credit_cards: { name: "Cartão", institution_name: "Banco", last_four_digits: "5718" },
       credit_card_instruments: { display_name: "Principal", last_four_digits: "5718", card_kind: "physical" },
+    }, {
+      id: "pdf-open-legacy",
+      card_id: "card-account",
+      external_id: "pdf-legacy",
+      invoice_id: "cycle-open",
+      description: "Parcela vinda de PDF antigo",
+      total_amount: 75.15,
+      installment_amount: 75.15,
+      installment_number: 12,
+      installment_count: 13,
+      purchase_date: "2026-07-20",
+      competence_date: "2026-07-01",
+      source: "pdf",
+      transaction_role: "consumption",
+      status: "realized",
+      review_status: "reviewed",
     }]),
     credit_cards: result([{
       id: "card-account",
@@ -299,20 +348,23 @@ test("integração: ciclo aberto sem Bill recupera Pluggy por competência e pro
       cycleId: "cycle-open",
     },
   );
-  assert.equal(data.cardPurchases.length, 3);
+  assert.equal(data.cardPurchases.length, 2);
   assert.deepEqual(
     data.cardPurchases.map(item => item.source).sort(),
-    ["pluggy", "pluggy", "projection"],
+    ["pluggy", "pluggy"],
   );
   assert.equal(
     data.cardPurchases.reduce(
       (sum, item) => sum + Number(item.installment_amount),
       0,
     ),
-    385,
+    285,
   );
   assert.ok(data.cardPurchases.every(item => item.description !== "Pagamento de fatura"));
   assert.ok(data.cardPurchases.every(item => item.invoice_id === null));
+  assert.ok(data.cardPurchases.every(item => item.source === "pluggy"));
+  assert.ok(data.cardPurchases.every(item => item.description !== "Parcela antiga 07/10"));
+  assert.ok(!calls.some(call => call.table === "card_installment_occurrences"));
   const cardCalls = calls.filter(call => call.table === "card_purchases");
   assert.ok(cardCalls.some(call =>
     call.method === "eq" &&

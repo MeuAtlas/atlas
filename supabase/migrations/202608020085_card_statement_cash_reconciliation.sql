@@ -310,7 +310,7 @@ begin
 
   target_id := payment.invoice_id;
   if target_id is null and payment.credit_card_id is not null then
-    select count(*),min(invoice.id) into candidate_count,target_id
+    select count(*),(array_agg(invoice.id))[1] into candidate_count,target_id
     from public.card_invoices invoice
     where invoice.owner_id=payment.owner_id
       and invoice.card_id=payment.credit_card_id

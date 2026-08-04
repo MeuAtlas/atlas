@@ -30,6 +30,15 @@ type CardOption = {
   institution_name: string | null;
   last_four_digits: string | null;
 };
+type TargetStatement = {
+  id: string;
+  card_id: string;
+  reference_month: string;
+  due_date: string;
+  provider_invoice_total: number | null;
+  pluggy_bill_total_amount: number | null;
+  status: string;
+};
 type Phase =
   | "select"
   | "processing"
@@ -46,6 +55,7 @@ export function InvoiceImportFlow({
   initialReviewDTO = null,
   canonicalDocumentId,
   documentNotFound = false,
+  targetStatement = null,
 }: {
   cards: CardOption[];
   initialReview?: InvoiceReviewState | null;
@@ -53,6 +63,7 @@ export function InvoiceImportFlow({
   initialReviewDTO?: InvoiceImportReviewDTO | null;
   canonicalDocumentId?: string;
   documentNotFound?: boolean;
+  targetStatement?: TargetStatement | null;
 }) {
   const router = useRouter();
   const canOpenInitialReview =
@@ -67,7 +78,7 @@ export function InvoiceImportFlow({
           : "select",
   );
   const [cardId, setCardId] = useState(
-    initialReview?.cardId ?? initialExisting?.cardId ?? cards[0]?.id ?? "",
+    initialReview?.cardId ?? initialExisting?.cardId ?? targetStatement?.card_id ?? cards[0]?.id ?? "",
   );
   const [file, setFile] = useState<File | null>(null);
   const [review, setReview] = useState<InvoiceReviewState | null>(initialReview);
@@ -90,7 +101,8 @@ export function InvoiceImportFlow({
 
   function openCanonicalDocument(documentId: string) {
     const path = invoiceImportCanonicalPath(documentId);
-    router.push(path, { scroll: false });
+    router.replace(path, { scroll: false });
+    router.refresh();
   }
 
   function handleApiResult(body: {
@@ -116,6 +128,7 @@ export function InvoiceImportFlow({
     setPhase("processing");
     const data = new FormData();
     data.set("cardId", cardId);
+    if (targetStatement) data.set("targetStatementId", targetStatement.id);
     data.set("file", file);
     setProcessingLabel("Extraindo texto do PDF");
     const response = await fetch("/api/invoice-imports", {
@@ -345,10 +358,21 @@ export function InvoiceImportFlow({
           <header>
             <div><p className="eyebrow">Fonte oficial</p><h2>Importar fatura em PDF</h2></div>
           </header>
+          {targetStatement ? (
+            <p className="invoice-review-warning" role="status">
+              Vinculando à fatura de {targetStatement.reference_month.slice(0, 7)},
+              com vencimento em {targetStatement.due_date.slice(8, 10)}/{targetStatement.due_date.slice(5, 7)}.
+              O PDF será o detalhamento definitivo após a revisão.
+            </p>
+          ) : null}
           <p>O documento ficará privado e será oficial somente depois da sua revisão.</p>
           <label>
             Cartão
-            <select value={cardId} onChange={event => setCardId(event.target.value)}>
+            <select
+              value={cardId}
+              onChange={event => setCardId(event.target.value)}
+              disabled={Boolean(targetStatement)}
+            >
               {cards.map(card => (
                 <option key={card.id} value={card.id}>
                   {card.name} · {card.last_four_digits ?? "••••"}

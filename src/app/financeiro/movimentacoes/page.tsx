@@ -4,7 +4,6 @@ import { requireFinanceAccess } from "@/modules/finance/access";
 import {
   calculateMovementPeriodSummary,
   calculateMovementSummaryByFilter,
-  buildMovementQueryKey,
   buildMovementFiltersUrl,
   canonicalizeMovementPath,
   currentMovementFiltersPath,
@@ -31,6 +30,7 @@ import {
 import {
   getMovementExpenseEstablishmentContexts,
 } from "@/modules/finance/expense-establishments";
+import { splitCardTransactions } from "@/modules/finance/card-movements-view-model";
 
 const PAGE_SIZE = 40;
 
@@ -88,6 +88,7 @@ export default async function MovementsPage({
     ? await resolveOpenCardInvoice(supabase, user.id, {
         cycleId: selectedCycle.cycleId,
         referenceDate: new Date(),
+        movementData: data,
       })
     : null;
   const normalizedBase = deduplicateMovements([
@@ -126,7 +127,16 @@ export default async function MovementsPage({
   const requestedPage = Number(filters.page || "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const offset = (page - 1) * PAGE_SIZE;
-  const items = filtered.slice(offset, offset + PAGE_SIZE);
+  const cardSections = filters.type === "card"
+    ? splitCardTransactions(filtered)
+    : null;
+  const regularTotalCount = cardSections?.regular.length ?? filtered.length;
+  const items = cardSections
+    ? [
+        ...cardSections.installments,
+        ...cardSections.regular.slice(offset, offset + PAGE_SIZE),
+      ]
+    : filtered.slice(offset, offset + PAGE_SIZE);
   const transactionItemIds = items
     .filter(item => item.sourceKind === "transaction").map(item => item.id);
   const [personContexts, establishmentContexts] = workspaceId
@@ -193,7 +203,6 @@ export default async function MovementsPage({
   ));
   return (
     <MovementsBrowser
-      key={buildMovementQueryKey(filters)}
       filters={filters}
       items={items}
       summary={summary}
@@ -209,6 +218,7 @@ export default async function MovementsPage({
         name: String(category.name),
       }))}
       totalCount={filtered.length}
+      paginationTotalCount={regularTotalCount}
       page={page}
       pageSize={PAGE_SIZE}
       hasConnectedAccount={data.connections.length > 0}

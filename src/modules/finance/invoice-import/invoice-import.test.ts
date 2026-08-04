@@ -11,6 +11,10 @@ import { reconcileInvoice } from "./reconciliation";
 import { santanderExtractedFixture, imageOnlyFixture } from "./fixtures/santander";
 import type { ParsedInvoiceEntry } from "./types";
 import {
+  invoiceDueDateMatchesReferenceMonth,
+  normalizeInvoiceEntryInstallments,
+} from "./validation";
+import {
   groupTextItemsIntoVisualLines,
   isDecorativeTransactionGlyph,
   splitPageIntoColumns,
@@ -20,6 +24,18 @@ test("converte total brasileiro e valor negativo em centavos", () => {
   assert.equal(parseBrazilianMoney("R$ 1.234,56"), 123456);
   assert.equal(parseBrazilianMoney("-1.234,56"), -123456);
   assert.equal(parseBrazilianMoney("sem valor"), null);
+});
+
+test("valida o mês da fatura selecionada antes da revisão", () => {
+  assert.equal(
+    invoiceDueDateMatchesReferenceMonth("2026-08-10", "2026-08-01"),
+    true,
+  );
+  assert.equal(
+    invoiceDueDateMatchesReferenceMonth("2026-08-10", "2026-07-01"),
+    false,
+  );
+  assert.equal(invoiceDueDateMatchesReferenceMonth(null, "2026-08-01"), false);
 });
 
 function syntheticPdf(text: string) {
@@ -74,7 +90,7 @@ test("não confunde data, horário nem final de cartão com parcela", () => {
 test("parser Santander reconhece resumo, linhas quebradas e tipos", () => {
   const parsed = parseInvoiceDocument(santanderExtractedFixture, { referenceYear: 2026 });
   assert.equal(parsed.bankCode, "033");
-  assert.equal(parsed.parserVersion, "2.0.0");
+  assert.equal(parsed.parserVersion, "2.1.0");
   assert.equal(parsed.pageCount, 4);
   assert.equal(parsed.officialTotalCents, 150000);
   assert.equal(parsed.dueDate, "2026-07-10");
@@ -131,6 +147,39 @@ test("layout separa duas colunas sem misturar linhas", () => {
   assert.match(left.find(line => line.y === 400)?.text ?? "", /MERCHANT A/);
   assert.doesNotMatch(left.find(line => line.y === 400)?.text ?? "", /MERCHANT B/);
   assert.match(right.find(line => line.y === 400)?.text ?? "", /MERCHANT B/);
+});
+
+test("layout separa cartão à esquerda de resumo curto à direita", () => {
+  const items = [
+    { pageNumber: 3, text: "VALOR TOTAL", x: 34, y: 737, width: 35, height: 7, visualIndex: 0 },
+    { pageNumber: 3, text: "124,91", x: 208, y: 737, width: 18, height: 7, visualIndex: 1 },
+    { pageNumber: 3, text: "SANCLE - XXXX XXXX 6579", x: 9, y: 712, width: 120, height: 7, visualIndex: 2 },
+    ...Array.from({ length: 14 }, (_, index) => ({
+      pageNumber: 3,
+      text: index === 0 ? "Pagamento e Demais Créditos" : `L${index}`,
+      x: 10,
+      y: 540 - index * 10,
+      width: 80,
+      height: 7,
+      visualIndex: index + 3,
+    })),
+    { pageNumber: 3, text: "VALOR TOTAL", x: 328, y: 737, width: 35, height: 7, visualIndex: 20 },
+    { pageNumber: 3, text: "3.084,58", x: 497, y: 737, width: 23, height: 7, visualIndex: 21 },
+    { pageNumber: 3, text: "Resumo da Fatura", x: 303, y: 713, width: 47, height: 7, visualIndex: 22 },
+    { pageNumber: 3, text: "Saldo Anterior", x: 326, y: 689, width: 36, height: 7, visualIndex: 23 },
+    { pageNumber: 3, text: "11.517,22", x: 492, y: 689, width: 27, height: 7, visualIndex: 24 },
+    { pageNumber: 3, text: "Resumo 1", x: 326, y: 500, width: 36, height: 7, visualIndex: 25 },
+    { pageNumber: 3, text: "Resumo 2", x: 326, y: 480, width: 36, height: 7, visualIndex: 26 },
+    { pageNumber: 3, text: "Resumo 3", x: 326, y: 460, width: 36, height: 7, visualIndex: 27 },
+  ];
+  const columns = splitPageIntoColumns({ items, pageWidth: 595, pageHeight: 842 });
+  assert.equal(columns.length, 2);
+  const leftText = columns[0].map(item => item.text).join(" ");
+  const rightText = columns[1].map(item => item.text).join(" ");
+  assert.match(leftText, /6579/);
+  assert.doesNotMatch(leftText, /Resumo da Fatura/);
+  assert.match(rightText, /3\.084,58/);
+  assert.match(rightText, /Resumo da Fatura/);
 });
 
 test("glifos decorativos são ignorados e 99 RIDE é preservado", () => {
@@ -196,6 +245,14 @@ const entry = (patch: Partial<ParsedInvoiceEntry>): ParsedInvoiceEntry => ({
   amountCents: 10000, currencyCode: "BRL", entryType: "purchase", cardLastFour: null,
   installment: null, confidence: .9, reviewStatus: "pending", isIgnored: false,
   sourceLineNumber: 1, ...patch,
+});
+
+test("compra sem quantidade de parcelas não cria plano parcelado", () => {
+  const [normalized] = normalizeInvoiceEntryInstallments([
+    entry({ entryType: "installment_purchase", installment: null }),
+  ]);
+  assert.equal(normalized.entryType, "purchase");
+  assert.equal(normalized.installment, null);
 });
 
 test("conciliação usa centavos, aceita zero real e aponta diferença", () => {
@@ -266,6 +323,87 @@ test("migration cria bucket privado, hash único, RLS e RPC transacional", () =>
   assert.ok(legacyBackfill >= 0 && sourceConstraint > legacyBackfill);
   assert.match(sql, /when source in \('pluggy','provider_bill'\).*then 'pluggy_bill'/);
   assert.match(sql, /when source in \('manual_bank_confirmation','manual_pdf_confirmation'\) then 'manual'/);
+});
+
+test("confirmação de PDF usa a constraint da fatura sem ambiguidade PL/pgSQL", () => {
+  const base = readFileSync(
+    "supabase/migrations/202607270030_import_credit_card_invoice_pdfs.sql",
+    "utf8",
+  );
+  const repair = readFileSync(
+    "supabase/migrations/202608040102_fix_invoice_pdf_confirmation_reference_month.sql",
+    "utf8",
+  );
+  assert.match(
+    base,
+    /on conflict on constraint card_invoices_card_id_reference_month_key/i,
+  );
+  assert.match(repair, /pg_get_functiondef/);
+  assert.match(repair, /card_invoices_card_id_reference_month_key/);
+  assert.doesNotMatch(base, /on conflict\s*\(\s*card_id\s*,\s*reference_month\s*\)/i);
+});
+
+test("confirmação só cria plano quando o total de parcelas é válido", () => {
+  const base = readFileSync(
+    "supabase/migrations/202607270030_import_credit_card_invoice_pdfs.sql",
+    "utf8",
+  );
+  const repair = readFileSync(
+    "supabase/migrations/202608040105_guard_invoice_pdf_installment_totals.sql",
+    "utf8",
+  );
+  assert.match(base, /jsonb_typeof\(entry->'installment'\)='object'/);
+  assert.match(base, /entry->'installment'->>'total'[\s\S]*between 2 and 120/);
+  assert.match(repair, /normalized by the application/);
+  assert.doesNotMatch(repair, /pg_get_functiondef|update public\.card_installment_plans/i);
+});
+
+test("correção de valor reutiliza o plano e atualiza somente parcelas não consolidadas", () => {
+  const base = readFileSync(
+    "supabase/migrations/202607270030_import_credit_card_invoice_pdfs.sql",
+    "utf8",
+  );
+  const repair = readFileSync(
+    "supabase/migrations/202608040107_merge_corrected_installment_plans.sql",
+    "utf8",
+  );
+  const identity = base.slice(
+    base.indexOf("fingerprint:=concat_ws"),
+    base.indexOf("insert into public.card_installment_plans"),
+  );
+  assert.match(identity, /atlas:installment:v2/);
+  assert.match(identity, /transactionDate/);
+  assert.doesNotMatch(identity, /installment_amount/);
+  assert.match(base, /installment_amount=excluded\.installment_amount/);
+  assert.match(base, /amount=excluded\.amount/);
+  assert.match(repair, /purchase_date_reference/);
+  assert.match(repair, /latest_known_installment desc/);
+  assert.match(repair, /set status='cancelled'/);
+  assert.match(repair, /and status='projected'/);
+  assert.doesNotMatch(repair, /delete from public\.(card_installment_plans|card_installment_occurrences)/);
+  const legacyRepair = readFileSync(
+    "supabase/migrations/202608040108_cancel_legacy_corrected_installment_projections.sql",
+    "utf8",
+  );
+  assert.match(legacyRepair, /estimated_first_competence/);
+  assert.match(legacyRepair, /between 0\.01 and 1\.00/);
+  assert.match(legacyRepair, /and status='projected'/);
+  assert.doesNotMatch(legacyRepair, /delete from public\./);
+});
+
+test("statement axes preserve PDF, Pluggy Bill, source links and independent payment", () => {
+  const sql = readFileSync(
+    "supabase/migrations/202608040103_credit_card_statement_source_axes.sql",
+    "utf8",
+  );
+  assert.match(sql, /details_status[\s\S]*awaiting_pdf/);
+  assert.match(sql, /pluggy_bill_total_amount/);
+  assert.match(sql, /pdf_total_amount/);
+  assert.match(sql, /confirmed_total_source_locked/);
+  assert.match(sql, /statement_transaction_source_links/);
+  assert.match(sql, /target_statement_id/);
+  assert.match(sql, /enable row level security/);
+  assert.doesNotMatch(sql, /update public\.credit_card_statement_payments[\s\S]*statement_pdf/i);
 });
 
 test("migration 032 versiona layout sem persistir coordenadas brutas", () => {

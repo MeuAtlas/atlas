@@ -3,7 +3,6 @@ import {
   buildNextInstallmentOccurrence,
   buildPostedInstallmentOccurrence,
   matchInstallmentTransactionToOccurrence,
-  normalizeInstallmentMerchant,
   projectInstallmentSeed,
   type InstallmentOccurrenceSeed,
   type PreviousInvoiceInstallment,
@@ -158,19 +157,7 @@ function postedSeeds(input: {
       input.dueDay,
     );
     if (!seed) return [];
-    const merchant = normalizeInstallmentMerchant(source.merchantNormalized);
-    return [{
-      ...seed,
-      matchingFingerprint: [
-        "atlas:pluggy-plan",
-        source.cardId,
-        source.cardLastFour ?? "",
-        merchant,
-        source.amount.toFixed(2),
-        source.totalInstallments,
-        source.originalDate ?? "",
-      ].join(":"),
-    }];
+    return [seed];
   });
   const unique = new Map<string, InstallmentOccurrenceSeed>();
   for (const candidate of candidates) {

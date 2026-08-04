@@ -23,6 +23,7 @@ import type {
   FinancialAccount,
   FinancialTransaction,
 } from "./types";
+import { isInstallmentTransaction } from "./card-movements-view-model";
 
 export type MovementDirection = "inflow" | "outflow" | "transfer" | "card" | "adjustment";
 export const movementSourceFilterSchema = z.enum([
@@ -67,6 +68,7 @@ export interface MovementFilters {
   ignored?: string;
   uncategorized?: string;
   document?: string;
+  purchaseType?: string;
   minAmount?: string;
   maxAmount?: string;
   page?: string;
@@ -253,6 +255,9 @@ export function normalizeMovementFilterState(
     offset: undefined,
     type,
   };
+  if (!["installment", "regular"].includes(normalized.purchaseType ?? "")) {
+    delete normalized.purchaseType;
+  }
   if (normalized.card === "all") delete normalized.card;
   if (type === "card") {
     const selected =
@@ -270,6 +275,7 @@ export function normalizeMovementFilterState(
       bill: cycles.length ? undefined : filters.bill,
     };
   }
+  delete normalized.purchaseType;
   return {
     ...normalized,
     period: bankPeriod.success ? bankPeriod.data : "this-month",
@@ -307,6 +313,7 @@ const movementFilterParamOrder: Array<keyof MovementFilters> = [
   "ignored",
   "uncategorized",
   "document",
+  "purchaseType",
   "minAmount",
   "maxAmount",
   "page",
@@ -379,7 +386,7 @@ export function buildMovementFiltersUrl(
   filters: MovementFilters,
   patch: Record<string, string | null | undefined> = {},
   options: { preservePage?: boolean } = {},
-) {
+): `/${string}` {
   const merged = normalizeMovementFilters({ ...filters, ...patch });
   const query = new URLSearchParams(serializeMovementFilters(merged));
   const type = parseMovementSourceFilter(merged.type);
@@ -426,6 +433,7 @@ export function buildMovementQueryKey(filters: MovementFilters) {
     normalized.category,
     normalized.nature,
     normalized.person,
+    normalized.purchaseType,
     normalized.page,
   ].map(value => value ?? "").join("|");
 }
@@ -842,23 +850,26 @@ export function calculateMovementSummaryByFilter(
       .reduce((sum, item) => sum + item.amount, 0);
     const purchasesAndCharges = launchedPurchases + projectedInstallments;
     const projection = purchasesAndCharges - credits;
-    if (
-      cycle?.officialTotal !== null &&
-      cycle?.officialTotal !== undefined &&
-      ["closed", "paid"].includes(cycle.kind)
-    ) {
+    const isClosedCycle = Boolean(
+      cycle && ["closed", "paid"].includes(cycle.kind),
+    );
+    if (isClosedCycle) {
       return {
         mode: filter,
         cards: [
-          { label: "Total oficial", value: cycle.officialTotal, tone: "neutral" },
+          {
+            label: "Total oficial",
+            value: cycle?.officialTotal ?? null,
+            tone: "neutral",
+          },
           {
             label: "Compras e encargos",
-            value: purchasesAndCharges,
+            value: items.length ? purchasesAndCharges : null,
             tone: "negative",
           },
           {
             label: "Créditos e estornos",
-            value: credits,
+            value: items.length ? credits : null,
             tone: "positive",
           },
         ],
@@ -1039,6 +1050,8 @@ export function matchesMovement(
     filters.ignored === "true" && !item.isIgnored ||
     filters.uncategorized === "true" && item.categoryName !== "Sem categoria" ||
     filters.document === "linked" && !item.documentLinked ||
+    filters.purchaseType === "installment" && !isInstallmentTransaction(item) ||
+    filters.purchaseType === "regular" && isInstallmentTransaction(item) ||
     Number.isFinite(minAmount) && filters.minAmount !== undefined && item.amount < minAmount ||
     Number.isFinite(maxAmount) && filters.maxAmount !== undefined && item.amount > maxAmount ||
     type === "bank" &&

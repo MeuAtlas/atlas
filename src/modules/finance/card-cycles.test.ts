@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   defaultCardCycle,
   normalizeAvailableCardCycles,
+  restoreConfirmedPdfCycleAxes,
   resolveLegacyCardCycle,
   type CardCycleRow,
 } from "./card-cycles";
@@ -57,6 +58,34 @@ test("prioriza ciclo confirmado por PDF sobre Pluggy e cálculo no mesmo interva
   assert.equal(cycles[0].label, "Atual");
 });
 
+test("restaura no carregamento as datas do PDF que uma projeção antiga deslocou", () => {
+  const [restored] = restoreConfirmedPdfCycleAxes([
+    row({
+      document_id: "document-august",
+      source: "calculated",
+      status: "open",
+      cycle_start_date: "2026-07-31",
+      cycle_end_date: "2026-08-30",
+      closing_date: "2026-08-30",
+      due_date: "2026-09-10",
+    }),
+  ], [{
+    id: "document-august",
+    confirmed_at: "2026-08-04T12:00:00Z",
+    parsed_payload: { parsed: {
+      cycleStartDate: "2026-07-04",
+      cycleEndDate: "2026-08-03",
+      closingDate: "2026-08-03",
+      dueDate: "2026-08-10",
+    } },
+  }]);
+  assert.equal(restored.cycle_start_date, "2026-07-04");
+  assert.equal(restored.cycle_end_date, "2026-08-03");
+  assert.equal(restored.due_date, "2026-08-10");
+  assert.equal(restored.status, "closed");
+  assert.equal(restored.source, "pdf");
+});
+
 test("seleciona ciclo atual por padrão e resolve URL legada pelo mês de vencimento", () => {
   const cycles = normalizeAvailableCardCycles([
     row({
@@ -81,4 +110,42 @@ test("ignora faturas sem intervalo persistido em vez de inventar um ciclo", () =
     ]),
     [],
   );
+});
+
+test("preserva total oficial da Pluggy mesmo antes de vincular o Bill ao ciclo", () => {
+  const [cycle] = normalizeAvailableCardCycles([
+    row({
+      status: "paid",
+      provider_invoice_total: 6_044.53,
+    }),
+  ]);
+  assert.equal(cycle.source, "calculated");
+  assert.equal(cycle.officialTotal, 6_044.53);
+});
+
+test("oculta projeção quando já existe fatura aberta real no mesmo vencimento", () => {
+  const cycles = normalizeAvailableCardCycles([
+    row({
+      id: "projected-september",
+      reference_month: "2026-09-01",
+      cycle_start_date: "2026-08-04",
+      cycle_end_date: "2026-09-03",
+      closing_date: "2026-09-03",
+      due_date: "2026-09-10",
+      source: "calculated",
+    }),
+    row({
+      id: "official-september",
+      reference_month: "2026-09-01",
+      cycle_start_date: "2026-07-31",
+      cycle_end_date: "2026-08-30",
+      closing_date: "2026-08-30",
+      due_date: "2026-09-10",
+      source: "pluggy_bill",
+      provider_bill_id: "bill-september",
+    }),
+  ], "2026-08-04");
+
+  assert.deepEqual(cycles.map(cycle => cycle.cycleId), ["official-september"]);
+  assert.equal(defaultCardCycle(cycles)?.cycleId, "official-september");
 });

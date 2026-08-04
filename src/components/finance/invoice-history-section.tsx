@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { ClientSearchForm, useClientNavigation } from "@/components/navigation/client-navigation";
 import { Money } from "./value-visibility";
@@ -43,6 +43,23 @@ const reconciliationLabels: Record<string, string> = {
   incomplete: "Incompleta",
   unavailable: "Indisponível",
 };
+
+const detailsStatusLabels = {
+  estimated: "Detalhes estimados",
+  awaiting_pdf: "Detalhes aguardando PDF",
+  confirmed: "Detalhes confirmados pelo PDF",
+  unavailable: "Detalhes indisponíveis",
+} as const;
+
+const paymentStatusLabels = {
+  unpaid: "Não paga",
+  payment_detected: "Pagamento encontrado",
+  partially_paid: "Pagamento parcial",
+  paid: "Paga",
+  overpaid: "Pagamento acima do total",
+  payment_mismatch: "Pagamento divergente",
+  cancelled: "Pagamento cancelado",
+} as const;
 
 const monthLabel = (date: string) =>
   new Intl.DateTimeFormat("pt-BR", {
@@ -93,6 +110,18 @@ function InvoiceTransactionsList({
 }) {
   if (!invoice.purchases.length && !invoice.pdfEntries?.length) {
     return (
+      <div className="previous-invoice-no-transactions">
+        <p>Os detalhes definitivos deste ciclo aguardam o PDF da fatura.</p>
+        {invoice.statement.canAttachPdf ? (
+          <Link href={`/financeiro/cartoes/importar-fatura?statement=${invoice.id}`}>
+            Vincular PDF a esta fatura
+          </Link>
+        ) : null}
+      </div>
+    );
+  }
+  if (!invoice.purchases.length && !invoice.pdfEntries?.length) {
+    return (
       <p className="previous-invoice-no-transactions">
         Os lançamentos deste ciclo ainda não estão disponíveis.
       </p>
@@ -100,6 +129,19 @@ function InvoiceTransactionsList({
   }
   return (
     <section className="previous-invoice-transactions">
+      {!invoice.pdfEntries?.length ? (
+        <div className="previous-invoice-no-transactions">
+          <p>
+            Estes lançamentos vieram da integração e são provisórios. O
+            detalhamento definitivo ainda aguarda o PDF.
+          </p>
+          {invoice.statement.canAttachPdf ? (
+            <Link href={`/financeiro/cartoes/importar-fatura?statement=${invoice.id}`}>
+              Vincular PDF a esta fatura
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       <h3>{invoice.purchaseCount} lançamentos identificados pelo Atlas</h3>
       {invoice.reconciliationDifference !== null &&
       invoice.reconciliationDifference > 0.01 ? (
@@ -178,6 +220,11 @@ function PreviousInvoiceDetailsDrawer({
   const navigate = useClientNavigation();
   const closeRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const [reprocessing, setReprocessing] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
   async function reprocess() {
@@ -257,6 +304,14 @@ function PreviousInvoiceDetailsDrawer({
               <dd>{statusLabels[invoice.status]}</dd>
             </div>
             <div>
+              <dt>Detalhes</dt>
+              <dd>{detailsStatusLabels[invoice.statement.detailsStatus]}</dd>
+            </div>
+            <div>
+              <dt>Pagamento</dt>
+              <dd>{paymentStatusLabels[invoice.statement.paymentStatus]}</dd>
+            </div>
+            <div>
               <dt>Período</dt>
               <dd>{formatDate(invoice.cycleStartDate)} a {formatDate(invoice.cycleEndDate)}</dd>
             </div>
@@ -310,7 +365,7 @@ function PreviousInvoiceDetailsDrawer({
       </aside>
     </div>
   );
-  return createPortal(drawer, document.body);
+  return mounted ? createPortal(drawer, document.body) : null;
 }
 
 function PreviousInvoiceCard({
@@ -334,6 +389,8 @@ function PreviousInvoiceCard({
         <strong>{invoice.total === null ? "Indisponível" : <Money value={invoice.total} />}</strong>
       </div>
       <dl>
+        <div><dt>Detalhes</dt><dd>{detailsStatusLabels[invoice.statement.detailsStatus]}</dd></div>
+        <div><dt>Pagamento</dt><dd>{paymentStatusLabels[invoice.statement.paymentStatus]}</dd></div>
         <div><dt>Período</dt><dd>{formatDate(invoice.cycleStartDate)} a {formatDate(invoice.cycleEndDate)}</dd></div>
         <div><dt>Fechamento</dt><dd>{formatDate(invoice.closingDate)}</dd></div>
         <div><dt>Vencimento</dt><dd>{formatDate(invoice.dueDate)}</dd></div>

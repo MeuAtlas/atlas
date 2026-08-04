@@ -116,6 +116,26 @@ export function normalizeInstallmentMerchant(value: string | null | undefined) {
     .toUpperCase();
 }
 
+export function buildInstallmentPlanFingerprint(input: {
+  cardId: string;
+  cardLastFour: string | null;
+  merchantNormalized: string;
+  originalDate: string | null;
+  totalInstallments: number;
+  currencyCode: string;
+  estimatedFirstCompetence: string;
+}) {
+  return [
+    "atlas:installment:v2",
+    input.cardId,
+    input.cardLastFour ?? "",
+    normalizeInstallmentMerchant(input.merchantNormalized),
+    input.originalDate ?? monthStart(input.estimatedFirstCompetence),
+    input.totalInstallments,
+    input.currencyCode || "BRL",
+  ].join("|");
+}
+
 export function classifyOpenCardCycleMovement(
   movement: OpenCardCycleMovementInput,
 ): ClassifiedOpenCardCycleMovement {
@@ -230,10 +250,16 @@ export function buildNextInstallmentOccurrence(
     return null;
   }
   const competenceMonth = monthStart(targetCompetenceMonth);
+  const estimatedFirstCompetence = shiftMonth(
+    competenceMonth,
+    -(installmentNumber - 1),
+  );
   return {
     sourceId: installment.sourceId,
-    matchingFingerprint:
-      `atlas:pdf:${installment.sourceId}:${installment.totalInstallments}`,
+    matchingFingerprint: buildInstallmentPlanFingerprint({
+      ...installment,
+      estimatedFirstCompetence,
+    }),
     merchantNormalized: normalizeInstallmentMerchant(
       installment.merchantNormalized || installment.description,
     ),
@@ -265,10 +291,16 @@ export function buildPostedInstallmentOccurrence(
     return null;
   }
   const competenceMonth = monthStart(competenceMonthValue);
+  const estimatedFirstCompetence = shiftMonth(
+    competenceMonth,
+    -(installment.currentInstallment - 1),
+  );
   return {
     sourceId: installment.sourceId,
-    matchingFingerprint:
-      `atlas:posted:${installment.sourceId}:${installment.totalInstallments}`,
+    matchingFingerprint: buildInstallmentPlanFingerprint({
+      ...installment,
+      estimatedFirstCompetence,
+    }),
     merchantNormalized: normalizeInstallmentMerchant(
       installment.merchantNormalized || installment.description,
     ),

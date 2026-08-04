@@ -48,6 +48,10 @@ export function mergeInvoicePersistenceRow(input:{
   syncExecutionId?:string|null;
 }){
   const {previous,incoming,completeness,reasons,syncedAt}=input;
+  const confirmedPdf=Boolean(
+    previous?.document_id &&
+    (previous.source==="pdf" || previous.details_status==="confirmed"),
+  );
   const previousCount=numeric(previous?.purchase_count);
   const incomingCount=numeric(incoming.purchase_count);
   const previousCalculated=numeric(previous?.calculated_invoice_total);
@@ -181,6 +185,20 @@ export function mergeInvoicePersistenceRow(input:{
     value_change_source:input.changeSource??"reconciliation",
     sync_execution_id:input.syncExecutionId??null,
   };
+  if(confirmedPdf&&previous&&incoming.source!=="pdf"){
+    for(const field of [
+      "reference_month","cycle_start_date","cycle_end_date","closing_date",
+      "due_date","source","document_id","manual_invoice_total","official_total",
+      "pdf_total_amount","details_status","confirmed_by_user",
+    ]){
+      if(previous[field]!==undefined)row[field]=previous[field];
+    }
+    if(["closed","paid","overdue","partially_paid"].includes(String(previous.status))&&
+      ["open","estimated"].includes(String(incoming.status))){
+      row.status=previous.status;
+    }
+    row.preservation_reason="pdf_statement_axes_preserved";
+  }
   return {
     row,
     preserved:preserve,

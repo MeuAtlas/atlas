@@ -22,6 +22,7 @@ import {
 } from "./invoice-history";
 import {
   normalizeAvailableCardCycles,
+  restoreConfirmedPdfCycleAxes,
   type AvailableCardCycle,
   type CardCycleRow,
 } from "./card-cycles";
@@ -35,7 +36,6 @@ import {
 } from "./card-cycle-movements";
 import {
   resolveCardCycleAccountIds,
-  resolveCycleCompetenceMonth,
 } from "./card-cycle-accounts";
 import {
   openInvoiceCacheTag,
@@ -81,8 +81,23 @@ export async function getAvailableCardCycles(
       "Não foi possível carregar os ciclos de fatura disponíveis.",
     );
   }
+  const rows = (result.data ?? []) as unknown as CardCycleRow[];
+  const documentIds = [...new Set(rows.flatMap(row => row.document_id ? [row.document_id] : []))];
+  const documents = documentIds.length
+    ? await supabase.from("invoice_documents")
+      .select("id,parsed_payload,confirmed_at")
+      .eq("user_id", userId)
+      .in("id", documentIds)
+    : { data: [], error: null };
+  if (documents.error) {
+    throwSupabaseError(
+      documents.error,
+      "getAvailableCardCycles.invoice_documents",
+      "Não foi possível carregar as datas confirmadas das faturas.",
+    );
+  }
   return normalizeAvailableCardCycles(
-    (result.data ?? []) as unknown as CardCycleRow[],
+    restoreConfirmedPdfCycleAxes(rows, documents.data ?? []),
   );
 }
 
@@ -362,7 +377,7 @@ export async function getCardInvoiceHistory(
   const result = await supabase
     .from("card_invoices")
     .select(
-      "id,document_id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,total_amount,paid_amount,paid_at,outstanding_amount,purchase_count,status,external_id,provider_invoice_total,calculated_invoice_total,manual_invoice_total,confirmed_invoice_total,minimum_payment_amount,provider_bill_status,total_source,reconciliation_difference,reconciliation_status,provider_updated_at,invoice_breakdown,invoice_entries(id,transaction_date,description_raw,amount,entry_type,card_last_four,installment_number,installment_total,confidence,provider_transaction_id)",
+      "id,document_id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,total_amount,paid_amount,paid_at,outstanding_amount,purchase_count,status,external_id,provider_invoice_total,calculated_invoice_total,manual_invoice_total,confirmed_invoice_total,minimum_payment_amount,provider_bill_status,total_source,reconciliation_difference,reconciliation_status,provider_updated_at,invoice_breakdown,details_status,pluggy_bill_total_amount,pdf_total_amount,manual_total_amount,confirmed_total_amount,confirmed_total_source,payment_confirmation_status,confirmed_payment_amount,invoice_entries(id,transaction_date,description_raw,amount,entry_type,card_last_four,installment_number,installment_total,confidence,provider_transaction_id)",
     )
     .eq("owner_id", userId)
     .eq("card_id", cardId)
@@ -400,7 +415,7 @@ export async function getCreditCardInvoiceHistory(
   let invoicesQuery = supabase
     .from("card_invoices")
     .select(
-      "id,document_id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,total_amount,paid_amount,paid_at,outstanding_amount,purchase_count,status,external_id,provider_invoice_total,calculated_invoice_total,manual_invoice_total,confirmed_invoice_total,minimum_payment_amount,provider_bill_status,total_source,reconciliation_difference,reconciliation_status,provider_updated_at,invoice_breakdown,invoice_entries(id,transaction_date,description_raw,amount,entry_type,card_last_four,installment_number,installment_total,confidence,provider_transaction_id)",
+      "id,document_id,card_id,reference_month,cycle_start_date,cycle_end_date,closing_date,due_date,total_amount,paid_amount,paid_at,outstanding_amount,purchase_count,status,external_id,provider_invoice_total,calculated_invoice_total,manual_invoice_total,confirmed_invoice_total,minimum_payment_amount,provider_bill_status,total_source,reconciliation_difference,reconciliation_status,provider_updated_at,invoice_breakdown,details_status,pluggy_bill_total_amount,pdf_total_amount,manual_total_amount,confirmed_total_amount,confirmed_total_source,payment_confirmation_status,confirmed_payment_amount,invoice_entries(id,transaction_date,description_raw,amount,entry_type,card_last_four,installment_number,installment_total,confidence,provider_transaction_id)",
       { count: "exact" },
     )
     .in("status", allowedStatuses)
@@ -769,7 +784,26 @@ export async function getMovementsData(
       );
     }
     if (cycle.data?.cycle_start_date && cycle.data?.cycle_end_date) {
-      selectedCycle = cycle.data as SelectedMovementCycle;
+      let restoredCycle = cycle.data as SelectedMovementCycle;
+      if (restoredCycle.document_id) {
+        const document = await supabase.from("invoice_documents")
+          .select("id,parsed_payload,confirmed_at")
+          .eq("id", restoredCycle.document_id)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (document.error) {
+          throwSupabaseError(
+            document.error,
+            "getMovementsData.invoice_document",
+            "Não foi possível carregar as datas confirmadas da fatura.",
+          );
+        }
+        restoredCycle = restoreConfirmedPdfCycleAxes(
+          [restoredCycle as unknown as CardCycleRow],
+          document.data ? [document.data] : [],
+        )[0] as unknown as SelectedMovementCycle;
+      }
+      selectedCycle = restoredCycle;
       period = {
         from: selectedCycle.cycle_start_date,
         to: selectedCycle.cycle_end_date,
@@ -789,6 +823,9 @@ export async function getMovementsData(
     selectedCycle &&
     ["open", "partial"].includes(selectedCycle.status) &&
     !isPdfCycle,
+  );
+  const isClosedWithoutPdf = Boolean(
+    selectedCycle && !isOpenCycle && !isPdfCycle,
   );
   const cardsResult = await supabase
     .from("credit_cards")
@@ -819,6 +856,7 @@ export async function getMovementsData(
         .from("financial_transactions")
         .select(transactionSelect)
         .eq("owner_id", userId)
+        .eq("source", "pluggy")
         .in("credit_card_id", cycleCardIds)
         .gte("competence_date", period.from)
         .lte("competence_date", period.to)
@@ -836,16 +874,15 @@ export async function getMovementsData(
       .limit(400);
   const purchasesQuery = (async () => {
     if (isCardScope && !selectedCycle) return emptyResult;
+    // A closed statement has exactly one detail source: its confirmed PDF.
+    // Pluggy's Bill remains authoritative for the total, not for list rows.
+    if (isCardScope && (isPdfCycle || isClosedWithoutPdf)) return emptyResult;
     const baseQuery = () => supabase
       .from("card_purchases")
       .select(purchaseSelect)
-      .eq("owner_id", userId);
+      .eq("owner_id", userId)
+      .eq("source", "pluggy");
     if (isCardScope && selectedCycle) {
-      if (isPdfCycle) {
-        return await baseQuery().in("card_id", cycleCardIds).or(
-          `invoice_id.eq.${selectedCycle.id},and(invoice_id.is.null,competence_date.gte.${period.from},competence_date.lte.${period.to})`,
-        ).order("competence_date", { ascending: false }).limit(800);
-      }
       const forCycle = () => baseQuery().in("card_id", cycleCardIds);
       const candidateQueries = [
         forCycle().eq("invoice_id", selectedCycle.id).limit(800),
@@ -919,21 +956,6 @@ export async function getMovementsData(
       .order("transaction_date", { ascending: false })
       .limit(1000)
     : emptyResult;
-  const occurrenceMonth = selectedCycle
-    ? resolveCycleCompetenceMonth(selectedCycle)
-    : "";
-  const occurrencesQuery = isCardScope && selectedCycle && !isPdfCycle
-    ? supabase
-      .from("card_installment_occurrences")
-      .select("id,card_id,bill_id,invoice_entry_id,competence_month,installment_number,total_installments,amount,status,due_date,source,confidence,installment_plan_id,card_installment_plans(card_last_four,merchant_normalized,description_reference)")
-      .eq("owner_id", userId)
-      .in("card_id", cycleCardIds)
-      .eq("competence_month", occurrenceMonth)
-      .in("status", ["projected", "posted", "confirmed", "paid"])
-      .order("installment_number")
-      .limit(500)
-    : emptyResult;
-
   const settled = await Promise.allSettled([
     supabase.from("financial_accounts").select("id,name,institution_name,account_type,current_balance,opening_balance,source,status,visibility,last_sync_at").eq("owner_id", userId).order("created_at"),
     transactionsQuery,
@@ -942,7 +964,6 @@ export async function getMovementsData(
     supabase.from("financial_categories").select("id,name,type").eq("is_active", true).order("name"),
     supabase.from("bank_connections").select("id,connector_name,sync_status,last_successful_sync_at,last_complete_sync_at,last_sync_at,provider_status,data_completeness,incident_message,stale_since,partial_data_count,loans_sync_status,loans_sync_message,last_loans_sync_at").eq("owner_id", userId).eq("provider", "pluggy").neq("status", "disabled"),
     invoiceEntriesQuery,
-    occurrencesQuery,
   ]);
   const results = settled.map(result => result.status === "fulfilled"
     ? result.value as MovementSourceResult
@@ -955,8 +976,10 @@ export async function getMovementsData(
     categories,
     connections,
     invoiceEntries,
-    occurrences,
   ] = results;
+  // Open invoices are a live Pluggy view. Historical installment occurrences
+  // may support other reports, but they must never manufacture rows here.
+  const occurrences: MovementSourceResult = { data: [], error: null };
   const resolved = resolveMovementSourceResults({
     accounts,
     transactions,
@@ -973,6 +996,7 @@ export async function getMovementsData(
   if (isCardScope && selectedCycle) {
     for (const purchase of resolved.cardPurchases) {
       if (
+        (isOpenCycle && purchase.source !== "pluggy") ||
         purchase.transaction_role === "invoice_payment" ||
         ["forecast", "cancelled"].includes(purchase.status) ||
         (isOpenCycle && !cardPurchaseBelongsToCycle({
@@ -1083,6 +1107,7 @@ export async function getMovementsData(
     if (isOpenCycle) {
       for (const transaction of resolved.transactions) {
         if (
+          transaction.source !== "pluggy" ||
           !transaction.credit_card_id ||
           !cycleCardIds.includes(transaction.credit_card_id) ||
           transaction.transaction_role === "invoice_payment" ||
@@ -1305,7 +1330,8 @@ export async function getMovementsData(
   }
 
   const deduplicated = isOpenCycle
-    ? getOpenCardCycleMovements(rawMovements)
+    ? getOpenCardCycleMovements(rawMovements.filter(movement =>
+      movement.source === "pluggy"))
     : getClosedCardCycleMovements(rawMovements);
   const normalizedCardPurchases = deduplicated.map(movement => {
     const isCredit = movement.effect === "credit";
@@ -1608,55 +1634,18 @@ export async function resolveOpenCardInvoice(
     // A confirmed total is independent from a temporarily unavailable detail.
   }
 
-  const legacyConfirmed = ["manual", "manual_bank_confirmation"].includes(
-    cycle.source ?? "",
-  ) || cycle.confirmed_open_total_source === "manual_bank_confirmation"
-    ? cycle.confirmed_invoice_total
-    : null;
-  const providerReliable = Boolean(
-    cycle.provider_bill_id &&
-    cycle.source === "pluggy_bill" &&
-    cycle.total_source === "provider_bill" &&
-    (
-      cycle.data_completeness === "complete" ||
-      cycle.provider_status === "available" ||
-      cycle.last_complete_sync_at
-    ),
-  );
+  // A projeção da fatura aberta é um retrato das compras que a Pluggy
+  // sincronizou para este ciclo. Totais manuais, PDFs e snapshots antigos
+  // continuam preservados no histórico, mas não alteram esta projeção viva.
   const total = resolveOpenInvoiceTotal({
-    confirmedOpenTotal: cycle.confirmed_open_total,
-    confirmedOpenTotalAt: cycle.confirmed_open_total_at,
-    confirmationTotal: confirmation?.official_amount,
-    confirmationAt: confirmation?.informed_at ?? confirmation?.updated_at,
-    legacyConfirmedTotal: legacyConfirmed,
-    providerInvoiceTotal: cycle.provider_invoice_total,
-    providerReliable,
-    providerUpdatedAt:
-      cycle.provider_updated_at ?? cycle.last_complete_sync_at,
-    manualInvoiceTotal: cycle.manual_invoice_total,
-    manualUpdatedAt: cycle.updated_at,
     calculatedTotal: detailedTotal,
-    calculatedReliable: detailsCompleteness === "complete",
+    calculatedReliable: detailedTotal !== null,
     calculatedUpdatedAt: cycle.last_sync_at ?? cycle.updated_at,
-    lastReliableTotal:
-      cycle.last_reliable_invoice_total ?? cycle.current_display_total,
-    lastReliableUpdatedAt: cycle.last_complete_sync_at ?? cycle.updated_at,
-    persistedDisplayTotal: cycle.current_display_total,
-    persistedDataCompleteness:
-      cycle.data_completeness === "complete" ||
-      cycle.data_completeness === "partial"
-        ? cycle.data_completeness
-        : "unknown",
   });
   const explicitConfirmedOpenTotal =
     openInvoiceMoney(cycle.confirmed_open_total) ??
-    openInvoiceMoney(confirmation?.official_amount) ??
-    openInvoiceMoney(legacyConfirmed);
-  const confirmedOpenTotal =
-    explicitConfirmedOpenTotal ??
-    (["provider_bill", "last_reliable"].includes(total.source)
-      ? total.amount
-      : null);
+    openInvoiceMoney(confirmation?.official_amount);
+  const confirmedOpenTotal = explicitConfirmedOpenTotal;
   const dataCompleteness: ResolvedOpenCardInvoice["dataCompleteness"] =
     detailsCompleteness === "complete"
       ? "complete"

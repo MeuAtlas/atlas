@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash, randomUUID } from "node:crypto";
+import { logSupabaseError, normalizeSupabaseError } from "@/lib/errors";
 import {
   extractPdfText,
   normalizePdfExtractionError,
@@ -22,10 +23,14 @@ import type {
   ParsedInvoice,
 } from "./types";
 import { logInvoiceImport } from "./logger";
+import {
+  invoicePeriodMatchesReferenceMonth,
+  normalizeInvoiceEntryInstallments,
+} from "./validation";
 
 const BUCKET = "financial-documents";
 const DOCUMENT_COLUMNS =
-  "id,workspace_id,user_id,card_id,bill_id,storage_bucket,storage_path,original_filename,file_hash,file_size_bytes,mime_type,bank_code,bank_name,parser_name,parser_version,processing_version,extraction_method,extraction_layout_version,parser_warnings,provider_future_installment_balance,next_open_invoice_amount,next_cycle_start_date,next_cycle_end_date,extracted_text,parsed_payload,processing_status,confidence,processing_error_code,processing_error_message,review_status,imported_at,confirmed_at,created_at,updated_at,deleted_at,processing_attempts,processing_started_at,processing_lock_until,last_processing_attempt_at,last_processing_error_code,last_processing_error_message";
+  "id,workspace_id,user_id,card_id,bill_id,target_statement_id,supersedes_document_id,storage_bucket,storage_path,original_filename,file_hash,file_size_bytes,mime_type,bank_code,bank_name,parser_name,parser_version,processing_version,extraction_method,extraction_layout_version,parser_warnings,provider_future_installment_balance,next_open_invoice_amount,next_cycle_start_date,next_cycle_end_date,extracted_text,parsed_payload,processing_status,confidence,processing_error_code,processing_error_message,review_status,imported_at,confirmed_at,created_at,updated_at,deleted_at,processing_attempts,processing_started_at,processing_lock_until,last_processing_attempt_at,last_processing_error_code,last_processing_error_message";
 
 const safeFilename = (value: string) =>
   value.replace(/[\r\n]/g, " ").replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(0, 180);
@@ -72,6 +77,7 @@ type InvoiceDocumentRow = InvoiceDocumentStateRow & {
   processing_error_message: string | null;
   last_processing_error_message: string | null;
   extraction_method: string | null;
+  target_statement_id: string | null;
 };
 
 function validateUploadedPdf(file: File) {
@@ -318,6 +324,77 @@ async function cardName(
   return String(result.data?.name ?? "Cartão");
 }
 
+async function statementComparison(
+  supabase: SupabaseClient,
+  userId: string,
+  document: InvoiceDocumentRow,
+  pdfTotalCents: number | null,
+): Promise<InvoiceReviewState["statementComparison"]> {
+  if (!document.target_statement_id) return undefined;
+  const result = await supabase.from("card_invoices")
+    .select("id,provider_invoice_total,pluggy_bill_total_amount")
+    .eq("id", document.target_statement_id)
+    .eq("owner_id", userId)
+    .maybeSingle();
+  if (result.error || !result.data) {
+    throw new InvoiceImportError(
+      "TARGET_STATEMENT_NOT_FOUND",
+      "A fatura escolhida não está mais disponível.",
+    );
+  }
+  const pluggy = result.data.pluggy_bill_total_amount ?? result.data.provider_invoice_total;
+  return {
+    statementId: result.data.id,
+    pluggyBillTotalCents: pluggy == null ? null : Math.round(Number(pluggy) * 100),
+    pdfTotalCents,
+    selectedTotalSource: "statement_pdf",
+  };
+}
+
+async function validateTargetStatementPeriod(input: {
+  supabase: SupabaseClient;
+  userId: string;
+  document: InvoiceDocumentRow;
+  parsed: ParsedInvoice;
+}) {
+  if (!input.document.target_statement_id) return;
+  const target = await input.supabase.from("card_invoices")
+    .select("id,card_id,reference_month,status")
+    .eq("id", input.document.target_statement_id)
+    .eq("owner_id", input.userId)
+    .maybeSingle();
+  if (target.error || !target.data) {
+    throw new InvoiceImportError(
+      "TARGET_STATEMENT_NOT_FOUND",
+      "A fatura escolhida não está mais disponível.",
+      { status: 422, stage: "target_statement_validation" },
+    );
+  }
+  if (!input.parsed.dueDate) {
+    throw new InvoiceImportError(
+      "TARGET_STATEMENT_PERIOD_NOT_IDENTIFIED",
+      "Não foi possível identificar no PDF o mês de vencimento da fatura selecionada.",
+      { status: 422, stage: "target_statement_validation" },
+    );
+  }
+  const extractedReferenceMonth = `${input.parsed.dueDate.slice(0, 7)}-01`;
+  if (
+    target.data.card_id !== input.document.card_id ||
+    !invoicePeriodMatchesReferenceMonth(
+      input.parsed,
+      target.data.reference_month,
+    ) ||
+    ["open", "estimated", "cancelled"].includes(target.data.status)
+  ) {
+    const [year, month] = extractedReferenceMonth.split("-");
+    throw new InvoiceImportError(
+      "TARGET_STATEMENT_MISMATCH",
+      `O PDF corresponde ao vencimento ${month}/${year} e não à fatura selecionada. Escolha a fatura correta antes de revisar os lançamentos.`,
+      { status: 422, stage: "target_statement_validation" },
+    );
+  }
+}
+
 async function persistReviewAtomically(input: {
   supabase: SupabaseClient;
   userId: string;
@@ -511,6 +588,12 @@ async function processStoredBuffer(input: {
         });
       }
     }
+    await validateTargetStatementPeriod({
+      supabase: input.supabase,
+      userId: input.userId,
+      document: input.document,
+      parsed,
+    });
     const reconciliation = reconcileInvoice({
       officialTotalCents: parsed.officialTotalCents,
       previousBalanceCents: parsed.previousBalanceCents,
@@ -524,6 +607,12 @@ async function processStoredBuffer(input: {
       parsed,
       reconciliation,
       extractionMethod: extracted.extractionMethod,
+      statementComparison: await statementComparison(
+        input.supabase,
+        input.userId,
+        input.document,
+        parsed.officialTotalCents,
+      ),
     };
     const version = input.operation === "process"
       ? Math.max(1, Number(input.document.processing_version ?? 1))
@@ -619,12 +708,27 @@ export async function uploadInvoicePdf(input: {
   supabase: SupabaseClient;
   userId: string;
   cardId: string;
+  targetStatementId?: string | null;
   file: File;
 }): Promise<ExistingInvoiceDocumentResolution> {
   validateUploadedPdf(input.file);
   const buffer = Buffer.from(await input.file.arrayBuffer());
   validateBuffer(buffer);
   const { workspaceId } = await ownedCardAndWorkspace(input);
+  if (input.targetStatementId) {
+    const target = await input.supabase.from("card_invoices")
+      .select("id,card_id,status")
+      .eq("id", input.targetStatementId)
+      .eq("owner_id", input.userId)
+      .maybeSingle();
+    if (target.error || !target.data || target.data.card_id !== input.cardId ||
+      ["open", "estimated", "cancelled"].includes(target.data.status)) {
+      throw new InvoiceImportError(
+        "INVALID_TARGET_STATEMENT",
+        "A fatura escolhida não pode receber este documento.",
+      );
+    }
+  }
   const fileHash = createHash("sha256").update(buffer).digest("hex");
   const existing = await findByHash({
     supabase: input.supabase,
@@ -632,7 +736,31 @@ export async function uploadInvoicePdf(input: {
     cardId: input.cardId,
     fileHash,
   });
-  if (existing) return resolveExistingInvoiceDocumentAction(existing);
+  if (existing) {
+    if (
+      input.targetStatementId &&
+      !existing.confirmed_at &&
+      existing.target_statement_id !== input.targetStatementId
+    ) {
+      const reassigned = await input.supabase.from("invoice_documents")
+        .update({ target_statement_id: input.targetStatementId })
+        .eq("id", existing.id)
+        .eq("user_id", input.userId)
+        .is("deleted_at", null)
+        .select(DOCUMENT_COLUMNS)
+        .maybeSingle();
+      if (reassigned.error || !reassigned.data) {
+        throw new InvoiceImportError(
+          "DATABASE_WRITE_FAILED",
+          "Não foi possível vincular o documento à fatura selecionada.",
+        );
+      }
+      return resolveExistingInvoiceDocumentAction(
+        reassigned.data as InvoiceDocumentRow,
+      );
+    }
+    return resolveExistingInvoiceDocumentAction(existing);
+  }
 
   const now = new Date();
   const documentId = randomUUID();
@@ -651,6 +779,7 @@ export async function uploadInvoicePdf(input: {
     workspace_id: workspaceId,
     user_id: input.userId,
     card_id: input.cardId,
+    target_statement_id: input.targetStatementId ?? null,
     storage_bucket: BUCKET,
     storage_path: path,
     original_filename: safeFilename(input.file.name),
@@ -690,23 +819,94 @@ export async function confirmInvoiceImport(input: {
   if (!input.review.parsed.dueDate || input.review.parsed.officialTotalCents === null) {
     throw new InvoiceImportError("MISSING_REQUIRED_FIELDS", "Informe o vencimento e o total oficial antes de confirmar.");
   }
+  const normalizedEntries = normalizeInvoiceEntryInstallments(
+    input.review.parsed.entries,
+  );
+  const document = await input.supabase.from("invoice_documents")
+    .select("target_statement_id,card_id")
+    .eq("id", input.documentId)
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (document.error || !document.data) {
+    throw new InvoiceImportError("DOCUMENT_NOT_FOUND", "Importação não encontrada.");
+  }
+  let verifiedPluggyBillTotalCents: number | null = null;
+  if (document.data.target_statement_id) {
+    const target = await input.supabase.from("card_invoices")
+      .select("id,card_id,reference_month,status,provider_invoice_total,pluggy_bill_total_amount")
+      .eq("id", document.data.target_statement_id)
+      .eq("owner_id", input.userId)
+      .maybeSingle();
+    const statementDate = input.review.parsed.closingDate ??
+      input.review.parsed.cycleEndDate ?? input.review.parsed.dueDate;
+    const statementMonth = `${statementDate.slice(0, 7)}-01`;
+    if (target.error || !target.data ||
+      target.data.card_id !== input.review.cardId ||
+      target.data.reference_month !== statementMonth ||
+      ["open", "estimated", "cancelled"].includes(target.data.status)) {
+      throw new InvoiceImportError(
+        "TARGET_STATEMENT_MISMATCH",
+        "O vencimento ou o cartão do PDF não corresponde à fatura escolhida.",
+      );
+    }
+    const targetTotal = (target.data as typeof target.data & {
+      provider_invoice_total?: number | null;
+      pluggy_bill_total_amount?: number | null;
+    }).pluggy_bill_total_amount ??
+      (target.data as typeof target.data & { provider_invoice_total?: number | null }).provider_invoice_total;
+    verifiedPluggyBillTotalCents = targetTotal == null
+      ? null
+      : Math.round(Number(targetTotal) * 100);
+  }
+  const selectedTotalSource = input.review.statementComparison?.selectedTotalSource ?? "statement_pdf";
+  if (selectedTotalSource === "pluggy_bill" && verifiedPluggyBillTotalCents === null) {
+    throw new InvoiceImportError(
+      "PLUGGY_BILL_TOTAL_UNAVAILABLE",
+      "O total da Pluggy não está disponível para esta fatura.",
+    );
+  }
+  const selectedTotalCents = selectedTotalSource === "pluggy_bill"
+    ? verifiedPluggyBillTotalCents!
+    : input.review.parsed.officialTotalCents;
   const reconciliation = reconcileInvoice({
-    officialTotalCents: input.review.parsed.officialTotalCents,
+    officialTotalCents: selectedTotalCents,
     previousBalanceCents: input.review.parsed.previousBalanceCents,
-    entries: input.review.parsed.entries,
+    entries: normalizedEntries,
   });
+  const confirmedReview = {
+    ...input.review,
+    parsed: {
+      ...input.review.parsed,
+      officialTotalCents: selectedTotalCents,
+      entries: normalizedEntries,
+    },
+    reconciliation,
+  };
   const result = await input.supabase.rpc("confirm_invoice_pdf_import", {
     p_document_id: input.documentId,
-    p_review: { ...input.review, reconciliation },
+    p_review: confirmedReview,
   });
   if (result.error) {
-    throw new InvoiceImportError("CONFIRMATION_FAILED", "Não foi possível confirmar a importação.");
+    const context = `confirmar importação da fatura (${input.documentId})`;
+    logSupabaseError(result.error, context);
+    const diagnostic = normalizeSupabaseError(result.error, context);
+    const developmentDetail = process.env.NODE_ENV === "development"
+      ? [diagnostic.code, diagnostic.message, diagnostic.details]
+        .filter(Boolean)
+        .join(" · ")
+      : "";
+    throw new InvoiceImportError(
+      "CONFIRMATION_FAILED",
+      developmentDetail
+        ? `Não foi possível confirmar a importação. Detalhe: ${developmentDetail}`
+        : "Não foi possível confirmar a importação. A revisão foi preservada; tente novamente.",
+    );
   }
   const foreignEnrichment = await input.supabase.rpc(
     "enrich_invoice_foreign_values",
     {
       p_document_id: input.documentId,
-      p_entries: input.review.parsed.entries,
+      p_entries: normalizedEntries,
     },
   );
   if (foreignEnrichment.error) {
@@ -716,6 +916,28 @@ export async function confirmInvoiceImport(input: {
     );
   }
   const imported = result.data as InvoiceImportResult;
+  if (document.data.target_statement_id && imported.billId !== document.data.target_statement_id) {
+    throw new InvoiceImportError(
+      "TARGET_STATEMENT_MISMATCH",
+      "O PDF foi processado para outro ciclo. A fatura escolhida foi preservada.",
+    );
+  }
+  const axes = await input.supabase.from("card_invoices").update({
+    pdf_total_amount: input.review.parsed.officialTotalCents / 100,
+    pluggy_bill_total_amount: verifiedPluggyBillTotalCents == null
+      ? undefined
+      : verifiedPluggyBillTotalCents / 100,
+    confirmed_total_amount: selectedTotalCents / 100,
+    confirmed_total_source: selectedTotalSource,
+    confirmed_total_source_locked: true,
+    details_status: "confirmed",
+  }).eq("id", imported.billId).eq("owner_id", input.userId);
+  if (axes.error) {
+    throw new InvoiceImportError(
+      "STATEMENT_AXES_UPDATE_FAILED",
+      "A fatura foi importada, mas a escolha do total não pôde ser registrada.",
+    );
+  }
   logInvoiceImport({
     operation: "confirm",
     documentId: input.documentId,

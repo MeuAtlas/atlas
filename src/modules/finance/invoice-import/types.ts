@@ -189,6 +189,12 @@ export interface InvoiceReviewState {
   parsed: ParsedInvoice;
   reconciliation: InvoiceReconciliation;
   extractionMethod?: ExtractedPdfDocument["extractionMethod"];
+  statementComparison?: {
+    statementId: string;
+    pluggyBillTotalCents: number | null;
+    pdfTotalCents: number | null;
+    selectedTotalSource: "statement_pdf" | "pluggy_bill";
+  };
 }
 
 export interface FutureCardCommitment {

@@ -50,7 +50,20 @@ export function splitPageIntoColumns(input: {
   const lowerTableItems = input.items.filter(item => item.y < input.pageHeight * .68);
   const left = lowerTableItems.filter(item => item.x + item.width < midpoint - 5).length;
   const right = lowerTableItems.filter(item => item.x > midpoint + 5).length;
-  if (left < 12 || right < 12) return [input.items];
+  const leftItemsWithMarkers = input.items.filter(item =>
+    item.x + item.width <= midpoint &&
+    /VALOR TOTAL|X{2,}\s*\d{4}/i.test(item.text),
+  );
+  const rightItemsWithMarkers = input.items.filter(item =>
+    item.x >= midpoint &&
+    /VALOR TOTAL|RESUMO DA FATURA|X{2,}\s*\d{4}/i.test(item.text),
+  );
+  const hasSparseSummaryColumn =
+    left >= 12 &&
+    right >= 3 &&
+    leftItemsWithMarkers.length > 0 &&
+    rightItemsWithMarkers.length > 0;
+  if ((left < 12 || right < 12) && !hasSparseSummaryColumn) return [input.items];
 
   const spanning = input.items.filter(item =>
     item.x < midpoint && item.x + item.width > midpoint,

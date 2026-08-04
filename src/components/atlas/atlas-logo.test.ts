@@ -45,7 +45,9 @@ test("favicon, Apple touch icon e PWA apontam para a identidade oficial", () => 
   assert.match(layout, /atlas-app-icon-light\.png/);
   assert.match(layout, /atlas-app-icon-dark\.png/);
   assert.match(layout, /manifest: "\/manifest\.webmanifest"/);
-  assert.match(manifest, /atlas-app-icon-dark\.png/);
+  assert.match(layout, /atlas-apple-touch-icon\.png/);
+  assert.match(manifest, /atlas-192\.png/);
+  assert.match(manifest, /atlas-512\.png/);
 
   const faviconPath = join(root, "src/app/favicon.ico");
   const favicon = readFileSync(faviconPath);

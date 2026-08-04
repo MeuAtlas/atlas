@@ -9,6 +9,11 @@ import type {
   FinancialTransaction,
   StoredCardInvoice,
 } from "./types";
+import {
+  buildCreditCardStatementViewModel,
+  normalizeStatementLifecycleStatus,
+  type CreditCardStatementViewModel,
+} from "./credit-card-statement";
 
 export const HISTORICAL_INVOICE_STATUSES = [
   "closed",
@@ -53,7 +58,9 @@ export type CreditCardInvoiceHistoryItem = {
   reconciliationStatus: string;
   dataCompleteness: "complete" | "partial" | "unavailable";
   purchases: CardPurchase[];
+  provisionalPurchases: CardPurchase[];
   payments: FinancialTransaction[];
+  statement: CreditCardStatementViewModel;
   pdfEntries?: Array<{
     id: string;
     transactionDate: string | null;
@@ -496,13 +503,30 @@ export function resolveHistoricalInvoiceTotal(invoice: Pick<
   | "confirmed_invoice_total"
   | "calculated_invoice_total"
   | "total_source"
+  | "confirmed_total_amount"
+  | "confirmed_total_source"
 >): {
   total: number | null;
   source: InvoiceTotalSource;
 } {
+  const explicitlySelected = amountOrNull(invoice.confirmed_total_amount);
+  if (explicitlySelected !== null) {
+    if (invoice.confirmed_total_source === "statement_pdf") {
+      return { total: explicitlySelected, source: "manual_pdf_confirmation" };
+    }
+    if (invoice.confirmed_total_source === "pluggy_bill") {
+      return { total: explicitlySelected, source: "provider_bill" };
+    }
+  }
+  const manual = amountOrNull(invoice.manual_invoice_total);
+  if (
+    manual !== null &&
+    invoice.total_source === "manual_pdf_confirmation"
+  ) {
+    return { total: manual, source: "manual_pdf_confirmation" };
+  }
   const provider = amountOrNull(invoice.provider_invoice_total);
   if (provider !== null) return { total: provider, source: "provider_bill" };
-  const manual = amountOrNull(invoice.manual_invoice_total);
   if (manual !== null) {
     return {
       total: manual,
@@ -707,6 +731,26 @@ export function normalizeHistoricalInvoice({
       ? amountOrNull(linkedPayments[0].amount) ?? 0
       : amountOrNull(invoice.paid_amount) ?? 0;
   const payment = linkedPayments[0];
+  const lifecycleStatus = normalizeStatementLifecycleStatus(invoice.status);
+  const statement = buildCreditCardStatementViewModel({
+    lifecycleStatus,
+    pdfTotal:
+      invoice.total_source === "manual_pdf_confirmation"
+        ? invoice.pdf_total_amount ?? invoice.manual_invoice_total
+        : invoice.pdf_total_amount,
+    pluggyBillTotal:
+      invoice.pluggy_bill_total_amount ?? invoice.provider_invoice_total,
+    manualTotal: invoice.manual_total_amount ?? (
+      invoice.total_source === "manual_bank_confirmation"
+        ? invoice.manual_invoice_total
+        : null
+    ),
+    calculatedTotal,
+    hasConfirmedPdf: Boolean(invoice.document_id),
+    hasProvisionalEntries: unmatchedProviderPurchases.length > 0,
+    paidAmount: invoice.confirmed_payment_amount ?? paidAmount,
+    paymentConfirmationStatus: invoice.payment_confirmation_status,
+  });
 
   return {
     id: invoice.id,
@@ -746,8 +790,10 @@ export function normalizeHistoricalInvoice({
     reconciliationStatus,
     dataCompleteness: resolved.total === null ? "unavailable" : partial ? "partial" : "complete",
     purchases: unmatchedProviderPurchases,
+    provisionalPurchases: unmatchedProviderPurchases,
     payments: linkedPayments,
     pdfEntries,
+    statement,
   };
 }
 

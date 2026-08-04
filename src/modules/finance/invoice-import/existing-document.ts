@@ -30,6 +30,7 @@ export type InvoiceDocumentStateRow = {
   id: string;
   card_id: string;
   bill_id: string | null;
+  target_statement_id?: string | null;
   processing_status: string;
   review_status: string;
   confirmed_at: string | null;

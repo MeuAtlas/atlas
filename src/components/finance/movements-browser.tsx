@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { Money } from "./value-visibility";
 import {
   buildMovementFiltersUrl,
+  buildMovementQueryKey,
   calculateMovementSummaryByFilter,
   groupMovementsByDate,
   navigateIfChanged,
@@ -17,6 +18,7 @@ import {
   type MovementSourceFilter,
 } from "@/modules/finance/movement-filters";
 import { useNavigationTransition } from "@/components/navigation/navigation-feedback";
+import { useClientNavigation } from "@/components/navigation/client-navigation";
 import type { AvailableCardCycle } from "@/modules/finance/card-cycles";
 import type {
   InstallmentsDataStatus,
@@ -26,6 +28,10 @@ import {
   formatMoneyByCurrency,
   implicitExchangeRate,
 } from "@/modules/finance/foreign-card-movement";
+import {
+  buildCardMovementsViewModel,
+  formatInstallmentLabel,
+} from "@/modules/finance/card-movements-view-model";
 import { correctForeignCardMovementAmounts } from "@/modules/finance/actions";
 import {
   confirmCommitmentMatch,
@@ -142,10 +148,14 @@ function SummaryCards({
       </aside>
     );
   }
+  const isClosedCycle = Boolean(
+    cycle && ["closed", "paid"].includes(cycle.kind),
+  );
   const isConfirmedClosedCycle = Boolean(
-    cycle &&
-    cycle.officialTotal !== null &&
-    ["closed", "paid"].includes(cycle.kind),
+    isClosedCycle && cycle?.officialTotal !== null,
+  );
+  const isOfficialTotalPending = Boolean(
+    isClosedCycle && cycle?.source !== "pdf" && cycle?.officialTotal === null,
   );
   return (
     <div className="movement-summary-shell">
@@ -153,39 +163,37 @@ function SummaryCards({
         {(summary.mode === "card" && breakdown
           ? [
             {
-              label: "Total confirmado",
-              value: breakdown.confirmedOpenTotal ?? null,
+              label: "Projeção Pluggy",
+              value: breakdown.detailedTotal ?? null,
               tone: "neutral" as const,
               signed: false,
             },
             {
-              label: "Compras novas",
+              label: "Compras à vista",
               value: breakdown.newPurchasesTotal ?? null,
               tone: "negative" as const,
               signed: false,
             },
             {
-              label: "Parcelas lançadas",
+              label: "Compras parceladas",
               value: breakdown.postedInstallmentsTotal ?? null,
               tone: "negative" as const,
               signed: false,
             },
             {
-              label: "Parcelas projetadas",
-              value: breakdown.installmentsDataStatus === "unavailable"
-                ? null
-                : breakdown.projectedUnpostedInstallmentsTotal ?? null,
+              label: "Encargos e IOF",
+              value: breakdown.feesAndTaxesTotal ?? null,
               tone: "negative" as const,
               signed: false,
             },
             {
-              label: "Detalhado pelo Atlas",
-              value: breakdown.detailedTotal ?? null,
-              tone: "negative" as const,
+              label: "Créditos e estornos",
+              value: breakdown.creditsAndRefundsTotal ?? null,
+              tone: "positive" as const,
               signed: false,
             },
             {
-              label: "Diferença a detalhar",
+              label: "Diferença para o total",
               value: breakdown.reconciliationDifference,
               tone: "neutral" as const,
               signed: false,
@@ -210,7 +218,9 @@ function SummaryCards({
             ? "Confirmada por PDF"
             : isConfirmedClosedCycle
               ? "Bill oficial Pluggy"
-              : "Conciliação da fatura aberta"}</span>
+              : isOfficialTotalPending
+                ? "Fechamento oficial pendente"
+                : "Conciliação da fatura aberta"}</span>
           {isConfirmedClosedCycle ? (
             <>
               <span>Pagamentos <Money value={cycle.paymentsTotal ?? 0} /></span>
@@ -222,31 +232,16 @@ function SummaryCards({
                   : <Money value={cycle.reconciliationDifference} signed />}
               </span>
             </>
+          ) : isOfficialTotalPending ? (
+            <span>
+              A Pluggy ainda não enviou o valor oficial de fechamento desta fatura.
+            </span>
           ) : (
             <>
               {breakdown ? (
                 <>
-                  <span>
-                    Encargos/IOF{" "}
-                    {breakdown.feesAndTaxesTotal === null ||
-                    breakdown.feesAndTaxesTotal === undefined
-                      ? "indisponível"
-                      : <Money value={breakdown.feesAndTaxesTotal} />}
-                  </span>
-                  <span>
-                    Créditos/estornos{" "}
-                    {breakdown.creditsAndRefundsTotal === null ||
-                    breakdown.creditsAndRefundsTotal === undefined
-                      ? "indisponível"
-                      : <Money value={breakdown.creditsAndRefundsTotal} />}
-                  </span>
-                  <span>
-                    Parcelas: {breakdown.installmentsDataStatus === "unavailable"
-                      ? "não foi possível carregar"
-                      : breakdown.installmentsDataStatus === "confirmed_zero"
-                        ? "nenhuma confirmada"
-                        : "dados disponíveis"}
-                  </span>
+                  <span>Movimentações: somente Pluggy</span>
+                  <span>Atualiza após cada sincronização</span>
                 </>
               ) : null}
               <span>
@@ -262,6 +257,8 @@ function SummaryCards({
                 ? "PDF confirmado"
                 : cycle.source === "pluggy_bill"
                   ? "Bill Pluggy"
+                  : isOfficialTotalPending
+                    ? "Pluggy — fechamento oficial pendente"
                   : cycle.source === "manual"
                     ? "Manual"
                     : "Calculada")}
@@ -278,37 +275,50 @@ function SummaryCards({
   );
 }
 
-function MovementViewTabs({ filters }: { filters: MovementFilters }) {
+function MovementViewTabs({
+  filters,
+  defaultCardCycleId,
+}: {
+  filters: MovementFilters;
+  defaultCardCycleId: string | null;
+}) {
+  const navigate = useClientNavigation();
   const type = (filters.type || "bank") as MovementSourceFilter;
-  const views: Array<{ value: MovementSourceFilter; label: string; href: string }> = [
+  const views: Array<{ value: "bank" | "card"; label: string }> = [
     {
       value: "bank",
       label: "Conta corrente",
-      href: "/financeiro/movimentacoes?type=bank&period=this-month",
     },
     {
       value: "card",
       label: "Cartões",
-      href: "/financeiro/movimentacoes?type=card",
-    },
-    {
-      value: "all",
-      label: "Todas",
-      href: "/financeiro/movimentacoes?type=all&period=this-month",
     },
   ];
   return (
     <nav className="movement-view-tabs" aria-label="Visão das movimentações">
-      {views.map(view => (
-        <Link
-          key={view.value}
-          href={view.href}
-          className={type === view.value ? "active" : undefined}
-          aria-current={type === view.value ? "page" : undefined}
-        >
-          {view.label}
-        </Link>
-      ))}
+      {views.map(view => {
+        const active = type === view.value;
+        return (
+          <button
+            key={view.value}
+            type="button"
+            className={active ? "active" : undefined}
+            aria-pressed={active}
+            onClick={() => navigate(buildMovementFiltersUrl(filters, {
+              type: view.value,
+              period: view.value === "bank"
+                ? filters.period || "this-month"
+                : null,
+              card: view.value === "bank" ? null : filters.card,
+              cycle: view.value === "card"
+                ? filters.cycle || defaultCardCycleId
+                : null,
+            }))}
+          >
+            {view.label}
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -361,7 +371,7 @@ export function BankPeriodSelect({
 }
 
 function cycleStatusLabel(cycle: AvailableCardCycle) {
-  if (cycle.kind === "estimated") return "Aberta · Projeção atual";
+  if (cycle.kind === "estimated") return "Projeção";
   if (cycle.status === "open") return "Aberta";
   if (cycle.status === "paid") return "Paga";
   if (cycle.status === "overdue") return "Vencida";
@@ -370,13 +380,62 @@ function cycleStatusLabel(cycle: AvailableCardCycle) {
 }
 
 function cycleMilestoneLabel(cycle: AvailableCardCycle) {
-  if (cycle.status === "open" && cycle.closingDate) {
-    return `fecha em ${formatShortDate(cycle.closingDate)}`;
+  const due = cycle.dueDate
+    ? `Vence ${formatShortDate(cycle.dueDate)}`
+    : null;
+  if (cycle.status === "open") {
+    return [
+      due,
+      cycle.closingDate
+        ? `fecha ${formatShortDate(cycle.closingDate)}`
+        : null,
+    ].filter(Boolean).join(" · ") || "Em aberto";
   }
-  if (cycle.dueDate) {
-    return `vence em ${formatShortDate(cycle.dueDate)}`;
-  }
-  return null;
+  return due;
+}
+
+export function cycleCardLabel(cycle: AvailableCardCycle) {
+  const lastFour = cycle.cardLabel.match(/(?:final\s*)?(\d{4})\b/i)?.[1];
+  const family = /\bVISA\b/i.test(cycle.cardLabel)
+    ? "Visa"
+    : /\b(?:MC|MASTER|MASTERCARD)\b/i.test(cycle.cardLabel)
+      ? "Mastercard"
+      : "Cartão";
+  return `${family}${lastFour ? ` • ${lastFour}` : ""}`;
+}
+
+function cycleMonthLabel(cycle: AvailableCardCycle) {
+  // O mês da fatura é o mês de referência/fechamento. O vencimento
+  // pode ocorrer no mês seguinte e não deve deslocar a fatura no seletor.
+  const value = cycle.referenceMonth ?? cycle.cycleEndDate;
+  const [year, month] = value.split("-").map(Number);
+  const label = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function cycleGroupLabel(cycle: AvailableCardCycle) {
+  const month = cycleMonthLabel(cycle);
+  return cycle.status === "open" ? `${month} · em aberto` : month;
+}
+
+export function cycleOptionLabel(
+  cycle: AvailableCardCycle,
+  includeClosingDate = false,
+) {
+  const status = cycleStatusLabel(cycle);
+  const dayMonth = (value: string) => `${value.slice(8, 10)}/${value.slice(5, 7)}`;
+  const details = [
+    cycle.dueDate ? `vence ${dayMonth(cycle.dueDate)}` : null,
+    status,
+    includeClosingDate && cycle.closingDate
+      ? `fecha ${dayMonth(cycle.closingDate)}`
+      : null,
+  ].filter(Boolean);
+  return `${cycleCardLabel(cycle)} · ${details.join(" · ")}`;
 }
 
 export function CardBillSelect({
@@ -388,16 +447,29 @@ export function CardBillSelect({
   cycles: AvailableCardCycle[];
   onChange: (value: string) => void;
 }) {
+  const groups = Map.groupBy(cycles, cycleGroupLabel);
+  const optionCollisions = new Map<string, number>();
+  for (const cycle of cycles) {
+    const key = `${cycleCardLabel(cycle)}|${cycle.dueDate ?? ""}`;
+    optionCollisions.set(key, (optionCollisions.get(key) ?? 0) + 1);
+  }
   return (
     <label className="movement-card-bill">
       <span>Fatura</span>
       <select name="cycle" value={value} onChange={event => onChange(event.target.value)}>
-        {cycles.map(cycle => (
-          <option value={cycle.cycleId} key={cycle.cycleId}>
-            {cycle.compactLabel}
-            {cycleMilestoneLabel(cycle) ? ` · ${cycleMilestoneLabel(cycle)}` : ""}
-            {` · ${cycleStatusLabel(cycle)}`}
-          </option>
+        {[...groups.entries()].map(([group, groupCycles]) => (
+          <optgroup label={group} key={group}>
+            {groupCycles.map(cycle => (
+              <option value={cycle.cycleId} key={cycle.cycleId}>
+                {cycleOptionLabel(
+                  cycle,
+                  (optionCollisions.get(
+                    `${cycleCardLabel(cycle)}|${cycle.dueDate ?? ""}`,
+                  ) ?? 0) > 1,
+                )}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
     </label>
@@ -417,7 +489,7 @@ export function CardFilterSelect({
     <label className="movement-card-filter">
       <span>Cartão</span>
       <select name="card" value={value} onChange={event => onChange(event.target.value)}>
-        <option value="">Todos os cartões</option>
+        <option value="">Todos os cartões desta fatura</option>
         {cards.map(card => <option value={card.id} key={card.id}>{card.name}</option>)}
       </select>
     </label>
@@ -463,6 +535,7 @@ function MovementFiltersForm({
     filters.ignored,
     filters.uncategorized,
     filters.document,
+    filters.purchaseType,
     filters.minAmount,
     filters.maxAmount,
   ].filter(Boolean).length;
@@ -550,6 +623,10 @@ function MovementFiltersForm({
             <option value="">Todos</option><option value="realized">Realizado</option>
             <option value="pending">Pendente</option><option value="forecast">Previsto</option>
           </select></label>
+          {type === "card" ? <label><span>Tipo de compra</span><select name="purchaseType" defaultValue={filters.purchaseType || ""}>
+            <option value="">Todas</option><option value="installment">Parceladas</option>
+            <option value="regular">Do per&iacute;odo</option>
+          </select></label> : null}
           {type !== "card" ? <label><span>Cartão</span><select name="card" defaultValue={filters.card || ""}>
             <option value="">Todos</option>
             {cards.map(card => <option value={card.id} key={card.id}>{card.name}</option>)}
@@ -579,10 +656,10 @@ function CurrentCardCyclesOverview({
     <section className="movement-card-cycle-overview" aria-labelledby="current-card-cycles">
       <header>
         <div>
-          <span>Faturas do mês</span>
-          <h2 id="current-card-cycles">Cartões em aberto</h2>
+          <span>Em aberto</span>
+          <h2 id="current-card-cycles">Faturas abertas</h2>
         </div>
-        <p>Escolha um cartão para detalhar suas compras e a conciliação da fatura.</p>
+        <p>Selecione uma fatura.</p>
       </header>
       <div>
         {currentCycles.map(cycle => (
@@ -591,7 +668,7 @@ function CurrentCardCyclesOverview({
             href={queryHref({ type: "card" }, { cycle: cycle.cycleId })}
             className={selectedCycle?.cycleId === cycle.cycleId ? "active" : undefined}
           >
-            <span>{cycle.compactLabel}</span>
+            <span>{cycleCardLabel(cycle)}</span>
             <strong>{cycle.officialTotal === null ? "Valor em conciliação" : <Money value={cycle.officialTotal} />}</strong>
             <small>{cycleMilestoneLabel(cycle) ?? cycleStatusLabel(cycle)}</small>
           </Link>
@@ -694,6 +771,110 @@ function MovementRow({
       </span>
     </button>
   );
+}
+
+function CardMovementValue({ item }: { item: MovementListItem }) {
+  if (item.amountBrl === null) return <span>Valor indispon&iacute;vel</span>;
+  const value = item.consumptionEffect === "income"
+    ? -Math.abs(item.amountBrl)
+    : Math.abs(item.amountBrl);
+  return <Money value={value} />;
+}
+
+function CardMovementRow({
+  item,
+  installment,
+  onOpen,
+}: {
+  item: MovementListItem;
+  installment: boolean;
+  onOpen: (item: MovementListItem, trigger: HTMLButtonElement) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`card-movement-row ${installment ? "is-installment" : "is-regular"}`}
+      onClick={event => onOpen(item, event.currentTarget)}
+      aria-label={`Abrir detalhes de ${item.description}, ${
+        installment ? `parcela ${formatInstallmentLabel(item)}, ` : ""
+      }${item.amountBrl === null ? "valor indispon\u00edvel" : formatMoneyByCurrency(item.amountBrl, "BRL")}`}
+    >
+      <span className="card-movement-launch">
+        <b>{item.description}</b>
+        <small>{"Cart\u00e3o \u00b7 "}{formatShortDate(item.date)}</small>
+      </span>
+      {installment ? <span className="card-movement-installment">{formatInstallmentLabel(item)}</span> : null}
+      <span className="card-movement-value"><CardMovementValue item={item} /></span>
+    </button>
+  );
+}
+
+function CardMovementsSections({
+  items,
+  onOpen,
+}: {
+  items: MovementListItem[];
+  onOpen: (item: MovementListItem, trigger: HTMLButtonElement) => void;
+}) {
+  const view = useMemo(() => buildCardMovementsViewModel(items), [items]);
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(() => new Set());
+  const toggleDay = (date: string) => setCollapsedDays(current => {
+    const next = new Set(current);
+    if (next.has(date)) next.delete(date);
+    else next.add(date);
+    return next;
+  });
+  return <div className="card-movement-sections">
+    {view.installments.length ? <section className="card-movement-section" aria-labelledby="installment-purchases-title">
+      <h3 id="installment-purchases-title">Compras parceladas</h3>
+      <div className="card-movement-table" role="table" aria-label="Compras parceladas">
+        <div className="card-movement-table-head is-installment" role="row">
+          <span role="columnheader">Lan&ccedil;amento</span>
+          <span role="columnheader">Parcela</span>
+          <span role="columnheader">Valor</span>
+        </div>
+        <div role="rowgroup">{view.installments.map(item => <CardMovementRow
+          key={`${item.sourceKind}-${item.id}`}
+          item={item}
+          installment
+          onOpen={onOpen}
+        />)}</div>
+      </div>
+    </section> : null}
+    {view.regular.length ? <section className="card-movement-section" aria-labelledby="period-purchases-title">
+      <h3 id="period-purchases-title">Compras do per&iacute;odo</h3>
+      <div className="card-movement-table" role="table" aria-label="Compras do período">
+        <div className="card-movement-table-head is-regular" role="row">
+          <span role="columnheader">Lan&ccedil;amento</span>
+          <span role="columnheader">Valor</span>
+        </div>
+        {view.regularGroups.map(group => {
+          const collapsed = collapsedDays.has(group.date);
+          return <section className="card-movement-day" key={group.date}>
+            <button
+              type="button"
+              className="card-movement-day-toggle"
+              aria-expanded={!collapsed}
+              aria-controls={`card-day-${group.date}`}
+              onClick={() => toggleDay(group.date)}
+            >
+              <b>{formatGroupDate(group.date)}</b>
+              <span>{group.items.length} {group.items.length === 1 ? "compra" : "compras"} &middot; total do dia <Money value={group.total} /></span>
+              <i className={collapsed ? "is-collapsed" : undefined} aria-hidden="true">&rsaquo;</i>
+            </button>
+            <div id={`card-day-${group.date}`} hidden={collapsed}>
+              {group.items.map(item => <CardMovementRow
+                key={`${item.sourceKind}-${item.id}`}
+                item={item}
+                installment={false}
+                onOpen={onOpen}
+              />)}
+            </div>
+          </section>;
+        })}
+      </div>
+    </section> : null}
+  </div>;
 }
 
 function MovementDetailsDrawer({
@@ -1373,6 +1554,7 @@ export function MovementsBrowser({
   selectedCycle,
   categories,
   totalCount,
+  paginationTotalCount,
   page,
   pageSize,
   hasConnectedAccount,
@@ -1397,6 +1579,7 @@ export function MovementsBrowser({
   selectedCycle: AvailableCardCycle | null;
   categories: Option[];
   totalCount: number;
+  paginationTotalCount: number;
   page: number;
   pageSize: number;
   hasConnectedAccount: boolean;
@@ -1413,6 +1596,12 @@ export function MovementsBrowser({
   const [selected, setSelected] = useState<MovementListItem | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const groups = useMemo(() => groupMovementsByDate(items), [items]);
+  const statementNeedsPdf = Boolean(
+    filters.type === "card" &&
+    selectedCycle &&
+    ["closed", "paid"].includes(selectedCycle.kind) &&
+    selectedCycle.source !== "pdf",
+  );
   const closeDrawer = () => {
     setSelected(null);
     requestAnimationFrame(() => triggerRef.current?.focus());
@@ -1440,7 +1629,14 @@ export function MovementsBrowser({
               : "Acompanhe o que entrou e saiu das suas contas no período selecionado."}</p>
         </div>
       </header>
-      <MovementViewTabs filters={filters} />
+      <MovementViewTabs
+        filters={filters}
+        defaultCardCycleId={
+          cardCycles.find(cycle => cycle.isCurrent)?.cycleId ??
+          cardCycles[0]?.cycleId ??
+          null
+        }
+      />
       {completeness === "partial" ? (
         <aside className="movement-partial-warning" role="status">
           <div>
@@ -1475,6 +1671,7 @@ export function MovementsBrowser({
         resolvedInvoice={resolvedOpenInvoice}
       />
       <MovementFiltersForm
+        key={buildMovementQueryKey(filters)}
         filters={filters}
         accounts={accounts}
         cards={cards}
@@ -1496,12 +1693,15 @@ export function MovementsBrowser({
         <header>
           <div>
             <h2>{filters.type === "card" && selectedCycle
-              ? selectedCycle.isCurrent
-                ? "Fatura atual"
-                : `Fatura de ${selectedCycle.label.toLocaleLowerCase("pt-BR")}`
+              ? `Fatura de ${cycleMonthLabel(selectedCycle).toLocaleLowerCase("pt-BR")}`
               : "Histórico"}</h2>
             <p>{filters.type === "card" && selectedCycle
-              ? `${formatShortDate(selectedCycle.cycleStartDate)} a ${formatShortDate(selectedCycle.cycleEndDate)}`
+              ? [
+                selectedCycle.dueDate
+                  ? `Vence ${formatShortDate(selectedCycle.dueDate)}`
+                  : null,
+                `${formatShortDate(selectedCycle.cycleStartDate)} a ${formatShortDate(selectedCycle.cycleEndDate)}`,
+              ].filter(Boolean).join(" · ")
               : `${totalCount} movimentações no período selecionado`}</p>
           </div>
           {summary.reviewPendingCount ? (
@@ -1512,15 +1712,44 @@ export function MovementsBrowser({
         </header>
         {!items.length ? (
           <div className="movement-empty-state">
-            <h3>Nenhuma movimentação encontrada</h3>
-            <p>{filters.type === "card"
-              ? "Ajuste os filtros ou selecione outra fatura."
-              : "Ajuste os filtros ou selecione outro período."}</p>
-            <div><Link href="/financeiro/movimentacoes">Limpar filtros</Link>
-              {filters.type === "card"
-                ? <Link href="/financeiro/cartoes/importar-fatura">Importar fatura</Link>
-                : <Link href="/financeiro/movimentacoes?type=bank&period=this-month">Ver este mês</Link>}</div>
+            {statementNeedsPdf && selectedCycle ? (
+              <>
+                <h3>Envie o PDF para gerar as movimentações desta fatura</h3>
+                <p>
+                  {selectedCycle.officialTotal === null
+                    ? "A Pluggy ainda não enviou o valor oficial de fechamento desta fatura. "
+                    : "O valor total oficial da Pluggy continua sendo exibido. "}
+                  O detalhamento será gerado somente a partir do PDF fechado
+                  que você enviar.
+                </p>
+                <div>
+                  <Link
+                    className="finance-button"
+                    href={`/financeiro/cartoes/importar-fatura?statement=${selectedCycle.cycleId}`}
+                    prefetch={false}
+                  >
+                    Enviar PDF desta fatura
+                  </Link>
+                  <Link href="/financeiro/cartoes" prefetch={false}>
+                    Ver faturas
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>Nenhuma movimentação encontrada</h3>
+                <p>{filters.type === "card"
+                  ? "Ajuste os filtros ou selecione outra fatura."
+                  : "Ajuste os filtros ou selecione outro período."}</p>
+                <div><Link href="/financeiro/movimentacoes">Limpar filtros</Link>
+                  {filters.type === "card"
+                    ? <Link href="/financeiro/cartoes/importar-fatura">Importar fatura</Link>
+                    : <Link href="/financeiro/movimentacoes?type=bank&period=this-month">Ver este mês</Link>}</div>
+              </>
+            )}
           </div>
+        ) : filters.type === "card" ? (
+          <CardMovementsSections items={items} onOpen={openDrawer} />
         ) : (
           <div className="movement-list-compact">
             {Object.entries(groups).map(([date, group]) => {
@@ -1555,11 +1784,13 @@ export function MovementsBrowser({
             })}
           </div>
         )}
-        {totalCount ? <footer className="movement-pagination">
-          <p>Exibindo {Math.min(page * pageSize, totalCount)} de {totalCount} movimentações</p>
+        {paginationTotalCount ? <footer className="movement-pagination">
+          <p>{filters.type === "card"
+            ? <>Exibindo {Math.min(page * pageSize, paginationTotalCount)} de {paginationTotalCount} compras do per&iacute;odo</>
+            : <>Exibindo {Math.min(page * pageSize, paginationTotalCount)} de {paginationTotalCount} movimenta&ccedil;&otilde;es</>}</p>
           <nav aria-label="Paginação de movimentações">
             {page > 1 ? <Link href={queryHref(filters, { page: String(page - 1) })}>Anterior</Link> : null}
-            {page * pageSize < totalCount
+            {page * pageSize < paginationTotalCount
               ? <Link href={queryHref(filters, { page: String(page + 1) })}>Próxima</Link>
               : null}
           </nav>
