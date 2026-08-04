@@ -24,6 +24,9 @@ function initialNotice(error: string | null) {
     return "Este link expirou ou não é válido. Solicite novas instruções.";
   }
   if (error === "invalid_credentials") return "E-mail ou senha incorretos.";
+  if (error === "email_not_confirmed") {
+    return "Seu e-mail ainda não foi confirmado. Abra a mensagem de confirmação enviada pelo Atlas ou recupere o acesso.";
+  }
   if (error === "rate_limited") {
     return "Muitas tentativas. Aguarde um momento e tente novamente.";
   }

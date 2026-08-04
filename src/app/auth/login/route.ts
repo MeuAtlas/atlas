@@ -40,10 +40,11 @@ export async function POST(request: NextRequest) {
       normalizedError.includes("rate limit") ||
       normalizedError.includes("too many")
         ? "rate_limited"
-        : normalizedError.includes("invalid_credentials") ||
-            normalizedError.includes("invalid login credentials") ||
-            normalizedError.includes("email_not_confirmed") ||
+        : normalizedError.includes("email_not_confirmed") ||
             normalizedError.includes("email not confirmed")
+          ? "email_not_confirmed"
+          : normalizedError.includes("invalid_credentials") ||
+              normalizedError.includes("invalid login credentials")
           ? "invalid_credentials"
           : "unavailable";
 

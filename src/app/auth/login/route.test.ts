@@ -20,6 +20,8 @@ test("login redirects relatively with 303 and never exposes the provider error",
   assert.match(route, /headers: \{ Location: path \}/);
   assert.doesNotMatch(route, /new URL\([^\n]*request\.url/);
   assert.match(route, /"invalid_credentials"/);
+  assert.match(route, /"email_not_confirmed"/);
+  assert.match(loginCard, /Seu e-mail ainda não foi confirmado/);
   assert.match(route, /"rate_limited"/);
   assert.match(route, /"unavailable"/);
   assert.doesNotMatch(route, /error\.message[^\n]*searchParams/);
