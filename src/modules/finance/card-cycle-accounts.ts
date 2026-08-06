@@ -17,19 +17,16 @@ export type CardCycleAccountResolution = {
   cardIds: string[];
   instrumentIds: string[];
   instrumentLastFours: string[];
-  resolutionSource: "primary_card";
+  resolutionSource: "primary_card" | "open_projection_active_cards";
 };
 
-export function resolveCardCycleAccountIds(
+function buildCardCycleAccountResolution(
   primaryCardId: string,
   cards: CardCycleAccountCandidate[],
+  resolved: CardCycleAccountCandidate[],
+  resolutionSource: CardCycleAccountResolution["resolutionSource"],
 ): CardCycleAccountResolution {
   const primary = cards.find(card => card.id === primaryCardId);
-  // A Pluggy Item/connection can expose multiple independent CREDIT accounts
-  // (for example, one Mastercard and one Visa). Sharing a connection does not
-  // mean sharing a bill. Additional and virtual cards belonging to the same
-  // bill are already represented as instruments of the primary credit account.
-  const resolved = [primary ?? { id: primaryCardId }];
   const cardIds = [...new Set(resolved.map(card => card.id))];
   const providerAccountIds = [...new Set(
     resolved
@@ -49,8 +46,52 @@ export function resolveCardCycleAccountIds(
         .map(instrument => instrument.last_four_digits)
         .filter((value): value is string => Boolean(value)),
     )],
-    resolutionSource: "primary_card",
+    resolutionSource,
   };
+}
+
+export function resolveCardCycleAccountIds(
+  primaryCardId: string,
+  cards: CardCycleAccountCandidate[],
+): CardCycleAccountResolution {
+  const primary = cards.find(card => card.id === primaryCardId);
+  // A Pluggy Item/connection can expose multiple independent CREDIT accounts
+  // (for example, one Mastercard and one Visa). Sharing a connection does not
+  // mean sharing a bill. Additional and virtual cards belonging to the same
+  // bill are already represented as instruments of the primary credit account.
+  const resolved = [primary ?? { id: primaryCardId }];
+  return buildCardCycleAccountResolution(
+    primaryCardId,
+    cards,
+    resolved,
+    "primary_card",
+  );
+}
+
+/**
+ * The open invoice screen is a consolidated projection of every non-archived
+ * credit card synchronized for the user. Visa and Mastercard can arrive
+ * through different Pluggy connections, and a provider status can lag behind
+ * an already-created open bill, so neither condition must limit this view.
+ * Historical and closed statements keep using resolveCardCycleAccountIds so
+ * their PDF details remain card-specific.
+ */
+export function resolveOpenProjectionCardAccountIds(
+  primaryCardId: string,
+  cards: CardCycleAccountCandidate[],
+): CardCycleAccountResolution {
+  const primary = cards.find(card => card.id === primaryCardId);
+  const resolved = cards.filter(card =>
+    card.status !== "archived" && !card.user_archived_at);
+  const withPrimary = resolved.some(card => card.id === primaryCardId)
+    ? resolved
+    : [primary ?? { id: primaryCardId }, ...resolved];
+  return buildCardCycleAccountResolution(
+    primaryCardId,
+    cards,
+    withPrimary,
+    "open_projection_active_cards",
+  );
 }
 
 export function resolveCycleCompetenceMonth(cycle: {

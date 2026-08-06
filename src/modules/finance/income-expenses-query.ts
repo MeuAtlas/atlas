@@ -26,6 +26,8 @@ export type IncomeExpenseListItem = {
   personId: string | null;
   title: string;
   description: string | null;
+  merchantMatchPattern?: string | null;
+  amountType?: "fixed" | "variable" | "estimated";
   direction: "income" | "expense";
   recurrenceFrequency: string;
   expectedDateDay: number | null;
@@ -78,6 +80,7 @@ type CommitmentRow = {
   id: string;
   title: string;
   description: string | null;
+  merchant_match_pattern: string | null;
   cash_flow_direction: string | null;
   recurrence_frequency: string | null;
   estimation_method: string | null;
@@ -86,6 +89,7 @@ type CommitmentRow = {
   budget_priority: string | null;
   status: string;
   expected_amount: number | null;
+  amount_type: string | null;
   historical_median_amount: number | null;
   historical_average_amount: number | null;
   historical_months_count: number | null;
@@ -169,6 +173,7 @@ export async function getIncomeExpenseOverview(
         "id",
         "title",
         "description",
+        "merchant_match_pattern",
         "cash_flow_direction",
         "recurrence_frequency",
         "estimation_method",
@@ -177,6 +182,7 @@ export async function getIncomeExpenseOverview(
         "budget_priority",
         "status",
         "expected_amount",
+        "amount_type",
         "historical_median_amount",
         "historical_average_amount",
         "historical_months_count",
@@ -270,6 +276,9 @@ export async function getIncomeExpenseOverview(
     const realizedAmountCents = direction === "income"
       ? cents(occurrence?.received_amount ?? occurrence?.actual_amount)
       : cents(occurrence?.paid_amount ?? occurrence?.actual_amount);
+    const amountType = String(row.amount_type ?? "fixed") as
+      IncomeExpenseListItem["amountType"];
+    const occurrenceStatus = String(occurrence?.status ?? "projected");
     const linkedTransaction = occurrence?.linked_transaction_id
       ? linkedTransactionById.get(occurrence.linked_transaction_id)
       : null;
@@ -287,6 +296,9 @@ export async function getIncomeExpenseOverview(
         ?.person_id ?? row.commitment_people?.[0]?.person_id ?? null,
       title: String(row.title),
       description: row.description ? String(row.description) : null,
+      merchantMatchPattern: row.merchant_match_pattern
+        ? String(row.merchant_match_pattern)
+        : null,
       direction,
       recurrenceFrequency: String(row.recurrence_frequency ?? "none"),
       expectedDateDay: row.expected_date_day == null
@@ -302,9 +314,10 @@ export async function getIncomeExpenseOverview(
         IncomeExpenseListItem["budgetPriority"],
       status: String(row.status),
       expectedAmountCents,
+      amountType,
       realizedAmountCents,
       differenceCents: realizedAmountCents - expectedAmountCents,
-      occurrenceStatus: String(occurrence?.status ?? "projected"),
+      occurrenceStatus,
       competenceMonth: String(occurrence?.competence_month ?? month),
       expectedDate: occurrence?.expected_due_date
         ? String(occurrence.expected_due_date)
@@ -342,7 +355,10 @@ export async function getIncomeExpenseOverview(
   });
   const incomes = items.filter(item => item.direction === "income");
   const allExpenses = items.filter(item => item.direction === "expense");
-  const expenses = allExpenses.filter(item => !item.isPayrollDeduction);
+  const cashExpenses = allExpenses.filter(item => !item.isPayrollDeduction);
+  // The Expenses tab lists every registered expense. Payroll deductions are
+  // excluded only from cash totals, so the salary is never counted twice.
+  const expenses = allExpenses;
   const impact = calculateFinancialImpactSummary(items.map(item => ({
     incomeBasis: item.incomeBasis,
     cashFlowEffect: item.cashFlowEffect,
@@ -385,7 +401,7 @@ export async function getIncomeExpenseOverview(
     dashboard: getIncomeExpenseDashboard({
       month,
       incomes,
-      expenses,
+      expenses: cashExpenses,
       payrollDeductions,
     }),
   };

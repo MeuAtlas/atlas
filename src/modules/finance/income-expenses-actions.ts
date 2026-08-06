@@ -576,7 +576,7 @@ export async function linkTransactionToIncomeOccurrence(
         .eq("id", occurrenceId)
         .single(),
       context.supabase.from("financial_transactions")
-        .select("id,owner_id,workspace_id,amount,bank_direction,transaction_type")
+        .select("id,owner_id,workspace_id,amount,description,account_id,bank_direction,transaction_type")
         .eq("id", transactionId)
         .eq("owner_id", context.userId)
         .single(),
@@ -628,6 +628,19 @@ export async function linkTransactionToIncomeOccurrence(
       competenceMonth: String(occurrence.data.competence_month),
       today: new Date().toISOString().slice(0, 10),
     });
+    if (data.get("save_income_reference_rule") === "on") {
+      const matchMode = data.get("income_reference_match_mode") === "origin_only"
+        ? "origin_only"
+        : "origin_and_amount";
+      await context.supabase.from("financial_commitments").update({
+        auto_match_enabled: true,
+        merchant_match_pattern: String(row.description ?? "").trim() || null,
+        account_id: row.account_id ?? null,
+        auto_match_amount_exact: matchMode === "origin_and_amount",
+        updated_at: new Date().toISOString(),
+      }).eq("workspace_id", context.workspaceId)
+        .eq("id", occurrence.data.commitment_id);
+    }
     invalidateCommitmentsCache(context.workspaceId, {
       month: String(occurrence.data.competence_month).slice(0, 7),
     });
@@ -662,6 +675,19 @@ export async function unlinkTransactionFromIncomeOccurrence(
       .eq("transaction_id", transactionId);
     if (removed.error) {
       throw new Error("Não foi possível remover o vínculo.");
+    }
+    const cleared = await context.supabase
+      .from("financial_commitment_occurrences")
+      .update({
+        linked_transaction_id: null,
+        match_source: null,
+        match_confidence: null,
+        payment_date: null,
+      })
+      .eq("workspace_id", context.workspaceId)
+      .eq("id", occurrenceId);
+    if (cleared.error) {
+      throw new Error("O vínculo foi removido, mas a competência não pôde ser liberada.");
     }
     await recalculateOccurrenceTotals(context.supabase, {
       workspaceId: context.workspaceId,
@@ -871,6 +897,14 @@ export async function updateExpenseDefinition(
     const month = z.string().regex(/^\d{4}-\d{2}$/).parse(data.get("month"));
     const title = z.string().trim().min(1).max(160).parse(data.get("title"));
     const descriptionText = String(data.get("description") ?? "").trim();
+    const merchantMatchPattern = String(
+      data.get("merchant_match_pattern") ?? "",
+    ).trim();
+    if (merchantMatchPattern.length > 160) {
+      return failedFormResult(
+        "O nome exibido pelo banco pode ter no máximo 160 caracteres.",
+      );
+    }
     const amountCents = parseBrazilianMoneyToCents(
       String(data.get("amount") ?? ""),
     );
@@ -880,10 +914,16 @@ export async function updateExpenseDefinition(
     const paymentMethod = expensePaymentMethodSchema.parse(
       data.get("payment_method"),
     );
+    const amountType = z.enum(["fixed", "variable"]).parse(
+      data.get("amount_type") || "fixed",
+    );
     const categoryId = optionalUuid(data.get("category_id"));
     const personId = optionalUuid(data.get("person_id"));
     const selectedAccountId = optionalUuid(data.get("account_id"));
     const selectedCardId = optionalUuid(data.get("card_id"));
+    const referenceTransactionId = optionalUuid(
+      data.get("reference_transaction_id"),
+    );
     const accountId = paymentMethod === "credit_card" ||
         paymentMethod === "payroll"
       ? null
@@ -899,6 +939,23 @@ export async function updateExpenseDefinition(
     const context = await getActiveFinanceWorkspaceContext(
       requestedWorkspaceId,
     );
+    const referenceTransaction = referenceTransactionId
+      ? await context.supabase.from("financial_transactions")
+        .select("id,description,owner_id,workspace_id")
+        .eq("id", referenceTransactionId)
+        .eq("owner_id", context.userId)
+        .maybeSingle()
+      : null;
+    if (referenceTransaction?.error ||
+      (referenceTransactionId && !referenceTransaction?.data)) {
+      return failedFormResult("O pagamento selecionado não foi encontrado.");
+    }
+    if (referenceTransaction?.data?.workspace_id &&
+      referenceTransaction.data.workspace_id !== context.workspaceId) {
+      return failedFormResult("O pagamento selecionado pertence a outro espaço.");
+    }
+    const recognizedDescription = referenceTransaction?.data?.description?.trim() ||
+      merchantMatchPattern || null;
     const current = await context.supabase.from("financial_commitments")
       .select("id,commitment_type,recurrence_frequency")
       .eq("workspace_id", context.workspaceId)
@@ -920,7 +977,10 @@ export async function updateExpenseDefinition(
       .update({
         title,
         description: descriptionText || null,
+        merchant_match_pattern: recognizedDescription,
+        auto_match_enabled: true,
         expected_amount: amountCents / 100,
+        amount_type: amountType,
         category_id: categoryId,
         account_id: accountId,
         card_id: cardId,
@@ -1011,6 +1071,32 @@ export async function updateExpenseDefinition(
         .eq("id", String(occurrence.id));
       if (occurrenceUpdate.error) {
         throw new Error("A despesa foi atualizada, mas uma competência não pôde ser ajustada.");
+      }
+      const recalculated = await context.supabase.rpc(
+        "recalculate_financial_occurrence_payments",
+        { p_occurrence_id: String(occurrence.id) },
+      );
+      if (recalculated.error) {
+        throw new Error("A despesa foi atualizada, mas o pagamento desta competência não pôde ser recalculado.");
+      }
+    }
+    if (referenceTransactionId) {
+      const target = (occurrences.data ?? []).find(occurrence =>
+        String(occurrence.competence_month).slice(0, 7) === month,
+      );
+      if (target) {
+        const linked = await context.supabase.rpc(
+          "link_financial_transaction_to_occurrence",
+          {
+            p_workspace_id: context.workspaceId,
+            p_occurrence_id: String(target.id),
+            p_transaction_id: referenceTransactionId,
+            p_replace_existing: false,
+          },
+        );
+        if (linked.error) {
+          throw new Error("A despesa foi salva, mas o pagamento selecionado não pôde ser vinculado.");
+        }
       }
     }
     if (paymentMethod === "credit_card") {

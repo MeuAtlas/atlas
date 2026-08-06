@@ -1,4 +1,4 @@
-begin;
+  begin;
 
 create or replace function public.validate_expense_establishment_scope()
 returns trigger language plpgsql security invoker set search_path = ''

@@ -278,6 +278,30 @@ test("integração: ciclo aberto usa somente compras atuais da Pluggy", async ()
       credit_cards: { name: "Cartão", institution_name: "Banco", last_four_digits: "5718" },
       credit_card_instruments: { display_name: "Principal", last_four_digits: "5718", card_kind: "physical" },
     }, {
+      id: "pluggy-mastercard-open",
+      card_id: "mastercard-account",
+      instrument_id: "instrument-mastercard",
+      external_id: "provider-mastercard-open",
+      invoice_id: null,
+      description: "Compra Mastercard",
+      total_amount: 50,
+      installment_amount: 50,
+      installment_number: 1,
+      installment_count: 1,
+      purchase_date: "2026-07-22",
+      competence_date: "2026-07-22",
+      source: "pluggy",
+      source_type: "card",
+      financial_origin: "credit_card",
+      transaction_role: "consumption",
+      status: "realized",
+      review_status: "reviewed",
+      provider_category: null,
+      merchant: "COMPRA MASTERCARD",
+      category_id: null,
+      credit_cards: { name: "Mastercard", institution_name: "Banco", last_four_digits: "5718" },
+      credit_card_instruments: { display_name: "Mastercard", last_four_digits: "5718", card_kind: "physical" },
+    }, {
       id: "pdf-open-legacy",
       card_id: "card-account",
       external_id: "pdf-legacy",
@@ -296,12 +320,23 @@ test("integração: ciclo aberto usa somente compras atuais da Pluggy", async ()
     }]),
     credit_cards: result([{
       id: "card-account",
-      name: "Cartão",
+      name: "Visa",
+      bank_connection_id: "connection-1",
       status: "active",
       credit_card_instruments: [{
         id: "instrument-main",
+        last_four_digits: "5896",
+        display_name: "Visa",
+      }],
+    }, {
+      id: "mastercard-account",
+      name: "Mastercard",
+      bank_connection_id: "connection-1",
+      status: "active",
+      credit_card_instruments: [{
+        id: "instrument-mastercard",
         last_four_digits: "5718",
-        display_name: "Principal",
+        display_name: "Mastercard",
       }],
     }]),
     financial_categories: result([]),
@@ -348,17 +383,17 @@ test("integração: ciclo aberto usa somente compras atuais da Pluggy", async ()
       cycleId: "cycle-open",
     },
   );
-  assert.equal(data.cardPurchases.length, 2);
+  assert.equal(data.cardPurchases.length, 3);
   assert.deepEqual(
     data.cardPurchases.map(item => item.source).sort(),
-    ["pluggy", "pluggy"],
+    ["pluggy", "pluggy", "pluggy"],
   );
   assert.equal(
     data.cardPurchases.reduce(
       (sum, item) => sum + Number(item.installment_amount),
       0,
     ),
-    285,
+    335,
   );
   assert.ok(data.cardPurchases.every(item => item.description !== "Pagamento de fatura"));
   assert.ok(data.cardPurchases.every(item => item.invoice_id === null));
@@ -366,6 +401,14 @@ test("integração: ciclo aberto usa somente compras atuais da Pluggy", async ()
   assert.ok(data.cardPurchases.every(item => item.description !== "Parcela antiga 07/10"));
   assert.ok(!calls.some(call => call.table === "card_installment_occurrences"));
   const cardCalls = calls.filter(call => call.table === "card_purchases");
+  assert.ok(cardCalls.some(call =>
+    call.method === "in" &&
+    call.args[0] === "card_id" &&
+    JSON.stringify(call.args[1]) === JSON.stringify([
+      "card-account",
+      "mastercard-account",
+    ])
+  ));
   assert.ok(cardCalls.some(call =>
     call.method === "eq" &&
     call.args[0] === "invoice_id" &&

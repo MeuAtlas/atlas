@@ -15,6 +15,7 @@ import {
   AtlasModalHeader,
 } from "@/components/ui/atlas-modal";
 import { SimpleCommitmentModal } from "@/components/finance/commitments/simple-commitment-modal";
+import { PersonForm } from "@/components/finance/commitments/person-form";
 import { useClientNavigation } from "@/components/navigation/client-navigation";
 import { IncomeExpenseDashboardView } from "./income-expense-dashboard";
 import type { CommitmentsOverview } from "@/modules/finance/commitments-query";
@@ -23,8 +24,18 @@ import type {
   IncomeExpensePageData,
 } from "@/modules/finance/income-expenses-query";
 import {
+  buildExpenseOriginGroups,
+  expensePresentationStatus,
+  openExpenseAmountCents,
+  type ExpenseFilter,
+  type ExpenseOrigin,
+  type ExpensePresentationStatus,
+} from "@/modules/finance/expense-origin";
+import {
   createHistoricalIncome,
   createSimpleIncome,
+  linkTransactionToIncomeOccurrence,
+  unlinkTransactionFromIncomeOccurrence,
   previewHistoricalIncome,
   recognizeExpensePaymentSource,
   setNextIncomeExpectedAmount,
@@ -40,12 +51,14 @@ type ReferenceTransaction = {
   date: string;
   accountName: string;
 };
+type PersonItem = CommitmentsOverview["people"][number];
 type ModalState =
   | "choose"
   | "income"
   | "expense"
   | "payroll"
   | { kind: "details"; item: IncomeExpenseListItem }
+  | { kind: "person"; item?: PersonItem }
   | null;
 
 const money = (cents: number | null) =>
@@ -175,6 +188,7 @@ function FlowList({
                     ? `variável · mediana de ${item.historicalMonthsCount} mês(es)`
                     : item.categoryName ?? contextLabels[item.contextType]}
                 </small>
+                <small className="flow-payment-source">{paymentMethodLabel(item)}</small>
               </span>
               <span><small>Esperado</small><b>{money(item.expectedAmountCents)}</b></span>
               <span>
@@ -197,6 +211,103 @@ function FlowList({
       )}
     </section>
   );
+}
+
+const expenseOriginLabels: Record<ExpenseOrigin, string> = {
+  bank_account: "Conta corrente",
+  credit_card: "Cartão de crédito",
+  payroll: "Holerite",
+  unknown: "Origem não definida",
+};
+
+const expenseStatusLabelsByOrigin: Record<ExpensePresentationStatus, string> = {
+  overdue: "Atrasada",
+  open: "A pagar",
+  partial: "Parcial",
+  paid: "Paga",
+  paid_difference: "Paga com diferença",
+  card_planned: "Prevista",
+  card_posted: "Lançada",
+  payroll_planned: "Previsto em folha",
+  payroll_paid: "Descontado em folha",
+};
+
+const expenseFilters: Array<{ value: ExpenseFilter; label: string }> = [
+  { value: "all", label: "Todas" },
+  { value: "open", label: "Em aberto" },
+  { value: "paid", label: "Pagas" },
+  { value: "overdue", label: "Atrasadas" },
+  { value: "automatic", label: "Automáticas" },
+];
+
+function itemDescription(item: IncomeExpenseListItem) {
+  return [item.personNames[0], item.categoryName].filter(Boolean).join(" · ") ||
+    "Sem pessoa ou categoria";
+}
+
+function ExpenseGroups({
+  items,
+  filter,
+  onFilter,
+  onOpen,
+}: {
+  items: IncomeExpenseListItem[];
+  filter: ExpenseFilter;
+  onFilter: (filter: ExpenseFilter) => void;
+  onOpen: (item: IncomeExpenseListItem) => void;
+}) {
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  });
+  const { summary, groups } = buildExpenseOriginGroups(items, today, filter);
+  const visibleGroups = groups.filter(group => group.origin !== "unknown" ||
+    group.summary.count > 0);
+  const summaryFor = (origin: ExpenseOrigin) =>
+    groups.find(group => group.origin === origin)?.summary ?? {
+      totalCents: 0, paidCents: 0, openCents: 0, count: 0,
+    };
+  const bank = summaryFor("bank_account");
+  const card = summaryFor("credit_card");
+  const payroll = summaryFor("payroll");
+  return <div className="expense-origin-workspace">
+    <section className="expense-origin-summary" aria-label="Resumo das despesas">
+      <article><span>Total do mês</span><strong>{money(summary.totalCents)}</strong><small>{summary.count} {summary.count === 1 ? "compromisso registrado" : "compromissos registrados"}</small></article>
+      <article><span>Conta corrente</span><strong>{money(bank.totalCents)}</strong><small>{money(bank.paidCents)} pago · {money(bank.openCents)} em aberto</small></article>
+      <article><span>Cartão de crédito</span><strong>{money(card.totalCents)}</strong><small>{card.count ? `${card.count} ${card.count === 1 ? "lançamento no cartão" : "lançamentos no cartão"}` : "Sem despesas no cartão"}</small></article>
+      <article><span>Holerite</span><strong>{money(payroll.totalCents)}</strong><small>{money(payroll.paidCents)} descontado · {money(payroll.openCents)} previsto</small></article>
+    </section>
+    <div className="expense-origin-filters" aria-label="Filtrar despesas">
+      {expenseFilters.map(option => <button type="button" key={option.value}
+        className={filter === option.value ? "active" : ""}
+        onClick={() => onFilter(option.value)}>{option.label}</button>)}
+    </div>
+    <div className="expense-origin-groups">
+      {visibleGroups.map(group => <section className={`expense-origin-group ${group.origin}`} key={group.origin}>
+        <header><div><p className="eyebrow">{expenseOriginLabels[group.origin]}</p><h2>{group.items.length} {group.items.length === 1 ? "despesa" : "despesas"}</h2></div><strong>{money(group.summary.totalCents)}</strong></header>
+        {group.origin === "unknown" ? <p className="expense-origin-warning">Alguns registros antigos precisam ter a origem revisada.</p> : null}
+        <div className="expense-origin-table" data-origin={group.origin}>
+          <div className="expense-origin-table-head" aria-hidden="true">
+            <span>Despesa</span>
+            {group.origin === "bank_account" || group.origin === "unknown" ? <><span>Vencimento</span><span>Previsto</span><span>Pago</span><span>Em aberto</span></> : null}
+            {group.origin === "credit_card" ? <><span>Cartão</span><span>Competência</span><span>Valor</span></> : null}
+            {group.origin === "payroll" ? <><span>Competência</span><span>Valor</span></> : null}
+            <span>Status</span>
+          </div>
+          {group.items.length ? group.items.map(item => {
+            const status = expensePresentationStatus(item, today);
+            const open = openExpenseAmountCents(item);
+            return <button type="button" key={item.id} onClick={() => onOpen(item)}>
+              <span className="expense-origin-name"><b>{item.title}</b><small>{itemDescription(item)}</small>{group.origin === "bank_account" ? <em>{paymentMethodLabel(item)}</em> : null}{group.origin === "payroll" ? <em>Já considerado na renda líquida</em> : null}</span>
+              {group.origin === "bank_account" || group.origin === "unknown" ? <><span data-label="Vencimento">{item.expectedDate ? dateLabel(item.expectedDate) : "Sem vencimento"}</span><strong data-label="Previsto">{money(item.expectedAmountCents)}</strong><strong data-label="Pago">{money(item.realizedAmountCents)}</strong><strong data-label="Em aberto">{money(open)}</strong></> : null}
+              {group.origin === "credit_card" ? <><span data-label="Cartão">{item.paymentSourceName ?? "Cartão não disponível"}</span><span data-label="Competência">{monthLabel(item.competenceMonth)}</span><strong data-label="Valor">{money(item.expectedAmountCents)}</strong></> : null}
+              {group.origin === "payroll" ? <><span data-label="Competência">{monthLabel(item.competenceMonth)}</span><strong data-label="Valor">{money(item.realizedAmountCents || item.expectedAmountCents)}</strong></> : null}
+              <span className={`expense-origin-status ${status}`}>{expenseStatusLabelsByOrigin[status]}</span>
+            </button>;
+          }) : <p className="expense-origin-empty">Nenhuma despesa neste filtro.</p>}
+        </div>
+      </section>)}
+    </div>
+  </div>;
 }
 
 function PayrollDeductionsModalContent({ data }: { data: IncomeExpensePageData }) {
@@ -428,6 +539,8 @@ function FlowDetails({
   categories,
   accounts,
   cards,
+  expenseReferenceTransactions,
+  referenceTransactions,
   onSaved,
 }: {
   item: IncomeExpenseListItem;
@@ -437,6 +550,8 @@ function FlowDetails({
   categories: Option[];
   accounts: Option[];
   cards: Option[];
+  expenseReferenceTransactions: ReferenceTransaction[];
+  referenceTransactions: ReferenceTransaction[];
   onSaved: (message: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -475,6 +590,30 @@ function FlowDetails({
       const result = await updateExpenseDefinition(data);
       if (!result.ok) setFeedback(result.message);
       else onSaved(result.message);
+    });
+  };
+  const linkIncomeReference = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    data.set("workspace_id", workspaceId);
+    data.set("occurrence_id", item.occurrenceId ?? "");
+    data.set("direction", "income");
+    startTransition(async () => {
+      const result = await linkTransactionToIncomeOccurrence(data);
+      if (!result.ok) setFeedback(result.message);
+      else onSaved(result.message);
+    });
+  };
+  const changeIncomeReference = () => {
+    if (!item.occurrenceId || !item.linkedTransactionId) return;
+    const data = new FormData();
+    data.set("workspace_id", workspaceId);
+    data.set("occurrence_id", item.occurrenceId);
+    data.set("transaction_id", item.linkedTransactionId);
+    startTransition(async () => {
+      const result = await unlinkTransactionFromIncomeOccurrence(data);
+      if (!result.ok) setFeedback(result.message);
+      else onSaved("Depósito desvinculado. Selecione o depósito correto.");
     });
   };
   const recognizePaymentSource = () => {
@@ -647,6 +786,13 @@ function FlowDetails({
               <input name="amount" defaultValue={money(item.expectedAmountCents)} required />
             </label>
             <label>
+              <span>Tipo de valor</span>
+              <select name="amount_type" defaultValue={item.amountType ?? "fixed"}>
+                <option value="fixed">Fixo</option>
+                <option value="variable">Variável mensal</option>
+              </select>
+            </label>
+            <label>
               <span>Dia de vencimento</span>
               <input name="due_day" type="number" min={1} max={31}
                 defaultValue={item.expectedDateDay ?? ""} />
@@ -698,6 +844,18 @@ function FlowDetails({
               </select>
             </label>
             <label className="wide">
+              <span>Pagamento de referência</span>
+              <select name="reference_transaction_id" defaultValue="">
+                <option value="">Selecionar depois</option>
+                {expenseReferenceTransactions.map(transaction => (
+                  <option key={transaction.id} value={transaction.id}>
+                    {transaction.date} · {transaction.accountName} · {transaction.description} · {money(transaction.amountCents)}
+                  </option>
+                ))}
+              </select>
+              <small>Ao salvar, este pagamento será vinculado e seu destino será usado nos próximos meses.</small>
+            </label>
+            <label className="wide">
               <span>Observação</span>
               <textarea name="description" rows={2}
                 defaultValue={item.description ?? ""} />
@@ -712,6 +870,49 @@ function FlowDetails({
           </form>
         ) : null}
         {item.direction === "income" ? (
+          <>
+          {item.linkedTransactionId ? (
+            <section className="income-override-form" aria-label="Depósito confirmado">
+              <h3>Depósito confirmado</h3>
+              <p>
+                Vinculado a {item.paymentSourceName ?? "uma conta bancária"}
+                {item.paymentDate ? ` em ${dateLabel(item.paymentDate)}` : ""}
+                {` · ${money(item.realizedAmountCents)}`}.
+              </p>
+              <button
+                className="finance-button secondary"
+                type="button"
+                disabled={pending}
+                onClick={changeIncomeReference}
+              >
+                {pending ? "Alterando…" : "Alterar depósito"}
+              </button>
+            </section>
+          ) : (
+            <form className="income-override-form" onSubmit={linkIncomeReference}>
+              <h3>Entrada de referência</h3>
+              <p>Selecione o depósito de {money(item.expectedAmountCents)} para vincular esta competência.</p>
+              <label><span>Depósito</span><select name="transaction_id" defaultValue="">
+                <option value="">Selecionar depois</option>
+                {referenceTransactions.filter(transaction => transaction.amountCents === item.expectedAmountCents).map(transaction => <option key={transaction.id} value={transaction.id}>{transaction.date} · {transaction.accountName} · {transaction.description} · {money(transaction.amountCents)}</option>)}
+              </select></label>
+              <input type="hidden" name="save_income_reference_rule" value="on" />
+              <fieldset className="income-reference-options">
+                <legend>Reconhecimento automático</legend>
+                <div className="income-reference-segmented">
+                  <label>
+                    <input type="radio" name="income_reference_match_mode" value="origin_only" />
+                    <span>Somente origem</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="income_reference_match_mode" value="origin_and_amount" defaultChecked />
+                    <span>Origem e valor</span>
+                  </label>
+                </div>
+              </fieldset>
+              <button className="finance-button" disabled={pending || !item.occurrenceId}>Vincular depósito</button>
+            </form>
+          )}
           <form className="income-override-form" onSubmit={submit}>
             <h3>Informar previsão desta competência</h3>
             <p>Vale somente para {monthLabel(item.competenceMonth)} e não altera a mediana.</p>
@@ -723,6 +924,7 @@ function FlowDetails({
               {pending ? "Salvando…" : "Salvar previsão"}
             </button>
           </form>
+          </>
         ) : null}
       </AtlasModalBody>
     </>
@@ -732,28 +934,33 @@ function FlowDetails({
 export function IncomeExpensesWorkspace({
   data,
   activeTab,
+  expenseFilter,
   workspaces,
   people,
   categories,
   accounts,
   cards,
   referenceTransactions,
+  expenseReferenceTransactions,
 }: {
   data: IncomeExpensePageData;
   activeTab: "overview" | "income" | "expenses" | "people";
+  expenseFilter: ExpenseFilter;
   workspaces: Option[];
   people: CommitmentsOverview["people"];
   categories: Option[];
   accounts: Option[];
   cards: Option[];
   referenceTransactions: ReferenceTransaction[];
+  expenseReferenceTransactions: ReferenceTransaction[];
 }) {
   const router = useRouter();
   const navigate = useClientNavigation();
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState("");
   const month = data.month.slice(0, 7);
-  const query = `workspace=${data.workspaceId}&month=${month}`;
+  const query = `workspace=${data.workspaceId}&month=${month}${expenseFilter === "all" ? "" : `&expense_filter=${expenseFilter}`}`;
+  const expenseFilterQuery = expenseFilter === "all" ? "" : `&expense_filter=${expenseFilter}`;
   const saved = (message: string) => {
     setModal(null);
     setToast(message);
@@ -771,13 +978,13 @@ export function IncomeExpensesWorkspace({
           <label>
             <span>Espaço</span>
             <select value={data.workspaceId} onChange={event =>
-              navigate(`/financeiro/receitas-despesas?workspace=${event.target.value}&month=${month}&tab=${activeTab}`)
+              navigate(`/financeiro/receitas-despesas?workspace=${event.target.value}&month=${month}&tab=${activeTab}${expenseFilterQuery}`)
             }>{workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           </label>
           <label>
             <span>Mês</span>
             <input type="month" value={month} onChange={event =>
-              navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${event.target.value}&tab=${activeTab}`)
+              navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${event.target.value}&tab=${activeTab}${expenseFilterQuery}`)
             } />
           </label>
           <button className="finance-button" onClick={() => setModal("choose")}>Adicionar</button>
@@ -785,15 +992,15 @@ export function IncomeExpensesWorkspace({
       </header>
       {toast ? <p className="income-expense-toast" role="status">{toast}</p> : null}
       <nav className="income-expense-tabs" aria-label="Receitas e Despesas">
-        <Link className={activeTab === "overview" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=overview`}>Visão geral</Link>
-        <Link className={activeTab === "income" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=income`}>Receitas</Link>
-        <Link className={activeTab === "expenses" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=expenses`}>Despesas</Link>
-        <Link className={activeTab === "people" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=people`}>Pessoas e dependentes</Link>
+        <Link prefetch={false} className={activeTab === "overview" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=overview`}>Visão geral</Link>
+        <Link prefetch={false} className={activeTab === "income" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=income`}>Receitas</Link>
+        <Link prefetch={false} className={activeTab === "expenses" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=expenses`}>Despesas</Link>
+        <Link prefetch={false} className={activeTab === "people" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=people`}>Pessoas e dependentes</Link>
       </nav>
       {activeTab === "overview" ? (
         <IncomeExpenseDashboardView
           dashboard={data.dashboard}
-          items={[...data.incomes, ...data.expenses]}
+          items={[...data.incomes, ...data.expenses.filter(item => !item.isPayrollDeduction)]}
           onOpenItem={item => setModal({ kind: "details", item })}
           onOpenPayroll={() => setModal("payroll")}
           query={query}
@@ -802,13 +1009,14 @@ export function IncomeExpensesWorkspace({
         <FlowList title="Receitas" eyebrow="Entradas esperadas e recebidas" items={data.incomes}
           empty="Nenhuma receita cadastrada" onOpen={item => setModal({ kind: "details", item })} />
       ) : activeTab === "expenses" ? (
-        <FlowList title="Despesas" eyebrow="Saídas previstas e pagas" items={data.expenses}
-          empty="Nenhuma despesa cadastrada" onOpen={item => setModal({ kind: "details", item })} />
+        <ExpenseGroups items={data.expenses} filter={expenseFilter}
+          onFilter={filter => navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${month}&tab=expenses${filter === "all" ? "" : `&expense_filter=${filter}`}`)}
+          onOpen={item => setModal({ kind: "details", item })} />
       ) : (
         <section className="finance-panel people-expense-summary">
-          <header><div><p className="eyebrow">Pessoas e dependentes</p><h2>Responsabilidades financeiras</h2></div></header>
+          <header><div><p className="eyebrow">Pessoas e dependentes</p><h2>Responsabilidades financeiras</h2></div><button className="finance-button secondary" onClick={() => setModal({ kind: "person" })}>Nova pessoa</button></header>
           {people.length ? <div className="finance-list">{people.map(item =>
-            <div key={item.person.id}><span><b>{item.person.name}</b><small>{item.person.isDependent ? "Dependente" : "Pessoa vinculada"}</small></span></div>)}</div>
+            <button type="button" className="person-summary-row" key={item.person.id} onClick={() => setModal({ kind: "person", item })}><span><b>{item.person.name}</b><small>{item.person.isDependent ? "Dependente" : "Pessoa vinculada"}</small></span><small>Editar</small></button>)}</div>
             : <div className="commitment-empty"><h3>Nenhuma pessoa cadastrada</h3></div>}
         </section>
       )}
@@ -831,12 +1039,22 @@ export function IncomeExpensesWorkspace({
         title="Composição dos descontos em folha" size="medium">
         <PayrollDeductionsModalContent data={data} />
       </AtlasModal>
+      <AtlasModal open={typeof modal === "object" && modal?.kind === "person"}
+        onClose={() => setModal(null)} title="Pessoa ou dependente" size="medium">
+        {typeof modal === "object" && modal?.kind === "person"
+          ? <PersonForm workspaceId={data.workspaceId} item={modal.item}
+              onClose={() => setModal(null)} onSaved={saved} />
+          : null}
+      </AtlasModal>
       <AtlasModal open={typeof modal === "object" && modal?.kind === "details"}
         onClose={() => setModal(null)} title="Detalhes financeiros" size="large">
         {typeof modal === "object" && modal?.kind === "details"
           ? <FlowDetails item={modal.item} workspaceId={data.workspaceId}
               month={month} people={people} categories={categories}
-              accounts={accounts} cards={cards} onSaved={saved} />
+              accounts={accounts} cards={cards}
+              expenseReferenceTransactions={expenseReferenceTransactions}
+              referenceTransactions={referenceTransactions}
+              onSaved={saved} />
           : null}
       </AtlasModal>
     </div>

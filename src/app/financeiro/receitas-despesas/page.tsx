@@ -16,6 +16,7 @@ export default async function IncomeExpensesPage({
     workspace?: string;
     month?: string;
     tab?: "overview" | "income" | "expenses" | "people";
+    expense_filter?: "all" | "open" | "paid" | "overdue" | "automatic";
   }>;
 }) {
   const params = await searchParams;
@@ -23,11 +24,14 @@ export default async function IncomeExpensesPage({
   const month = /^\d{4}-\d{2}$/.test(params.month ?? "")
     ? params.month!
     : new Date().toISOString().slice(0, 7);
+  const expenseFilter = ["all", "open", "paid", "overdue", "automatic"].includes(
+    params.expense_filter ?? "",
+  ) ? params.expense_filter! : "all";
   await ensureRollingCommitmentOccurrences(context.workspaceId);
   await refreshOccurrenceStatuses(context.supabase, context.workspaceId);
   const from = new Date(`${month}-01T12:00:00Z`);
   from.setUTCMonth(from.getUTCMonth() - 12);
-  const [data, legacyOverview, workspaces, categories, accounts, cards, references] =
+  const [data, legacyOverview, workspaces, categories, accounts, cards, references, expenseReferences] =
     await Promise.all([
       getIncomeExpenseOverview(context.supabase, {
         workspaceId: context.workspaceId,
@@ -61,6 +65,13 @@ export default async function IncomeExpensesPage({
         .or("bank_direction.eq.inflow,transaction_type.eq.income")
         .order("competence_date", { ascending: false })
         .limit(200),
+      context.supabase.from("financial_transactions")
+        .select("id,description,amount,competence_date,workspace_id,owner_id,financial_accounts:financial_accounts!financial_transactions_account_id_fkey(name,institution_name)")
+        .eq("owner_id", context.userId)
+        .gte("competence_date", from.toISOString().slice(0, 10))
+        .eq("bank_direction", "outflow")
+        .order("competence_date", { ascending: false })
+        .limit(200),
     ]);
   const referenceTransactions = (references.data ?? [])
     .filter(item =>
@@ -82,10 +93,23 @@ export default async function IncomeExpensesPage({
         ].filter(Boolean).join(" · ") || "Conta bancária",
       };
     });
+  const expenseReferenceTransactions = (expenseReferences.data ?? [])
+    .filter(item => item.workspace_id === context.workspaceId ||
+      (item.workspace_id === null && item.owner_id === context.userId))
+    .map(item => {
+      const account = Array.isArray(item.financial_accounts)
+        ? item.financial_accounts[0] : item.financial_accounts;
+      return { id: String(item.id), description: String(item.description),
+        amountCents: Math.round(Math.abs(Number(item.amount)) * 100),
+        date: String(item.competence_date),
+        accountName: [account?.institution_name, account?.name]
+          .filter(Boolean).join(" · ") || "Conta bancária" };
+    });
   return (
     <IncomeExpensesWorkspace
       data={data}
       activeTab={params.tab ?? "overview"}
+      expenseFilter={expenseFilter}
       workspaces={(workspaces.data ?? []).map(item => ({
         id: String(item.id),
         name: String(item.name),
@@ -108,6 +132,7 @@ export default async function IncomeExpensesPage({
         }`,
       }))}
       referenceTransactions={referenceTransactions}
+      expenseReferenceTransactions={expenseReferenceTransactions}
     />
   );
 }

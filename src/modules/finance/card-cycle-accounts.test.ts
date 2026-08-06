@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   resolveCardCycleAccountIds,
   resolveCycleCompetenceMonth,
+  resolveOpenProjectionCardAccountIds,
 } from "./card-cycle-accounts";
 
 test("mantém contas Mastercard e Visa independentes na mesma conexão", () => {
@@ -42,6 +43,46 @@ test("mantém contas Mastercard e Visa independentes na mesma conexão", () => {
   assert.deepEqual(result.instrumentIds, ["physical", "additional", "virtual"]);
   assert.deepEqual(result.instrumentLastFours, ["5718", "6579", "5991"]);
   assert.equal(result.resolutionSource, "primary_card");
+});
+
+test("projeção aberta reúne todos os cartões ativos, mesmo em conexões diferentes", () => {
+  const result = resolveOpenProjectionCardAccountIds("visa", [
+    {
+      id: "visa",
+      external_id: "provider-visa",
+      bank_connection_id: "santander",
+      status: "active",
+    },
+    {
+      id: "mastercard",
+      external_id: "provider-master",
+      bank_connection_id: "santander",
+      status: "active",
+      credit_card_instruments: [
+        { id: "master-5718", last_four_digits: "5718" },
+      ],
+    },
+    {
+      id: "archived",
+      bank_connection_id: "santander",
+      status: "archived",
+    },
+    {
+      id: "other-connection",
+      external_id: "provider-other",
+      bank_connection_id: "other",
+      status: "active",
+    },
+  ]);
+
+  assert.deepEqual(result.cardIds, ["visa", "mastercard", "other-connection"]);
+  assert.deepEqual(result.accountIds, [
+    "provider-visa",
+    "provider-master",
+    "provider-other",
+  ]);
+  assert.deepEqual(result.instrumentIds, ["master-5718"]);
+  assert.equal(result.resolutionSource, "open_projection_active_cards");
 });
 
 test("competência usa vencimento e recua para fechamento/referência", () => {

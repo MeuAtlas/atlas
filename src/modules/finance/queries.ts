@@ -36,6 +36,7 @@ import {
 } from "./card-cycle-movements";
 import {
   resolveCardCycleAccountIds,
+  resolveOpenProjectionCardAccountIds,
 } from "./card-cycle-accounts";
 import {
   openInvoiceCacheTag,
@@ -827,6 +828,26 @@ export async function getMovementsData(
   const isClosedWithoutPdf = Boolean(
     selectedCycle && !isOpenCycle && !isPdfCycle,
   );
+  const openProjectionCyclesResult = isOpenCycle
+    ? await supabase
+      .from("card_invoices")
+      .select("card_id,cycle_start_date,cycle_end_date,status,document_id,source")
+      .eq("owner_id", userId)
+      .in("status", ["open", "partial"])
+      .is("document_id", null)
+    : { data: [], error: null };
+  if (openProjectionCyclesResult.error) {
+    throwSupabaseError(
+      openProjectionCyclesResult.error,
+      "getMovementsData.open_projection_cycles",
+      "Não foi possível identificar os cartões da projeção aberta.",
+    );
+  }
+  const openProjectionCardIds = Array.isArray(openProjectionCyclesResult.data)
+    ? openProjectionCyclesResult.data
+      .map(cycle => String(cycle.card_id))
+      .filter(Boolean)
+    : [];
   const cardsResult = await supabase
     .from("credit_cards")
     .select("id,external_id,bank_connection_id,name,institution_name,last_four_digits,status,user_archived_at,credit_card_instruments(id,last_four_digits,display_name,card_kind,user_archived_at)")
@@ -840,13 +861,18 @@ export async function getMovementsData(
     );
   }
   const cycleAccountResolution = selectedCycle
-    ? resolveCardCycleAccountIds(
+    ? (isOpenCycle
+      ? resolveOpenProjectionCardAccountIds
+      : resolveCardCycleAccountIds)(
       selectedCycle.card_id,
       (cardsResult.data ?? []) as unknown as CreditCard[],
     )
     : null;
-  const cycleCardIds =
-    cycleAccountResolution?.cardIds ?? (selectedCycle ? [selectedCycle.card_id] : []);
+  const cycleCardIds = [...new Set([
+    ...(cycleAccountResolution?.cardIds ??
+      (selectedCycle ? [selectedCycle.card_id] : [])),
+    ...openProjectionCardIds,
+  ])];
   const transactionSelect = "id,external_id,description,amount,amount_brl,original_amount,original_currency,original_currency_code,exchange_rate,foreign_iof_amount,conversion_source,converted_at,transaction_type,transaction_role,source_type,financial_origin,cash_flow_kind,bank_direction,financial_nature,financial_role,provider_category,classification_source,classification_confidence,manually_confirmed,manual_override_at,status,competence_date,realized_at,provider_posted_at,bank_posted_at,effective_at,user_effective_at,created_at,source,account_id,credit_card_id,invoice_id,payment_source,transfer_group_id,destination_account_id,category_id,review_status,financial_accounts:financial_accounts!financial_transactions_account_id_fkey(name,institution_name),credit_cards:credit_cards!financial_transactions_credit_card_id_fkey(name,last_four_digits),financial_categories:financial_categories!financial_transactions_category_id_fkey(name)";
   const purchaseSelect = "id,external_id,provider_bill_id,description,total_amount,installment_amount,amount_brl,provider_signed_amount,installment_number,installment_count,purchase_date,posting_date,competence_date,created_at,source,source_type,financial_origin,transaction_role,entry_type,related_foreign_purchase_id,status,review_status,instrument_id,instrument_review_status,provider_category,merchant,currency,original_amount,original_currency_code,exchange_rate,foreign_iof_amount,conversion_source,conversion_confidence,converted_at,provider_metadata,card_id,invoice_id,invoice_reference,bill_forecast_date,category_id,credit_cards:credit_cards!card_purchases_card_id_fkey(name,institution_name,last_four_digits),credit_card_instruments:credit_card_instruments!card_purchases_instrument_id_fkey(display_name,last_four_digits,card_kind),financial_categories:financial_categories!card_purchases_category_id_fkey(name)";
   const emptyResult = Promise.resolve({ data: [], error: null });
@@ -1546,7 +1572,10 @@ export async function resolveOpenCardInvoice(
   const cards = (cardsResult.data ?? []) as unknown as CreditCard[];
   const account = cards.find(card => card.id === cycle.card_id);
   if (!account) return null;
-  const cardIds = resolveCardCycleAccountIds(cycle.card_id, cards).cardIds;
+  const cardIds = resolveOpenProjectionCardAccountIds(
+    cycle.card_id,
+    cards,
+  ).cardIds;
 
   const confirmationsResult = await supabase
     .from("card_invoice_confirmations")

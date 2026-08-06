@@ -31,6 +31,7 @@ import {
   getMovementExpenseEstablishmentContexts,
 } from "@/modules/finance/expense-establishments";
 import { splitCardTransactions } from "@/modules/finance/card-movements-view-model";
+import { resolveOpenProjectionCardAccountIds } from "@/modules/finance/card-cycle-accounts";
 
 const PAGE_SIZE = 40;
 
@@ -46,10 +47,10 @@ export default async function MovementsPage({
   const workspaceId = workspacesResult.data?.find(item =>
     item.id === rawFilters.workspace
   )?.id ?? workspacesResult.data?.[0]?.id ?? null;
-  const cardCycles = await getAvailableCardCycles(supabase, user.id);
-  const filters = normalizeMovementFilterState(rawFilters, cardCycles);
-  const selectedCycle = filters.type === "card"
-    ? cardCycles.find(cycle => cycle.cycleId === filters.cycle) ?? null
+  const availableCardCycles = await getAvailableCardCycles(supabase, user.id);
+  const filters = normalizeMovementFilterState(rawFilters, availableCardCycles);
+  const requestedCycle = filters.type === "card"
+    ? availableCardCycles.find(cycle => cycle.cycleId === filters.cycle) ?? null
     : null;
   const hasIncompatibleCardParams =
     filters.type === "card" &&
@@ -69,10 +70,10 @@ export default async function MovementsPage({
   if (needsCanonicalRedirect) {
     redirect(canonicalPath);
   }
-  const period = selectedCycle
+  const period = requestedCycle
     ? {
-        from: selectedCycle.cycleStartDate,
-        to: selectedCycle.cycleEndDate,
+        from: requestedCycle.cycleStartDate,
+        to: requestedCycle.cycleEndDate,
       }
     : resolveMovementPeriod(filters);
   const data = await getMovementsData(
@@ -81,9 +82,24 @@ export default async function MovementsPage({
     {
       ...period,
       type: filters.type,
-      cycleId: selectedCycle?.cycleId,
+      cycleId: requestedCycle?.cycleId,
     },
   );
+  const cardCycles = availableCardCycles.map(cycle => {
+    if (!["open", "partial"].includes(cycle.status)) return cycle;
+    return {
+      ...cycle,
+      cardIds: [...new Set([
+        ...resolveOpenProjectionCardAccountIds(cycle.cardId, data.cards).cardIds,
+        ...availableCardCycles
+          .filter(other => ["open", "partial"].includes(other.status))
+          .flatMap(other => other.cardIds),
+      ])],
+    };
+  });
+  const selectedCycle = filters.type === "card"
+    ? cardCycles.find(cycle => cycle.cycleId === filters.cycle) ?? null
+    : null;
   const resolvedOpenInvoice = selectedCycle?.status === "open"
     ? await resolveOpenCardInvoice(supabase, user.id, {
         cycleId: selectedCycle.cycleId,
@@ -156,7 +172,7 @@ export default async function MovementsPage({
         : account.name,
     }));
   const activeCards = data.cards
-    .filter(card => card.status === "active" && !card.user_archived_at)
+    .filter(card => card.status !== "archived" && !card.user_archived_at)
     .flatMap(card => {
       const instruments = (card.credit_card_instruments ?? [])
         .filter(instrument => !instrument.user_archived_at)
@@ -179,6 +195,17 @@ export default async function MovementsPage({
           }`,
         }];
     });
+  const displayedCardIds = new Set(activeCards.map(card => card.parentId ?? card.id));
+  for (const cycle of cardCycles) {
+    if (!["open", "partial"].includes(cycle.status) ||
+      displayedCardIds.has(cycle.cardId)) continue;
+    activeCards.push({
+      id: cycle.cardId,
+      parentId: cycle.cardId,
+      name: cycle.cardLabel,
+    });
+    displayedCardIds.add(cycle.cardId);
+  }
   const [peopleResult, occurrenceResult, decisionsResult] = workspaceId
     ? await Promise.all([
         supabase.from("financial_people").select("id,name")
