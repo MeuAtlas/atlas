@@ -18,7 +18,9 @@ import { SimpleCommitmentModal } from "@/components/finance/commitments/simple-c
 import { PersonForm } from "@/components/finance/commitments/person-form";
 import { useClientNavigation } from "@/components/navigation/client-navigation";
 import { IncomeExpenseDashboardView } from "./income-expense-dashboard";
+import { ExpenseEstablishmentsPanel } from "./expense-establishments-panel";
 import type { CommitmentsOverview } from "@/modules/finance/commitments-query";
+import type { EstablishmentAnalysis } from "@/modules/finance/expense-establishment-analysis";
 import type {
   IncomeExpenseListItem,
   IncomeExpensePageData,
@@ -935,6 +937,10 @@ export function IncomeExpensesWorkspace({
   data,
   activeTab,
   expenseFilter,
+  establishmentAnalyses,
+  eventualSearch,
+  eventualOrder,
+  eventualEstablishmentId,
   workspaces,
   people,
   categories,
@@ -944,8 +950,12 @@ export function IncomeExpensesWorkspace({
   expenseReferenceTransactions,
 }: {
   data: IncomeExpensePageData;
-  activeTab: "overview" | "income" | "expenses" | "people";
+  activeTab: "overview" | "income" | "expenses" | "eventual" | "people";
   expenseFilter: ExpenseFilter;
+  establishmentAnalyses: EstablishmentAnalysis[];
+  eventualSearch: string;
+  eventualOrder: "highest" | "lowest" | "count" | "above_median" | "name";
+  eventualEstablishmentId?: string;
   workspaces: Option[];
   people: CommitmentsOverview["people"];
   categories: Option[];
@@ -959,7 +969,10 @@ export function IncomeExpensesWorkspace({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState("");
   const month = data.month.slice(0, 7);
-  const query = `workspace=${data.workspaceId}&month=${month}${expenseFilter === "all" ? "" : `&expense_filter=${expenseFilter}`}`;
+  const eventualQuery = activeTab === "eventual"
+    ? `${eventualSearch ? `&eventual_search=${encodeURIComponent(eventualSearch)}` : ""}${eventualOrder === "highest" ? "" : `&eventual_order=${eventualOrder}`}${eventualEstablishmentId ? `&eventual_establishment=${eventualEstablishmentId}` : ""}`
+    : "";
+  const query = `workspace=${data.workspaceId}&month=${month}${expenseFilter === "all" ? "" : `&expense_filter=${expenseFilter}`}${eventualQuery}`;
   const expenseFilterQuery = expenseFilter === "all" ? "" : `&expense_filter=${expenseFilter}`;
   const saved = (message: string) => {
     setModal(null);
@@ -978,13 +991,13 @@ export function IncomeExpensesWorkspace({
           <label>
             <span>Espaço</span>
             <select value={data.workspaceId} onChange={event =>
-              navigate(`/financeiro/receitas-despesas?workspace=${event.target.value}&month=${month}&tab=${activeTab}${expenseFilterQuery}`)
+              navigate(`/financeiro/receitas-despesas?workspace=${event.target.value}&month=${month}&tab=${activeTab}${expenseFilterQuery}${eventualQuery}`)
             }>{workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           </label>
           <label>
             <span>Mês</span>
             <input type="month" value={month} onChange={event =>
-              navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${event.target.value}&tab=${activeTab}${expenseFilterQuery}`)
+              navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${event.target.value}&tab=${activeTab}${expenseFilterQuery}${eventualQuery}`)
             } />
           </label>
           <button className="finance-button" onClick={() => setModal("choose")}>Adicionar</button>
@@ -995,6 +1008,7 @@ export function IncomeExpensesWorkspace({
         <Link prefetch={false} className={activeTab === "overview" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=overview`}>Visão geral</Link>
         <Link prefetch={false} className={activeTab === "income" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=income`}>Receitas</Link>
         <Link prefetch={false} className={activeTab === "expenses" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=expenses`}>Despesas</Link>
+        <Link prefetch={false} className={activeTab === "eventual" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=eventual`}>Despesas eventuais</Link>
         <Link prefetch={false} className={activeTab === "people" ? "active" : ""} href={`/financeiro/receitas-despesas?${query}&tab=people`}>Pessoas e dependentes</Link>
       </nav>
       {activeTab === "overview" ? (
@@ -1012,6 +1026,10 @@ export function IncomeExpensesWorkspace({
         <ExpenseGroups items={data.expenses} filter={expenseFilter}
           onFilter={filter => navigate(`/financeiro/receitas-despesas?workspace=${data.workspaceId}&month=${month}&tab=expenses${filter === "all" ? "" : `&expense_filter=${filter}`}`)}
           onOpen={item => setModal({ kind: "details", item })} />
+      ) : activeTab === "eventual" ? (
+        <ExpenseEstablishmentsPanel items={establishmentAnalyses} workspaceId={data.workspaceId}
+          month={month} search={eventualSearch} order={eventualOrder}
+          selectedId={eventualEstablishmentId} />
       ) : (
         <section className="finance-panel people-expense-summary">
           <header><div><p className="eyebrow">Pessoas e dependentes</p><h2>Responsabilidades financeiras</h2></div><button className="finance-button secondary" onClick={() => setModal({ kind: "person" })}>Nova pessoa</button></header>

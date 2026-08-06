@@ -7,6 +7,7 @@ import {
   refreshOccurrenceStatuses,
 } from "@/modules/finance/commitments-query";
 import { getIncomeExpenseOverview } from "@/modules/finance/income-expenses-query";
+import { getExpenseEstablishmentAnalyses } from "@/modules/finance/expense-establishment-query";
 import { getActiveFinanceWorkspaceContext } from "@/modules/finance/workspace-context";
 
 export default async function IncomeExpensesPage({
@@ -15,8 +16,11 @@ export default async function IncomeExpensesPage({
   searchParams: Promise<{
     workspace?: string;
     month?: string;
-    tab?: "overview" | "income" | "expenses" | "people";
+    tab?: "overview" | "income" | "expenses" | "eventual" | "people";
     expense_filter?: "all" | "open" | "paid" | "overdue" | "automatic";
+    eventual_search?: string;
+    eventual_order?: "highest" | "lowest" | "count" | "above_median" | "name";
+    eventual_establishment?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -31,12 +35,15 @@ export default async function IncomeExpensesPage({
   await refreshOccurrenceStatuses(context.supabase, context.workspaceId);
   const from = new Date(`${month}-01T12:00:00Z`);
   from.setUTCMonth(from.getUTCMonth() - 12);
-  const [data, legacyOverview, workspaces, categories, accounts, cards, references, expenseReferences] =
+  const [data, establishmentAnalyses, legacyOverview, workspaces, categories, accounts, cards, references, expenseReferences] =
     await Promise.all([
       getIncomeExpenseOverview(context.supabase, {
         workspaceId: context.workspaceId,
         month,
       }),
+      params.tab === "eventual"
+        ? getExpenseEstablishmentAnalyses(context.supabase, context.workspaceId, month)
+        : Promise.resolve([]),
       getCommitmentsOverview(context.supabase, context.userId, {
         workspaceId: context.workspaceId,
         month,
@@ -110,6 +117,10 @@ export default async function IncomeExpensesPage({
       data={data}
       activeTab={params.tab ?? "overview"}
       expenseFilter={expenseFilter}
+      establishmentAnalyses={establishmentAnalyses}
+      eventualSearch={params.eventual_search?.slice(0, 120) ?? ""}
+      eventualOrder={params.eventual_order ?? "highest"}
+      eventualEstablishmentId={params.eventual_establishment}
       workspaces={(workspaces.data ?? []).map(item => ({
         id: String(item.id),
         name: String(item.name),

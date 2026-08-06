@@ -155,11 +155,21 @@ export default async function MovementsPage({
     : filtered.slice(offset, offset + PAGE_SIZE);
   const transactionItemIds = items
     .filter(item => item.sourceKind === "transaction").map(item => item.id);
+  const cardPurchaseItemIds = items
+    .filter(item => item.sourceKind === "card_purchase" && !item.id.startsWith("invoice-entry:"))
+    .map(item => item.id);
+  const invoiceEntryItemIds = items
+    .filter(item => item.sourceKind === "card_purchase" && item.id.startsWith("invoice-entry:"))
+    .map(item => item.id.replace("invoice-entry:", ""));
   const [personContexts, establishmentContexts] = workspaceId
     ? await Promise.all([
         getMovementPersonContexts(supabase, workspaceId, transactionItemIds),
         getMovementExpenseEstablishmentContexts(
-          supabase, workspaceId, transactionItemIds,
+          supabase, workspaceId, {
+            transactionIds: transactionItemIds,
+            cardPurchaseIds: cardPurchaseItemIds,
+            invoiceEntryIds: invoiceEntryItemIds,
+          },
         ),
       ])
     : [{}, {}];

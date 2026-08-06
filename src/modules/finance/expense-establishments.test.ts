@@ -49,7 +49,7 @@ test("drawer cria estabelecimento a partir do PIX sem exigir recorrência", () =
     "utf8",
   );
   assert.match(browser, /Associar estabelecimento/);
-  assert.match(browser, /Diária de referência/);
+  assert.doesNotMatch(browser, /Diária de referência/);
   assert.match(browser, /apply_to_history/);
   assert.match(browser, /Meses sem pagamento entram como zero na mediana/);
   assert.match(actions, /extractCounterpartyFingerprint/);

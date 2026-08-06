@@ -1121,9 +1121,11 @@ function MovementDetailsDrawer({
           <div><dt>Transferência vinculada</dt><dd>{item.transferLinked ? "Sim" : "Não"}</dd></div>
           <div><dt>Última alteração</dt><dd>{item.updatedAt ? formatShortDate(item.updatedAt.slice(0, 10)) : "Não informada"}</dd></div>
         </dl>
-        {workspaceId && item.sourceKind === "transaction" &&
-        item.direction === "outflow" &&
-        (item.financialNature === "pix_sent" || /\bPIX\b/i.test(item.originalDescription)) ? (
+        {workspaceId && (
+          (item.sourceKind === "transaction" && item.direction === "outflow" &&
+            item.consumptionEffect === "expense" && !item.isInvoicePayment) ||
+          (item.sourceKind === "card_purchase" && item.transactionRole === "consumption")
+        ) ? (
           <section className="movement-establishment">
             <header><div><small>DESPESA EVENTUAL</small><h3>Estabelecimento</h3></div></header>
             {establishmentContext ? (
@@ -1138,9 +1140,7 @@ function MovementDetailsDrawer({
                 </div>
                 <p>
                   {establishmentContext.paymentCount} pagamento(s) em {establishmentContext.observedMonths} mês(es) observado(s)
-                  {establishmentContext.referenceDailyAmount
-                    ? <> · diária de referência <Money value={establishmentContext.referenceDailyAmount} /></>
-                    : null}.
+                  .
                 </p>
                 <form action={async formData => {
                   setEstablishmentFeedback(null);
@@ -1153,7 +1153,8 @@ function MovementDetailsDrawer({
                   });
                 }}>
                   <input type="hidden" name="workspace_id" value={workspaceId} />
-                  <input type="hidden" name="transaction_id" value={item.id} />
+                  <input type="hidden" name="source_kind" value={item.id.startsWith("invoice-entry:") ? "invoice_entry" : item.sourceKind} />
+                  <input type="hidden" name="source_id" value={item.id.replace("invoice-entry:", "")} />
                   <button type="submit" className="movement-establishment-unlink" disabled={isEstablishmentPending}>
                     Remover desta movimentação
                   </button>
@@ -1173,16 +1174,16 @@ function MovementDetailsDrawer({
                   });
                 }}>
                   <input type="hidden" name="workspace_id" value={workspaceId} />
-                  <input type="hidden" name="transaction_id" value={item.id} />
+                  <input type="hidden" name="source_kind" value={item.id.startsWith("invoice-entry:") ? "invoice_entry" : item.sourceKind} />
+                  <input type="hidden" name="source_id" value={item.id.replace("invoice-entry:", "")} />
                   <label><span>Nome</span><input name="name" defaultValue={item.description} required maxLength={160} /></label>
                   <label><span>Categoria</span><select name="category_id" defaultValue={item.categoryId ?? ""}>
                     <option value="">Sem categoria</option>
                     {categories.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
                   </select></label>
-                  <label><span>Diária de referência</span><div className="movement-establishment-money"><i>R$</i><input name="reference_daily_amount" inputMode="decimal" placeholder="85,00" /></div></label>
-                  <label className="movement-check"><input type="checkbox" name="apply_to_history" defaultChecked /><span>Associar pagamentos anteriores do mesmo destinatário</span></label>
+                  {item.sourceKind === "transaction" ? <label className="movement-check"><input type="checkbox" name="apply_to_history" defaultChecked /><span>Associar pagamentos anteriores do mesmo destinatário</span></label> : null}
                   <label className="movement-check"><input type="checkbox" name="planning_enabled" /><span>Usar o histórico no planejamento</span></label>
-                  <p>Os próximos PIX para este destinatário serão associados automaticamente. Meses sem pagamento entram como zero na mediana.</p>
+                  <p>{item.sourceKind === "transaction" ? "As próximas saídas do mesmo destinatário serão associadas automaticamente." : "Esta compra será associada somente ao movimento selecionado."} Meses sem pagamento entram como zero na mediana.</p>
                   <button type="submit" disabled={isEstablishmentPending}>
                     {isEstablishmentPending ? "Associando..." : "Criar e associar"}
                   </button>

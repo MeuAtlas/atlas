@@ -18,14 +18,18 @@ declare
   restored_status text;
   today_in_brasilia date := timezone('America/Sao_Paulo', now())::date;
 begin
-  select occurrence.*, coalesce(commitment.amount_type = 'variable', false)
-    into target, is_variable_amount
+  select occurrence.*
+    into target
   from public.financial_commitment_occurrences occurrence
-  join public.financial_commitments commitment on commitment.id = occurrence.commitment_id
   where occurrence.id = p_occurrence_id
   for update of occurrence;
 
   if target.id is null then return; end if;
+
+  select coalesce(commitment.amount_type = 'variable', false)
+    into is_variable_amount
+  from public.financial_commitments commitment
+  where commitment.id = target.commitment_id;
 
   select
     coalesce(sum(link.allocated_amount), 0),
