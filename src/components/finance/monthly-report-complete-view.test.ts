@@ -10,13 +10,13 @@ const listService = readFileSync("src/modules/finance/financial-reports-list.ts"
 const css = readFileSync("src/app/globals.css", "utf8");
 const pdfRoute = readFileSync("src/app/api/monthly-reports/[id]/pdf/route.ts", "utf8");
 
-test("página mensal reúne pendências, leitura, fluxo, consumo, futuro e revisão final", () => {
-  for (const component of ["MonthlyBlockingIssues", "MonthlySummaryGrid", "MonthlyAtlasReading", "MonthlyCashFlowReviewSection", "MonthlyIncomeSection", "MonthlyConsumptionSection", "MonthlyCommitmentsSection", "MonthlyPaidCardSection", "MonthlyNextStatementSection", "MonthlyFutureSection", "MonthlyFinalReview", "MonthlyCloseSection"]) {
+test("página mensal reúne resumo, leitura, fluxo, folha e conferência sem projeções futuras", () => {
+  for (const component of ["MonthlySummaryGrid", "MonthlyAtlasFlow", "MonthlyDetailSheet", "MonthlyPaidCardSection", "MonthlyResponsibleAndReimbursements", "MonthlyBlockingIssues", "MonthlyFinalReview", "MonthlyObservations", "MonthlyCloseSection"]) {
     assert.match(page, new RegExp(`<${component}`));
   }
-  assert.match(reviewView, /Antes de concluir/);
-  assert.match(reviewView, /Para onde foi o dinheiro/);
-  assert.match(reviewView, /Revisão final/);
+  assert.match(reviewView, /Detalhamento do mês/);
+  assert.match(reviewView, /Conferência do mês/);
+  assert.doesNotMatch(page, /MonthlyNextStatementSection|MonthlyFutureSection|MonthlyProjectionSection/);
 });
 
 test("relatório fechado remove edição e oferece visualizar e baixar o PDF", () => {

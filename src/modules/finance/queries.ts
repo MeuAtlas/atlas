@@ -966,16 +966,6 @@ export async function getMovementsData(
       .select("id,bill_id,document_id,card_id,transaction_date,posting_date,description_raw,description_normalized,merchant_normalized,amount,amount_brl,original_amount,original_currency_code,exchange_rate,foreign_iof_amount,conversion_source,converted_at,entry_type,card_last_four,installment_number,installment_total,category_id,provider_transaction_id,confidence,review_status,is_ignored,created_at")
       .eq("owner_id", userId)
       .eq("bill_id", selectedCycle.id)
-      .in("entry_type", [
-        "purchase",
-        "installment_purchase",
-        "credit",
-        "refund",
-        "fee",
-        "interest",
-        "tax",
-        "adjustment",
-      ])
       .eq("is_ignored", false)
       .order("transaction_date", { ascending: false })
       .limit(1000)
@@ -1253,8 +1243,15 @@ export async function getMovementsData(
         description: entry.description_raw,
       });
       const rawAmount = foreign.amountBrl ?? 0;
-      const effect = resolveInvoiceEntryEffect(entry.entry_type, rawAmount);
-      if (effect === "exclude") continue;
+      const parsedInstallment = Number(entry.installment_total ?? 1) > 1 &&
+        Number(entry.installment_number ?? 0) >= 1 &&
+        Number(entry.installment_number) <= Number(entry.installment_total);
+      const resolvedEffect = resolveInvoiceEntryEffect(entry.entry_type, rawAmount);
+      // The final installment can arrive from the PDF parser with a generic
+      // entry type. Its structured fraction (for example 10/10) remains
+      // authoritative and must be shown in the statement movement.
+      if (resolvedEffect === "exclude" && !parsedInstallment) continue;
+      const effect = resolvedEffect === "exclude" ? "debit" : resolvedEffect;
       const card = cardRows.find(item => item.id === entry.card_id);
       const instrument = card?.credit_card_instruments?.find(item =>
         item.last_four_digits === entry.card_last_four);

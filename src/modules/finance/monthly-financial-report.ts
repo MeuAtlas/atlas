@@ -92,6 +92,16 @@ export type MonthlyStatement = {
   statement_status: string;
   personal_share_amount: number;
   third_party_share_amount: number;
+  third_party_people: Array<{
+    name: string;
+    amount: number;
+    installment_purchase_count: number;
+    installment_total_amount: number;
+  }>;
+  personal_installment_purchase_count: number;
+  personal_installment_total_amount: number;
+  installment_purchase_count: number;
+  installment_total_amount: number;
   payments: MonthlyStatementPayment[];
 };
 

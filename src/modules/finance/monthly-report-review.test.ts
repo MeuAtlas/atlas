@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { FinancialMonthRecord } from "./monthly-financial-report-query";
+import type { IncomeExpenseListItem, IncomeExpensePageData } from "./income-expenses-query";
 import {
   buildMonthlySnapshot,
   getMonthlyPeriod,
@@ -55,6 +56,28 @@ const month = (status = "awaiting_consolidation") => ({
   id: "month-1", workspace_id: "workspace-1", reference_year: 2026,
   reference_month: 7, status, current_report_id: null,
 }) as FinancialMonthRecord;
+
+const registeredItem = (overrides: Partial<IncomeExpenseListItem> = {}) => ({
+  id: "commitment-1", occurrenceId: "occurrence-1", categoryId: null,
+  accountId: null, cardId: null, personId: null, title: "Compromisso",
+  description: null, direction: "expense", recurrenceFrequency: "monthly",
+  expectedDateDay: null, estimationMethod: "fixed", aggregationMode: "single_occurrence",
+  contextType: "personal", status: "active", expectedAmountCents: 0,
+  realizedAmountCents: 0, differenceCents: 0, occurrenceStatus: "projected",
+  competenceMonth: "2026-07-01", expectedDate: null, paymentDate: null,
+  paymentMethod: "bank_debit", paymentSourceName: null, settlementSource: null,
+  linkedInvoiceId: null, linkedTransactionId: null, creditsCount: 0,
+  historicalMedianCents: null, historicalAverageCents: null, historicalMonthsCount: 0,
+  incomeBasis: null, cashFlowEffect: "decrease", planningEffect: "decrease",
+  analyticsEffect: "expense", paymentChannel: "bank", isPayrollDeduction: false,
+  categoryName: null, personNames: [],
+  ...overrides,
+}) as IncomeExpenseListItem;
+
+const registeredFlows = (items: IncomeExpenseListItem[]) => ({
+  incomes: items.filter(item => item.direction === "income"),
+  expenses: items.filter(item => item.direction === "expense"),
+}) as Pick<IncomeExpensePageData, "incomes" | "expenses">;
 
 function snapshot(input: {
   statements?: MonthlyStatement[];
@@ -186,6 +209,72 @@ test("PDF confirmado aparece como anexado no checklist", () => {
     view.finalReview.find(item => item.label === "PDF da fatura")?.value,
     "Anexado",
   );
+});
+
+test("folha mensal separa receita, cartão, folha e conta sem repetir pagamento de fatura", () => {
+  const income = bank({ id: "income", description: "Salário", amount: 2_000,
+    original_amount: 2_000, transaction_type: "income", bank_direction: "inflow" });
+  const direct = bank({ id: "direct", description: "Boleto", amount: 300 });
+  const invoicePayment = bank({ id: "invoice-payment", description: "PAGAMENTO FATURA",
+    amount: 100, transaction_role: "invoice_payment" });
+  const payroll = bank({ id: "payroll", description: "Plano de saúde", amount: 150,
+    source_type: "payroll", account_id: null, bank_direction: null, recurring_rule_id: "rule-1" });
+  const view = buildMonthlyReportReviewViewModel({
+    financialMonth: month(),
+    snapshot: snapshot({ transactions: [income, direct, invoicePayment, payroll], purchases: [purchase()] }),
+    statements: [], reconciliationStatements: [], openStatements: [], paymentCandidates: [],
+    purchases: [purchase()], versions: [], now: new Date("2026-08-02T12:00:00Z"),
+  });
+  const groups = new Map(view.detailGroups.map(group => [group.key, group]));
+  assert.equal(groups.get("income")?.total, 2_000);
+  assert.equal(groups.get("card")?.total, 100);
+  assert.equal(groups.get("payroll")?.total, 150);
+  assert.equal(groups.get("account")?.total, 300);
+  assert.equal(groups.get("account")?.items.some(item => item.description === "PAGAMENTO FATURA"), false);
+});
+
+test("folha prioriza o valor oficial da fatura paga sem somar as compras avulsas", () => {
+  const officialStatement = statement({
+    official_total_amount: 11_517.22,
+    expected_statement_amount: 11_517.22,
+    payment_confirmation_status: "paid",
+  });
+  const view = buildMonthlyReportReviewViewModel({
+    financialMonth: month(), snapshot: snapshot({ purchases: [purchase({ total_amount: 441.75, installment_amount: 441.75 })] }),
+    statements: [officialStatement], reconciliationStatements: [], openStatements: [], paymentCandidates: [],
+    purchases: [purchase()], versions: [], now: new Date("2026-08-02T12:00:00Z"),
+  });
+  const card = view.detailGroups.find(group => group.key === "card");
+  assert.equal(card?.total, 11_517.22);
+  assert.deepEqual(card?.items, [{ description: "Santander Unlimited · fatura oficial", amount: 11_517.22 }]);
+});
+
+test("folha usa apenas receitas e despesas cadastradas, não qualquer saída da conta", () => {
+  const view = buildMonthlyReportReviewViewModel({
+    financialMonth: month(),
+    snapshot: snapshot({ transactions: [bank({ description: "PIX avulso", amount: 9_999 })] }),
+    statements: [statement()], reconciliationStatements: [], openStatements: [],
+    paymentCandidates: [], purchases: [purchase()], versions: [],
+    registeredFlows: registeredFlows([
+      registeredItem({ id: "income", title: "Salário", direction: "income", expectedAmountCents: 10_000_00, realizedAmountCents: 9_000_00, cashFlowEffect: "inflow", planningEffect: "increase", analyticsEffect: "income", paymentChannel: "bank" }),
+      registeredItem({ id: "income-open", title: "Diárias pendentes", direction: "income", expectedAmountCents: 2_000_00, cashFlowEffect: "inflow", planningEffect: "increase", analyticsEffect: "income", paymentChannel: "bank" }),
+      registeredItem({ id: "account", title: "Escola", expectedAmountCents: 1_331_00 }),
+      registeredItem({ id: "card", title: "Spotify", expectedAmountCents: 23_90, paymentMethod: "credit_card", paymentChannel: "card", cardId: "card-1" }),
+      registeredItem({ id: "payroll", title: "Consignado", expectedAmountCents: 2_233_57, paymentMethod: "payroll", paymentChannel: "payroll", isPayrollDeduction: true, cashFlowEffect: "none" }),
+    ]),
+    eventualExpenses: [{ description: "Restaurante eventual", amount: 85 }],
+    now: new Date("2026-08-02T12:00:00Z"),
+  });
+  const groups = new Map(view.detailGroups.map(group => [group.key, group]));
+  assert.equal(groups.get("income")?.total, 9_000);
+  assert.equal(groups.get("income")?.items.some(item => item.description === "Diárias pendentes"), false);
+  assert.equal(groups.get("account")?.total, 1_331);
+  assert.equal(groups.get("card")?.total, 23.9);
+  assert.equal(groups.get("payroll")?.total, 2_233.57);
+  assert.equal(groups.get("payroll")?.items[0]?.state, "paid");
+  assert.equal(groups.get("eventual")?.total, 85);
+  assert.equal(view.identifiedExpenses, 3_673.47);
+  assert.equal(groups.get("account")?.items.some(item => item.description === "PIX avulso"), false);
 });
 
 test("primeiro mês não usa falsa mediana e categorias pendentes são aviso", () => {

@@ -273,12 +273,19 @@ export async function getIncomeExpenseOverview(
     const expectedAmountCents = cents(
       occurrence?.expected_amount ?? row.expected_amount,
     );
-    const realizedAmountCents = direction === "income"
+    const recordedAmountCents = direction === "income"
       ? cents(occurrence?.received_amount ?? occurrence?.actual_amount)
       : cents(occurrence?.paid_amount ?? occurrence?.actual_amount);
+    // Payroll deductions are settled by the employer directly in the payroll.
+    // They are never pending bank debits for the person.
+    const realizedAmountCents = effects.isPayrollDeduction
+      ? expectedAmountCents
+      : recordedAmountCents;
     const amountType = String(row.amount_type ?? "fixed") as
       IncomeExpenseListItem["amountType"];
-    const occurrenceStatus = String(occurrence?.status ?? "projected");
+    const occurrenceStatus = effects.isPayrollDeduction
+      ? "paid"
+      : String(occurrence?.status ?? "projected");
     const linkedTransaction = occurrence?.linked_transaction_id
       ? linkedTransactionById.get(occurrence.linked_transaction_id)
       : null;

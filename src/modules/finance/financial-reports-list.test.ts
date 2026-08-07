@@ -52,6 +52,11 @@ const statement = (input: { paid?: number; expected: number; payments?: number }
   statement_status: input.paid ? "paid" : "estimated",
   personal_share_amount: input.expected,
   third_party_share_amount: 0,
+  third_party_people: [],
+  personal_installment_purchase_count: 0,
+  personal_installment_total_amount: 0,
+  installment_purchase_count: 0,
+  installment_total_amount: 0,
   payments: Array.from({ length: input.payments ?? (input.paid ? 1 : 0) }, (_, index) => ({
     id: `payment-${index}`,
     bankTransactionId: `transaction-${index}`,

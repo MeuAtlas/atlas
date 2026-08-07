@@ -44,5 +44,21 @@ test("calcula aberto, parcial, atraso, cartão e folha corretamente", () => {
   assert.equal(expensePresentationStatus(partial, "2026-08-05"), "partial");
   assert.equal(expensePresentationStatus(base({ expectedDate: "2026-08-01" }), "2026-08-05"), "overdue");
   assert.equal(expensePresentationStatus(base({ cardId: "card", paymentChannel: "card" }), "2026-08-05"), "card_planned");
-  assert.equal(expensePresentationStatus(base({ isPayrollDeduction: true, paymentMethod: "payroll" }), "2026-08-05"), "payroll_planned");
+  const payroll = base({ isPayrollDeduction: true, paymentMethod: "payroll" });
+  assert.equal(openExpenseAmountCents(payroll), 0);
+  assert.equal(expensePresentationStatus(payroll, "2026-08-05"), "payroll_paid");
+});
+
+test("baixa uma despesa variável pelo valor efetivamente pago", () => {
+  const variable = base({
+    amountType: "variable",
+    expectedAmountCents: 140375,
+    realizedAmountCents: 140335,
+  });
+  const result = buildExpenseOriginGroups([variable], "2026-08-05");
+  assert.equal(openExpenseAmountCents(variable), 0);
+  assert.equal(expensePresentationStatus(variable, "2026-08-05"), "paid");
+  assert.equal(result.summary.totalCents, 140335);
+  assert.equal(result.summary.paidCents, 140335);
+  assert.equal(result.summary.openCents, 0);
 });

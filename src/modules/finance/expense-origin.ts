@@ -48,6 +48,8 @@ export function classifyExpenseOrigin(item: IncomeExpenseListItem): ExpenseOrigi
 }
 
 export function openExpenseAmountCents(item: IncomeExpenseListItem) {
+  if (classifyExpenseOrigin(item) === "payroll") return 0;
+  if (item.amountType === "variable" && item.realizedAmountCents > 0) return 0;
   return Math.max(item.expectedAmountCents - item.realizedAmountCents, 0);
 }
 
@@ -57,7 +59,10 @@ export function expensePresentationStatus(
 ): ExpensePresentationStatus {
   const origin = classifyExpenseOrigin(item);
   if (origin === "payroll") {
-    return item.realizedAmountCents > 0 ? "payroll_paid" : "payroll_planned";
+    return "payroll_paid";
+  }
+  if (item.amountType === "variable" && item.realizedAmountCents > 0) {
+    return "paid";
   }
   if (origin === "credit_card") {
     return item.realizedAmountCents > 0 || item.linkedTransactionId
@@ -122,12 +127,22 @@ function sortGroup(origin: ExpenseOrigin, today: string) {
 }
 
 function summarize(items: IncomeExpenseListItem[]): ExpenseOriginSummary {
-  return items.reduce<ExpenseOriginSummary>((summary, item) => ({
-    totalCents: summary.totalCents + item.expectedAmountCents,
-    paidCents: summary.paidCents + item.realizedAmountCents,
-    openCents: summary.openCents + openExpenseAmountCents(item),
-    count: summary.count + 1,
-  }), { totalCents: 0, paidCents: 0, openCents: 0, count: 0 });
+  return items.reduce<ExpenseOriginSummary>((summary, item) => {
+    const payroll = classifyExpenseOrigin(item) === "payroll";
+    const settledVariable = item.amountType === "variable" &&
+      item.realizedAmountCents > 0;
+    const paidCents = payroll
+      ? item.expectedAmountCents
+      : item.realizedAmountCents;
+    return {
+      totalCents: summary.totalCents + (settledVariable
+        ? item.realizedAmountCents
+        : item.expectedAmountCents),
+      paidCents: summary.paidCents + paidCents,
+      openCents: summary.openCents + openExpenseAmountCents(item),
+      count: summary.count + 1,
+    };
+  }, { totalCents: 0, paidCents: 0, openCents: 0, count: 0 });
 }
 
 export function buildExpenseOriginGroups(

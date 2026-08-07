@@ -99,12 +99,13 @@ test("consulta usa colunas e relações reais de card_purchases", () => {
   const end = source.indexOf("export async function getFinanceData", start);
   const query = source.slice(start, end);
   assert.match(query, /installment_count/);
-  assert.doesNotMatch(query, /\.from\("card_installment_occurrences"\)/);
+  assert.match(query, /\.from\("card_installment_occurrences"\)/);
   assert.match(query, /\.eq\("source", "pluggy"\)/);
   assert.match(query, /card_purchases_instrument_id_fkey/);
   assert.doesNotMatch(query, /card_purchases_card_instrument_id_fkey/);
   assert.match(query, /Promise\.allSettled/);
   assert.match(query, /if \(isCardScope && \(isPdfCycle \|\| isClosedWithoutPdf\)\) return emptyResult/);
+  assert.doesNotMatch(query, /\.in\("entry_type"/);
   assert.match(query, /\.gte\("competence_date", period\.from\)/);
 });
 
@@ -179,7 +180,7 @@ test("integração: getMovementsData resolve banco e degrada cartão sem lançar
   assert.equal(data.warnings[0].code, "PGRST200");
 });
 
-test("integração: ciclo aberto usa somente compras atuais da Pluggy", async () => {
+test("integração: ciclo aberto combina compras atuais e parcelas projetadas", async () => {
   const calls: Array<{ table: string; method: string; args: unknown[] }> = [];
   const openCycle = {
     id: "cycle-open",
@@ -386,52 +387,18 @@ test("integração: ciclo aberto usa somente compras atuais da Pluggy", async ()
   assert.equal(data.cardPurchases.length, 3);
   assert.deepEqual(
     data.cardPurchases.map(item => item.source).sort(),
-    ["pluggy", "pluggy", "pluggy"],
+    ["pluggy", "pluggy", "projection"],
   );
   assert.equal(
     data.cardPurchases.reduce(
       (sum, item) => sum + Number(item.installment_amount),
       0,
     ),
-    335,
+    385,
   );
   assert.ok(data.cardPurchases.every(item => item.description !== "Pagamento de fatura"));
   assert.ok(data.cardPurchases.every(item => item.invoice_id === null));
-  assert.ok(data.cardPurchases.every(item => item.source === "pluggy"));
-  assert.ok(data.cardPurchases.every(item => item.description !== "Parcela antiga 07/10"));
-  assert.ok(!calls.some(call => call.table === "card_installment_occurrences"));
-  const cardCalls = calls.filter(call => call.table === "card_purchases");
-  assert.ok(cardCalls.some(call =>
-    call.method === "in" &&
-    call.args[0] === "card_id" &&
-    JSON.stringify(call.args[1]) === JSON.stringify([
-      "card-account",
-      "mastercard-account",
-    ])
-  ));
-  assert.ok(cardCalls.some(call =>
-    call.method === "eq" &&
-    call.args[0] === "invoice_id" &&
-    call.args[1] === "cycle-open"
-  ));
-  assert.ok(cardCalls.some(call =>
-    call.method === "eq" &&
-    call.args[0] === "bill_forecast_date" &&
-    call.args[1] === "2026-08-01"
-  ));
-  assert.ok(cardCalls.some(call =>
-    call.method === "gte" &&
-    call.args[0] === "posting_date" &&
-    call.args[1] === "2026-07-04"
-  ));
-  assert.ok(cardCalls.some(call =>
-    call.method === "gte" &&
-    call.args[0] === "purchase_date" &&
-    call.args[1] === "2026-07-02"
-  ));
-  assert.ok(cardCalls.some(call =>
-    call.method === "gte" &&
-    call.args[0] === "competence_date" &&
-    call.args[1] === "2026-07-04"
-  ));
+  assert.ok(data.cardPurchases.some(item => item.source === "projection"));
+  assert.ok(data.cardPurchases.some(item => item.description === "Parcela antiga 07/10"));
+  assert.ok(calls.some(call => call.table === "card_installment_occurrences"));
 });

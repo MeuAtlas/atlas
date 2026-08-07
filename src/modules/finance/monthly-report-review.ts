@@ -1,4 +1,6 @@
 import type { FinancialMonthRecord, MonthlyReportRecord } from "./monthly-financial-report-query";
+import type { IncomeExpensePageData } from "./income-expenses-query";
+import { classifyExpenseOrigin } from "./expense-origin";
 import type {
   MonthlyCardPurchase,
   MonthlyReportSnapshot,
@@ -58,6 +60,143 @@ const dateLabel = (value: string) => new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC",
 }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+type MonthlyDetailGroupKey = "income" | "card" | "payroll" | "account" | "eventual";
+type MonthlyDetailItemState = "received" | "paid" | "pending";
+type MonthlyDetailItem = {
+  description: string;
+  amount: number;
+  state?: MonthlyDetailItemState;
+};
+type MonthlyDetailGroup = {
+  key: MonthlyDetailGroupKey;
+  items: MonthlyDetailItem[];
+  total: number;
+};
+type EventualExpense = { description: string; amount: number };
+
+type RegisteredMonthlyFlows = Pick<IncomeExpensePageData, "incomes" | "expenses">;
+
+function buildRegisteredDetailGroups(
+  flows: RegisteredMonthlyFlows,
+  eventualExpenses: EventualExpense[],
+): MonthlyDetailGroup[] {
+  const groups: Record<MonthlyDetailGroupKey, Map<string, MonthlyDetailItem>> = {
+    income: new Map(),
+    card: new Map(),
+    payroll: new Map(),
+    account: new Map(),
+    eventual: new Map(),
+  };
+  const add = (
+    key: MonthlyDetailGroupKey,
+    description: string,
+    amount: number,
+    state: MonthlyDetailItemState,
+  ) => {
+    if (amount <= 0) return;
+    const entryKey = `${state}:${description}`;
+    const previous = groups[key].get(entryKey);
+    groups[key].set(entryKey, {
+      description,
+      amount: money((previous?.amount ?? 0) + amount),
+      state,
+    });
+  };
+
+  for (const item of flows.incomes) {
+    add("income", item.title, item.realizedAmountCents / 100, "received");
+  }
+  for (const item of flows.expenses) {
+    const origin = classifyExpenseOrigin(item);
+    const key = origin === "credit_card"
+      ? "card"
+      : origin === "payroll"
+        ? "payroll"
+        : origin === "bank_account"
+          ? "account"
+          : null;
+    if (!key) continue;
+    const paidCents = origin === "payroll"
+      ? item.expectedAmountCents
+      : item.realizedAmountCents;
+    const paid = paidCents / 100;
+    const pending = origin === "payroll" ||
+        (item.amountType === "variable" && item.realizedAmountCents > 0)
+      ? 0
+      : Math.max(item.expectedAmountCents - item.realizedAmountCents, 0) / 100;
+    add(key, item.title, paid, "paid");
+    add(key, item.title, pending, "pending");
+  }
+  for (const item of eventualExpenses) add("eventual", item.description, item.amount, "paid");
+
+  return (Object.keys(groups) as MonthlyDetailGroupKey[]).map(key => {
+    const items = [...groups[key].values()];
+    return { key, items, total: money(items.reduce((sum, item) => sum + item.amount, 0)) };
+  });
+}
+
+function buildDetailGroups(
+  snapshot: MonthlyReportSnapshot,
+  statements: MonthlyStatement[],
+  registeredFlows?: RegisteredMonthlyFlows,
+  eventualExpenses: EventualExpense[] = [],
+): MonthlyDetailGroup[] {
+  // The report sheet is driven by the commitments created in Receitas e
+  // Despesas. Account movements remain available in the cash-flow section,
+  // but arbitrary debits must never become planned expenses.
+  if (registeredFlows) return buildRegisteredDetailGroups(registeredFlows, eventualExpenses);
+  const groups: Record<MonthlyDetailGroupKey, Map<string, number>> = {
+    income: new Map(),
+    card: new Map(),
+    payroll: new Map(),
+    account: new Map(),
+    eventual: new Map(),
+  };
+
+  const officialStatements = statements.filter(statement =>
+    statement.official_total_amount != null || statement.expected_statement_amount > 0,
+  );
+
+  for (const entry of snapshot.entries) {
+    const isIncome = entry.kind === "revenue";
+    const isExpense = entry.kind === "expense" || entry.kind === "expense_refund";
+    if (!isIncome && !isExpense) continue;
+
+    const key: MonthlyDetailGroupKey | null = isIncome
+      ? "income"
+      : entry.sourceKind === "card"
+        ? "card"
+        : entry.sourceKind === "payroll"
+          ? "payroll"
+          : entry.sourceKind === "account" || entry.sourceKind === "cash"
+            ? "account"
+            : null;
+    if (!key) continue;
+
+    // A reconciled invoice is the authoritative card total for the cash month.
+    // Do not add its individual purchases again in this report presentation.
+    if (key === "card" && officialStatements.length) continue;
+
+    // The bank debit that settles a statement is cash movement, not new consumption.
+    if (key === "account" && (entry.transactionRole === "invoice_payment" || entry.financialRole === "invoice_payment")) {
+      continue;
+    }
+
+    const signedAmount = entry.kind === "expense_refund" ? -Math.abs(entry.amount) : entry.amount;
+    groups[key].set(entry.description, money((groups[key].get(entry.description) ?? 0) + signedAmount));
+  }
+
+  for (const statement of officialStatements) {
+    const amount = statement.official_total_amount ?? statement.expected_statement_amount;
+    groups.card.set(`${statement.card_name} · fatura oficial`, money(amount));
+  }
+
+  return (Object.keys(groups) as MonthlyDetailGroupKey[]).map(key => {
+    const items = [...groups[key]].map(([description, amount]) => ({ description, amount }));
+    return { key, items, total: money(items.reduce((sum, item) => sum + item.amount, 0)) };
+  });
+}
 
 export function deriveMonthlyReportStatus(input: {
   persistedStatus: string;
@@ -160,6 +299,8 @@ export function buildMonthlyReportReviewViewModel(input: {
   paymentCandidates: MonthlyPaymentCandidate[];
   purchases: MonthlyCardPurchase[];
   versions: MonthlyReportRecord[];
+  registeredFlows?: RegisteredMonthlyFlows;
+  eventualExpenses?: EventualExpense[];
   now?: Date;
 }) {
   const blockers = buildBlockers(input);
@@ -228,6 +369,15 @@ export function buildMonthlyReportReviewViewModel(input: {
     netPersonalCost: money(Math.max(0,
       statement.confirmed_payment_amount - input.snapshot.totals.reimbursementsReceived)),
   }));
+  const cardReference = input.snapshot.cardPerspective?.reference ?? null;
+  const cardPercentage = input.snapshot.cardPerspective?.percentageDifference ?? null;
+  const cardPaymentComparison = cardReference == null || cardPercentage == null
+    ? null
+    : {
+        reference: cardReference,
+        percentage: cardPercentage,
+        tone: Math.abs(cardPercentage) <= 5 ? "neutral" as const : cardPercentage > 0 ? "positive" as const : "negative" as const,
+      };
   const detectedStatements = input.reconciliationStatements.map(statement => ({
     statement,
     candidate: candidateForStatement(statement, input.paymentCandidates),
@@ -257,6 +407,12 @@ export function buildMonthlyReportReviewViewModel(input: {
     { label: "PDF da fatura", value: [...input.statements, ...input.reconciliationStatements].some(statement => statement.statement_file_path || statement.pdf_document_id) ? "Anexado" : "Não anexado · opcional", tone: "neutral" },
     { label: "Snapshot", value: blockers.length ? "Aguardando pendências" : "Pronto", tone: blockers.length ? "warning" : "success" },
   ];
+  const detailGroups = buildDetailGroups(
+    input.snapshot,
+    input.statements,
+    input.registeredFlows,
+    input.eventualExpenses,
+  );
   return {
     header: {
       monthLabel: monthLabel(input.snapshot.period.year, input.snapshot.period.month),
@@ -278,6 +434,10 @@ export function buildMonthlyReportReviewViewModel(input: {
       { key: "closing", label: "Terminou com", value: input.snapshot.totals.closingBalance, helper: "saldo final", tone: input.snapshot.totals.closingBalance < 0 ? "negative" : "positive" },
       { key: "income", label: "Renda real", value: realIncome, helper: "sem transferências e resgates", tone: "accent" },
     ],
+    detailGroups,
+    identifiedExpenses: money(detailGroups
+      .filter(group => group.key !== "income")
+      .reduce((sum, group) => sum + group.total, 0)),
     narrative: buildNarrative({ snapshot: input.snapshot, blockers, firstMonth: input.snapshot.tracking.isFirstFinancialReport }),
     cashFlow: {
       series: input.snapshot.cashFlow ?? [],
@@ -308,7 +468,7 @@ export function buildMonthlyReportReviewViewModel(input: {
       incomeShare: realIncome > 0 ? Math.round((totalCommitted / realIncome) * 1000) / 10 : null,
       available, partial: householdUnclassified || incomeNeedsClassification,
     },
-    paidStatements, detectedStatements, openStatements,
+    paidStatements, cardPaymentComparison, detectedStatements, openStatements,
     reimbursements: {
       received: input.snapshot.totals.reimbursementsReceived,
       pending: input.snapshot.totals.reimbursementsPending,

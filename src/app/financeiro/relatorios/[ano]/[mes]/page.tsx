@@ -4,26 +4,17 @@ import { notFound } from "next/navigation";
 import { PlannedFinancialMonthOverview } from "@/components/finance/financial-reports-list";
 import {
   MonthlyBlockingIssues,
-  MonthlyCashFlowReviewSection,
+  MonthlyAtlasFlow,
   MonthlyCloseSection,
-  MonthlyCommitmentsSection,
-  MonthlyConsumptionSection,
+  MonthlyDetailSheet,
   MonthlyFinalReview,
-  MonthlyFutureSection,
-  MonthlyIncomeSection,
-  MonthlyInstallmentsSection,
-  MonthlyLoansSection,
-  MonthlyNextStatementSection,
+  MonthlyObservations,
   MonthlyPaidCardSection,
   MonthlyReportHeader,
-  MonthlyReportNotice,
-  MonthlyResponsiblePurchases,
+  MonthlyResponsibleAndReimbursements,
   MonthlySummaryGrid,
-  MonthlyAtlasReading,
 } from "@/components/finance/monthly-report-review-view";
 import {
-  MonthlyFutureAndLoans,
-  MonthlyProjectionSection,
   MonthlyReportVersionHistory,
   MonthlyStatusBadge,
   MonthlyStatusBanner,
@@ -31,6 +22,9 @@ import {
 } from "@/components/finance/monthly-report-view";
 import { ValueVisibility } from "@/components/finance/value-visibility";
 import { getStatementForCashMonth } from "@/modules/finance/financial-reports-list";
+import { getExpenseEstablishmentAnalyses } from "@/modules/finance/expense-establishment-query";
+import { isValidEstablishmentTransaction } from "@/modules/finance/expense-establishment-analysis";
+import { getIncomeExpenseOverview } from "@/modules/finance/income-expenses-query";
 import { isBeforeFinancialTracking } from "@/modules/finance/monthly-financial-report";
 import { getMonthlyReportPreview, getReadableFinanceWorkspace } from "@/modules/finance/monthly-financial-report-query";
 import { buildMonthlyReportReviewViewModel } from "@/modules/finance/monthly-report-review";
@@ -86,10 +80,41 @@ export default async function MonthlyReportPage({ params, searchParams }: {
       <header className="monthly-report-header"><div><Link href={backUrl} prefetch={false}>← Todos os meses</Link><p className="eyebrow">Planejamento mensal</p><h1 className="capitalize">{title}</h1><p>Previsões conhecidas para o período, sem alterar o caixa real.</p></div><MonthlyStatusBadge status="planned" /></header>
       <MonthlyStatusBanner month={data.financialMonth} />
       <PlannedFinancialMonthOverview snapshot={data.snapshot} card={card} />
-      <MonthlyProjectionSection snapshot={data.snapshot} />
-      <MonthlyFutureAndLoans snapshot={data.snapshot} />
     </main></ValueVisibility>;
   }
+
+  const reportMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const [registeredFlows, establishmentAnalyses] = await Promise.all([
+    getIncomeExpenseOverview(context.supabase, {
+      workspaceId: context.workspaceId,
+      month: reportMonth,
+    }),
+    getExpenseEstablishmentAnalyses(
+      context.supabase,
+      context.workspaceId,
+      reportMonth,
+    ),
+  ]);
+  const registeredTransactionIds = new Set(
+    [...registeredFlows.incomes, ...registeredFlows.expenses]
+      .map(item => item.linkedTransactionId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const eventualExpenses = establishmentAnalyses.map(analysis => {
+    const amountCents = analysis.transactions
+      .filter(transaction =>
+        transaction.date.startsWith(reportMonth) &&
+        !registeredTransactionIds.has(transaction.id) &&
+        isValidEstablishmentTransaction(transaction),
+      )
+      .reduce((sum, transaction) => sum + (
+        ["refund", "reversal"].includes(transaction.transactionRole ?? "") ||
+        transaction.bankDirection === "inflow"
+          ? -transaction.amountCents
+          : transaction.amountCents
+      ), 0);
+    return { description: analysis.name, amount: amountCents / 100 };
+  }).filter(item => item.amount > 0);
 
   const view = buildMonthlyReportReviewViewModel({
     financialMonth: data.financialMonth,
@@ -100,8 +125,9 @@ export default async function MonthlyReportPage({ params, searchParams }: {
     paymentCandidates: data.paymentCandidates,
     purchases: data.purchases,
     versions: data.versions,
+    registeredFlows,
+    eventualExpenses,
   });
-  const movementsUrl = `/financeiro/movimentacoes?workspace=${context.workspaceId}&month=${data.snapshot.period.key}`;
   const invoiceUploadUrl = `/financeiro/cartoes/importar-fatura?workspace=${context.workspaceId}`;
   const finalPdfUrl = data.financialMonth.status === "closed" && currentReport?.pdf_storage_path
     ? `/api/monthly-reports/${currentReport.id}/pdf`
@@ -110,23 +136,18 @@ export default async function MonthlyReportPage({ params, searchParams }: {
   return <ValueVisibility controls={false}><main className="monthly-report-page monthly-review-page">
     <MonthlyReportHeader view={view} backUrl={backUrl} previewPdfUrl={previewPdfUrl} finalPdfUrl={finalPdfUrl} />
     {!data.schemaReady ? <div className="monthly-review-notice warning">A estrutura de fechamento ainda precisa ser atualizada antes de salvar versões.</div> : null}
-    <MonthlyReportNotice view={view} />
-    <MonthlyBlockingIssues view={view} common={common} />
     <MonthlySummaryGrid view={view} />
-    <MonthlyAtlasReading view={view} />
-    <MonthlyCashFlowReviewSection view={view} snapshot={data.snapshot} workspaceId={context.workspaceId} />
-    <MonthlyIncomeSection view={view} movementsUrl={movementsUrl} />
-    <MonthlyConsumptionSection view={view} movementsUrl={movementsUrl} />
-    <MonthlyCommitmentsSection view={view} movementsUrl={movementsUrl} />
-    <div className="monthly-card-review-grid">
-      <MonthlyPaidCardSection view={view} invoiceUploadUrl={invoiceUploadUrl} />
-      <MonthlyNextStatementSection view={view} />
-    </div>
-    <MonthlyResponsiblePurchases view={view} people={data.people} common={common} />
-    <MonthlyInstallmentsSection view={view} />
-    <MonthlyLoansSection snapshot={data.snapshot} />
-    <MonthlyFutureSection view={view} />
+    <MonthlyAtlasFlow view={view} snapshot={data.snapshot} workspaceId={context.workspaceId} />
+    <MonthlyDetailSheet view={view} />
+    <MonthlyPaidCardSection
+      view={view}
+      invoiceUploadUrl={invoiceUploadUrl}
+      ownerName={context.profile.preferred_name || context.profile.full_name || "Minha parte"}
+    />
+    <MonthlyResponsibleAndReimbursements view={view} />
+    <MonthlyBlockingIssues view={view} common={common} />
     <MonthlyFinalReview view={view} />
+    <MonthlyObservations view={view} />
     <details className="monthly-review-section monthly-technical-details"><summary>Detalhes e movimentações</summary><div><MonthlyTransactionsSection snapshot={data.snapshot} />{data.versions.length ? <MonthlyReportVersionHistory versions={data.versions} common={common} /> : null}</div></details>
     <MonthlyCloseSection view={view} snapshot={data.snapshot} common={common} monthId={data.financialMonth.id} canAdmin={context.canAdmin && data.schemaReady} />
   </main></ValueVisibility>;

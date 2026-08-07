@@ -154,6 +154,68 @@ export function MonthlyCashFlowReviewSection({ view, snapshot, workspaceId }: {
   </section>;
 }
 
+export function MonthlyAtlasFlow({ view, snapshot, workspaceId }: {
+  view: MonthlyReportReviewViewModel;
+  snapshot: MonthlyReportSnapshot;
+  workspaceId: string;
+}) {
+  return <div className="monthly-atlas-flow">
+    <MonthlyAtlasReading view={view} />
+    <MonthlyCashFlowReviewSection view={view} snapshot={snapshot} workspaceId={workspaceId} />
+  </div>;
+}
+
+const detailGroupLabels = {
+  income: { number: "1", title: "Receitas recebidas", empty: "Nenhuma receita recebida neste mês." },
+  card: { number: "2", title: "Despesas no cartão", empty: "Nenhuma despesa cadastrada no cartão neste mês." },
+  payroll: { number: "3", title: "Despesas na folha de pagamento", empty: "Nenhum desconto em folha cadastrado neste mês." },
+  account: { number: "4", title: "Despesas na conta corrente", empty: "Nenhuma despesa direta cadastrada neste mês." },
+  eventual: { number: "5", title: "Despesas eventuais", empty: "Nenhuma despesa eventual reconhecida neste mês." },
+} as const;
+
+export function MonthlyDetailSheet({ view }: { view: MonthlyReportReviewViewModel }) {
+  return <section className="monthly-detail-sheet" aria-labelledby="monthly-detail-sheet-title">
+    <header>
+      <p className="eyebrow">Detalhamento do mês</p>
+      <div className="monthly-detail-sheet-heading"><h2 id="monthly-detail-sheet-title">Receitas recebidas e despesas do período</h2><span className="monthly-detail-sheet-status-key"><i />Pendente</span></div>
+    </header>
+    <div className="monthly-detail-sheet-grid">
+      {view.detailGroups.map(group => {
+        const label = detailGroupLabels[group.key];
+        return <section key={group.key} className="monthly-detail-group">
+          <h3>{label.number}. {label.title}</h3>
+          {group.items.length ? <dl>
+            {group.items.map(item => <div key={`${item.state ?? "item"}:${item.description}`} data-state={item.state}><dt>{item.description}</dt><dd><Money value={item.amount} /></dd></div>)}
+          </dl> : <p>{label.empty}</p>}
+          <footer><span>Total</span><strong><Money value={group.total} /></strong></footer>
+        </section>;
+      })}
+    </div>
+  </section>;
+}
+
+export function MonthlyResponsibleAndReimbursements({ view }: { view: MonthlyReportReviewViewModel }) {
+  const people = view.reimbursements.people;
+  const hasRelevantData = people.length || view.responsiblePurchases.unresolved.length || view.reimbursements.received || view.reimbursements.pending;
+  if (!hasRelevantData) return null;
+  return <section className="monthly-review-section monthly-responsible-reimbursements">
+    <header><div><p className="eyebrow">Responsáveis e reembolsos</p><h2>Valores de outras pessoas neste mês</h2></div></header>
+    {people.length ? <div className="monthly-person-table">
+      <div className="head"><span>Responsável</span><span>Compras</span><span>Recebido</span><span>Em aberto</span></div>
+      {people.map(person => <div key={person.personId ?? person.personName}><strong>{person.personName}</strong><Money value={person.total} /><Money value={person.received} /><Money value={person.pending} /></div>)}
+    </div> : <p>Nenhum valor de terceiros foi consolidado neste mês.</p>}
+    {view.responsiblePurchases.unresolved.length ? <p className="monthly-inline-notice">{view.responsiblePurchases.unresolved.length} compras ainda precisam de responsável antes do fechamento.</p> : null}
+  </section>;
+}
+
+export function MonthlyObservations({ view }: { view: MonthlyReportReviewViewModel }) {
+  const observations = view.warnings.slice(0, 3);
+  return <section className="monthly-review-section monthly-observations">
+    <header><div><p className="eyebrow">Observações do mês</p><h2>Contexto para este fechamento</h2></div></header>
+    {observations.length ? <ul>{observations.map(item => <li key={item.id}>{item.description}</li>)}</ul> : <p>Nenhuma observação adicional foi identificada neste mês.</p>}
+  </section>;
+}
+
 export function MonthlyIncomeSection({ view, movementsUrl }: { view: MonthlyReportReviewViewModel; movementsUrl: string }) {
   const income = view.income;
   return <section className="monthly-review-section monthly-review-income"><header><div><p className="eyebrow">Sua renda</p><h2>O que entrou como renda real</h2></div></header><div className="monthly-income-summary"><span>Recebido em {view.header.shortMonthLabel}<strong><Money value={income.received} /></strong></span>{income.reference == null ? <div className="monthly-comparison-empty"><b>Primeiro mês acompanhado</b><p>A comparação aparecerá após os próximos fechamentos.</p></div> : <><span>Referência recente<strong><Money value={income.reference} /></strong></span><span>Diferença<strong className={(income.difference ?? 0) < 0 ? "negative" : "positive"}><Money value={income.difference ?? 0} /></strong><small>{Math.abs(income.percentage ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% {(income.difference ?? 0) < 0 ? "abaixo" : "acima"}</small></span></>}</div>
@@ -177,12 +239,15 @@ export function MonthlyCommitmentsSection({ view, movementsUrl }: { view: Monthl
   </section>;
 }
 
-export function MonthlyPaidCardSection({ view, invoiceUploadUrl }: {
+export function MonthlyPaidCardSection({ view, invoiceUploadUrl, ownerName }: {
   view: MonthlyReportReviewViewModel;
   invoiceUploadUrl: string;
+  ownerName: string;
 }) {
-  return <section className="monthly-review-section monthly-paid-card-section"><header><div><p className="eyebrow">Cartão pago em {view.header.shortMonthLabel}</p><h2>Pagamento que saiu da conta</h2></div></header>{view.paidStatements.length ? <div className="monthly-paid-card-list">{view.paidStatements.map(statement => <article key={statement.id}><header><div><h3>{statement.card_name}</h3><small>Pagamento confirmado pela movimentação da conta.</small></div><span className={statement.state === "confirmed" ? "positive" : "warning"}>{statement.state === "confirmed" ? "Pago" : statement.state === "partial" ? "Pagamento parcial" : "Diferença encontrada"}</span></header><dl><div><dt>Valor pago</dt><dd><Money value={statement.confirmed_payment_amount} /></dd></div><div><dt>Data do pagamento</dt><dd>{statement.payments[0] ? date(statement.payments[0].paymentDate) : "Não informada"}</dd></div><div><dt>Conta utilizada</dt><dd>{statement.payments[0]?.accountName ?? "Conta não informada"}</dd></div><div><dt>Sua parte</dt><dd><Money value={statement.personal_share_amount} /></dd></div><div><dt>Parte de terceiros</dt><dd><Money value={statement.third_party_share_amount} /></dd></div><div><dt>Custo líquido pessoal</dt><dd><Money value={statement.netPersonalCost} /></dd></div></dl><details><summary>Ver detalhes da conciliação</summary><p>Valor esperado: <Money value={statement.expected_statement_amount} />. O PDF é opcional e serve apenas para detalhamento.</p></details></article>)}</div> : view.detectedStatements.length ? <div className="monthly-detected-card">{view.detectedStatements.map(item => <article key={item.statement.id}><span><b>{item.statement.card_name}</b><small>Pagamento encontrado · aguardando confirmação</small></span><strong><Money value={item.candidate?.amount ?? item.statement.expected_statement_amount} /></strong></article>)}</div> : <MonthlyEmptyState title="Nenhum pagamento de fatura foi identificado neste mês." />}
-    <div className="monthly-card-secondary"><span>{view.reimbursements.pending || view.reimbursements.received ? <>Reembolsos: <Money value={view.reimbursements.received} /> recebidos · <Money value={view.reimbursements.pending} /> pendentes</> : "Não há valores de terceiros neste mês."}</span><Link href={invoiceUploadUrl} prefetch={false}>Anexar PDF da fatura — opcional</Link></div>
+  const hasAttachedPdf = view.paidStatements.some(statement =>
+    Boolean(statement.statement_file_path || statement.pdf_document_id));
+  return <section className="monthly-review-section monthly-paid-card-section"><header><div><p className="eyebrow">Cartão pago em {view.header.shortMonthLabel}</p><h2>Resumo da fatura paga</h2></div>{view.cardPaymentComparison ? <span className={`monthly-card-comparison ${view.cardPaymentComparison.tone}`}><b>{view.cardPaymentComparison.percentage > 0 ? "+" : ""}{view.cardPaymentComparison.percentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b>vs. mediana de <Money value={view.cardPaymentComparison.reference} /></span> : null}</header>{view.paidStatements.length ? <div className="monthly-paid-card-list">{view.paidStatements.map(statement => <article key={statement.id}><header><div><h3>{statement.card_name}</h3><small>Fatura paga em {statement.payments[0] ? date(statement.payments[0].paymentDate) : "data não informada"}.</small></div><span className={statement.state === "confirmed" ? "positive" : "warning"}>{statement.state === "confirmed" ? "Pago" : statement.state === "partial" ? "Pagamento parcial" : "Diferença encontrada"}</span></header><div className="monthly-card-facts"><span>Total da fatura<strong><Money value={statement.official_total_amount ?? statement.expected_statement_amount} /></strong></span><span>Compras parceladas<strong>{statement.installment_purchase_count}</strong></span><span>Parcelas nesta fatura<strong><Money value={statement.installment_total_amount} /></strong></span></div><div className="monthly-card-responsibilities"><div className="monthly-card-responsibility-head"><span>Responsável</span><span>Parte da fatura</span><span>Compras parceladas</span><span>Parcelas</span></div><div><b>{ownerName}</b><span><small>Minha parte</small><strong><Money value={statement.personal_share_amount} /></strong></span><span><small>Compras parceladas</small><strong>{statement.personal_installment_purchase_count}</strong></span><span><small>Parcelas</small><strong><Money value={statement.personal_installment_total_amount} /></strong></span></div>{statement.third_party_people.map(person => <div key={person.name}><b>{person.name}</b><span><small>Parte da fatura</small><strong><Money value={person.amount} /></strong></span><span><small>Compras parceladas</small><strong>{person.installment_purchase_count}</strong></span><span><small>Parcelas</small><strong><Money value={person.installment_total_amount} /></strong></span></div>)}</div></article>)}</div> : view.detectedStatements.length ? <div className="monthly-detected-card">{view.detectedStatements.map(item => <article key={item.statement.id}><span><b>{item.statement.card_name}</b><small>Pagamento encontrado · aguardando confirmação</small></span><strong><Money value={item.candidate?.amount ?? item.statement.expected_statement_amount} /></strong></article>)}</div> : <MonthlyEmptyState title="Nenhum pagamento de fatura foi identificado neste mês." />}
+    <div className="monthly-card-secondary">{hasAttachedPdf ? <span>PDF da fatura anexado</span> : <Link href={invoiceUploadUrl} prefetch={false}>Anexar PDF da fatura — opcional</Link>}{view.reimbursements.pending || view.reimbursements.received ? <span>Reembolsos: <Money value={view.reimbursements.received} /> recebidos · <Money value={view.reimbursements.pending} /> pendentes</span> : null}</div>
     {view.reimbursements.people.length ? <details className="monthly-reimbursement-details"><summary>Ver valores por pessoa</summary><div className="monthly-compact-list">{view.reimbursements.people.map(person => <span key={person.personId ?? person.personName}>{person.personName}<small><Money value={person.received} /> recebidos · <Money value={person.pending} /> pendentes</small><strong><Money value={person.total} /></strong></span>)}</div></details> : null}
   </section>;
 }
@@ -228,7 +293,7 @@ export function MonthlyLoansSection({ snapshot }: { snapshot: MonthlyReportSnaps
 }
 
 export function MonthlyFinalReview({ view }: { view: MonthlyReportReviewViewModel }) {
-  return <section className="monthly-review-section monthly-final-review" id="monthly-final-review"><header><div><p className="eyebrow">Revisão final</p><h2>Checklist para conclusão</h2></div></header><div>{view.finalReview.map(item => <span key={item.label}><b>{item.label}</b><em className={item.tone}>{item.value}</em></span>)}</div>{view.warnings.length ? <details className="monthly-review-warnings"><summary>{view.warnings.length} avisos que não bloqueiam</summary><div>{view.warnings.map(warning => <article key={warning.id}><b>{warning.title}</b><p>{warning.description}</p><small>{warning.status === "optional" ? "Opcional" : "Não bloqueia"}</small></article>)}</div></details> : null}</section>;
+  return <section className="monthly-review-section monthly-final-review" id="monthly-final-review"><header><div><p className="eyebrow">Conferência do mês</p><h2>O que falta conferir</h2></div></header><div>{view.finalReview.map(item => <span key={item.label}><b>{item.label}</b><em className={item.tone}>{item.value}</em></span>)}</div>{view.warnings.length ? <details className="monthly-review-warnings"><summary>{view.warnings.length} avisos que não bloqueiam</summary><div>{view.warnings.map(warning => <article key={warning.id}><b>{warning.title}</b><p>{warning.description}</p><small>{warning.status === "optional" ? "Opcional" : "Não bloqueia"}</small></article>)}</div></details> : null}</section>;
 }
 
 export function MonthlyCloseSection({ view, snapshot, common, monthId, canAdmin }: {
