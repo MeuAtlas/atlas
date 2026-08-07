@@ -33,7 +33,6 @@ import {
   getCreditCardInvoiceAnalyticsEntries,
   getFinanceData,
   getReliableCurrentInvoiceSnapshots,
-  getResolvedCardCycleDetails,
   resolveOpenCardInvoice,
 } from "@/modules/finance/queries";
 import { syncCurrentInvoicesAction } from "@/app/financeiro/integracoes/actions";
@@ -87,10 +86,15 @@ export default async function Page({
       })()
     : undefined;
   const { supabase, user } = await requireFinanceAccess();
-  const [data,storedInvoices,peopleResult]=await Promise.all([
+  const needsInvoiceAnalytics = view === "current" || view === "history";
+  const [data,storedInvoices,peopleResult,analyticsResult]=await Promise.all([
     getFinanceData(supabase,user.id),
     getReliableCurrentInvoiceSnapshots(supabase,user.id),
     supabase.from("financial_people").select("id,name").eq("created_by",user.id).eq("is_active",true).is("archived_at",null).order("name"),
+    needsInvoiceAnalytics
+      ? getCreditCardInvoiceAnalyticsEntries(supabase, user.id, null)
+        .catch(() => [] as InvoiceHistoryAnalyticsEntry[])
+      : Promise.resolve([] as InvoiceHistoryAnalyticsEntry[]),
   ]);
   const people=peopleResult.data??[];
   const activeCards = data.cards.filter((card) => card.status === "active");
@@ -107,42 +111,25 @@ export default async function Page({
     data.cardPurchases,
     new Date(),
     {storedInvoices},
-  ).filter((invoice) =>
-    ["open", "partially_paid", "estimated"].includes(invoice.status),
   );
-  const resolvedInvoices = new Map(
-    (await Promise.all(invoices.map(async invoice => {
+  const resolvedInvoices = new Map(view === "current"
+    ? (await Promise.all(invoices.map(async invoice => {
       const resolved = await resolveOpenCardInvoice(supabase, user.id, {
         workspaceId: invoice.card.workspace_id ?? null,
         cardAccountId: invoice.card.id,
         referenceDate: new Date(),
       });
       if (!resolved) return null;
-      const details = await getResolvedCardCycleDetails(supabase, user.id, {
-        workspaceId,
-        cycleId: resolved.cycleId,
-        cardId: invoice.card.id,
-      });
-      return [invoice.card.id, { resolved, details }] as const;
-    }))).filter((entry): entry is NonNullable<typeof entry> => entry !== null),
-  );
+      return [invoice.card.id, { resolved }] as const;
+    }))).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    : []);
   const currentInvoiceTotals = [...resolvedInvoices.values()]
     .map(value => value.resolved.displayTotal)
     .filter((value): value is number => value !== null);
   const currentInvoiceTotal = currentInvoiceTotals.length
     ? currentInvoiceTotals.reduce((sum, value) => sum + value, 0)
     : null;
-  let analyticsEntries: InvoiceHistoryAnalyticsEntry[] = [];
-  try {
-    analyticsEntries = await getCreditCardInvoiceAnalyticsEntries(
-      supabase,
-      user.id,
-      null,
-    );
-  } catch {
-    // A indisponibilidade do histórico não bloqueia a fatura vigente.
-  }
-  const chartEntries = analyticsEntries.map(entry => {
+  const chartEntries = analyticsResult.map(entry => {
     if (!["open", "estimated", "partially_paid"].includes(entry.status)) return entry;
     const current = resolvedInvoices.get(entry.cardId)?.resolved;
     if (!current?.displayTotal) return entry;
@@ -265,9 +252,6 @@ export default async function Page({
                     invoice={invoice}
                     resolvedInvoice={
                       resolvedInvoices.get(invoice.card.id)?.resolved
-                    }
-                    resolvedDetails={
-                      resolvedInvoices.get(invoice.card.id)?.details ?? undefined
                     }
                     compact
                   />

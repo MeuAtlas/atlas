@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
+import { ThemeInitializer } from "@/components/atlas/theme-toggle";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { PwaRuntime } from "@/components/pwa/pwa-runtime";
 
@@ -68,26 +68,6 @@ export const viewport: Viewport = {
   ],
 };
 
-const themeScript = `
-  (() => {
-    try {
-      const storedTheme = localStorage.getItem('atlas-theme');
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const theme =
-        storedTheme === 'dark' || storedTheme === 'light'
-          ? storedTheme
-          : prefersDark
-            ? 'dark'
-            : 'light';
-
-      const root = document.documentElement;
-      root.setAttribute('data-theme', theme);
-      root.classList.toggle('dark', theme === 'dark');
-      root.style.colorScheme = theme;
-    } catch {}
-  })();
-`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -99,14 +79,8 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
-        <Script
-          id="atlas-theme-init"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: themeScript }}
-        />
-      </head>
       <body className="min-h-full">
+        <ThemeInitializer />
         <PwaRuntime>
           <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
         </PwaRuntime>

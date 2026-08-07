@@ -153,6 +153,41 @@ test("fatura seguinte aberta informa o futuro sem bloquear julho", () => {
   assert.equal(view.openStatements.length, 1);
 });
 
+test("fatura oficial do próximo mês não mantém a parte pessoal como estimativa", () => {
+  const august = statement({
+    id: "august-official",
+    official_amount_confirmed: true,
+    official_total_amount: 11_517.22,
+    current_open_amount: 10_997.96,
+    personal_share_amount: 11_517.22,
+    due_date: "2026-08-10",
+  });
+  const view = buildMonthlyReportReviewViewModel({
+    financialMonth: month(), snapshot: snapshot({ openStatements: [august] }),
+    statements: [], reconciliationStatements: [], openStatements: [august],
+    paymentCandidates: [], purchases: [purchase()], versions: [],
+    now: new Date("2026-08-02T12:00:00Z"),
+  });
+  assert.equal(view.openStatements[0]?.personal_share_amount, 11_517.22);
+});
+
+test("PDF confirmado aparece como anexado no checklist", () => {
+  const paid = statement({
+    official_amount_confirmed: true,
+    pdf_document_id: "document-july",
+  });
+  const view = buildMonthlyReportReviewViewModel({
+    financialMonth: month(), snapshot: snapshot({ statements: [paid] }),
+    statements: [paid], reconciliationStatements: [], openStatements: [],
+    paymentCandidates: [], purchases: [purchase()], versions: [],
+    now: new Date("2026-08-02T12:00:00Z"),
+  });
+  assert.equal(
+    view.finalReview.find(item => item.label === "PDF da fatura")?.value,
+    "Anexado",
+  );
+});
+
 test("primeiro mês não usa falsa mediana e categorias pendentes são aviso", () => {
   const view = buildMonthlyReportReviewViewModel({
     financialMonth: month(), snapshot: snapshot({ firstMonth: true }),

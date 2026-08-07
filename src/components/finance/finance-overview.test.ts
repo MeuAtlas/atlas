@@ -73,10 +73,19 @@ test("navegação financeira não cria links para a própria rota", () => {
 test("shells dinâmicos não pré-carregam dashboard e financeiro em ciclo", () => {
   assert.match(shell, /href="\/dashboard" prefetch=\{false\}/);
   assert.match(tabs, /prefetch=\{false\}/);
-  assert.match(dashboard, /href=\{m\.route\} prefetch=\{false\}/);
+  assert.match(dashboard, /href=\{module\.route\} prefetch=\{false\}/);
   assert.match(privateShell, /href="\/dashboard" prefetch=\{false\}/);
   assert.match(moduleSwitcher, /prefetch=\{false\}/);
   assert.doesNotMatch(overview, /<Link(?![^>]*prefetch=\{false\})[^>]*>/);
+});
+
+test("dashboard exibe somente módulos habilitados e implementados", () => {
+  assert.match(dashboard, /\.eq\("enabled", true\)/);
+  assert.match(
+    dashboard,
+    /enabled\.has\(module\.id\) && route \? \[\{ \.\.\.module, route \}\] : \[\]/,
+  );
+  assert.doesNotMatch(dashboard, /Não habilitado|Em breve/);
 });
 
 test("layout e pagina financeira compartilham uma unica validacao de acesso", () => {

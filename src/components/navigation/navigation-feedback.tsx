@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type ComponentProps,
   createContext,
   Suspense,
   useCallback,
@@ -13,6 +14,7 @@ import {
   type ReactNode,
   type TransitionStartFunction,
 } from "react";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 type NavigationFeedback = {
@@ -23,6 +25,23 @@ type NavigationFeedback = {
 };
 
 const NavigationFeedbackContext = createContext<NavigationFeedback | null>(null);
+
+function NavigationLinkHint() {
+  const { pending } = useLinkStatus();
+  return <span
+    aria-hidden="true"
+    className={`atlas-link-pending${pending ? " is-pending" : ""}`}
+  />;
+}
+
+/**
+ * Link for authenticated routes whose data is intentionally not prefetched.
+ * The compact indicator acknowledges the tap immediately while the next
+ * route's loading UI is prepared by the App Router.
+ */
+export function NavigationLink({ children, ...props }: ComponentProps<typeof Link>) {
+  return <Link {...props}>{children}<NavigationLinkHint /></Link>;
+}
 
 function NavigationCompletion({ complete }: { complete: () => void }) {
   const pathname = usePathname();
@@ -91,32 +110,32 @@ export function NavigationFeedbackProvider({ children }: { children: ReactNode }
 
 export function useNavigationTransition(): [boolean, TransitionStartFunction] {
   const feedback = useContext(NavigationFeedbackContext);
-  if (!feedback) {
-    throw new Error("useNavigationTransition exige NavigationFeedbackProvider.");
-  }
-
-  const { begin, completion, end, loading } = feedback;
-  const [, startTransition] = useTransition();
+  const [transitionPending, startTransition] = useTransition();
   const tokenRef = useRef<symbol | null>(null);
 
   useEffect(() => {
     tokenRef.current = null;
-  }, [completion]);
+  }, [feedback?.completion]);
 
   useEffect(() => () => {
-    if (tokenRef.current) end(tokenRef.current);
-  }, [end]);
+    if (tokenRef.current && feedback) feedback.end(tokenRef.current);
+  }, [feedback]);
 
   const startTrackedTransition = useCallback<TransitionStartFunction>((callback) => {
-    if (!tokenRef.current) tokenRef.current = begin();
+    if (!feedback) {
+      startTransition(callback);
+      return;
+    }
+
+    if (!tokenRef.current) tokenRef.current = feedback.begin();
     try {
       startTransition(callback);
     } catch (error) {
-      if (tokenRef.current) end(tokenRef.current);
+      if (tokenRef.current) feedback.end(tokenRef.current);
       tokenRef.current = null;
       throw error;
     }
-  }, [begin, end, startTransition]);
+  }, [feedback, startTransition]);
 
-  return [loading, startTrackedTransition];
+  return [feedback?.loading ?? transitionPending, startTrackedTransition];
 }

@@ -79,6 +79,7 @@ export type MonthlyStatement = {
   cycle_start_date?: string | null;
   cycle_end_date?: string | null;
   statement_file_path?: string | null;
+  pdf_document_id?: string | null;
   reference_month?: string | null;
   expected_statement_amount: number;
   current_open_amount: number;
@@ -533,7 +534,7 @@ export function validateMonthlyClosing(input: {
       issues.push({ key: `statement:${statement.id}:pdf-optional`, type: "statement_pdf_optional", severity: "warning", title: `PDF opcional não anexado para ${statement.card_name}`, description: "O pagamento bancário confirma o valor. O PDF serve apenas para detalhamento e auditoria.", relatedEntityType: "card_invoice", relatedEntityId: statement.id });
     }
   }
-  for (const statement of input.openStatements ?? []) {
+  for (const statement of (input.openStatements ?? []).filter(statement => !isStatementSettled(statement))) {
     issues.push({ key: `statement:${statement.id}:open-forecast`, type: "open_statement_forecast", severity: "warning", title: `A próxima fatura de ${statement.card_name} ainda pode mudar`, description: "Ela não é saída deste mês e aparece apenas como compromisso futuro.", relatedEntityType: "card_invoice", relatedEntityId: statement.id, amount: statement.current_open_amount });
   }
   if ((input.unmatchedPaymentCount ?? 0) > 0) {
@@ -555,6 +556,12 @@ export function validateMonthlyClosing(input: {
     issues.push({ key: "pending_reimbursements", type: "pending_reimbursement", severity: "info", title: "Ainda existem valores a receber", description: "Isso não impede o fechamento do mês.", amount: pending });
   }
   return { issues, blockers: issues.filter((issue) => issue.severity === "blocking"), canClose: !issues.some((issue) => issue.severity === "blocking") };
+}
+
+export function isStatementSettled(statement: Pick<MonthlyStatement, "payment_confirmation_status" | "confirmed_payment_amount" | "official_total_amount" | "expected_statement_amount" | "current_open_amount">) {
+  const expected = statement.official_total_amount ?? statement.expected_statement_amount ?? statement.current_open_amount;
+  return statement.payment_confirmation_status === "paid" ||
+    (expected > 0 && statement.confirmed_payment_amount >= expected);
 }
 
 export function buildMonthlySnapshot(input: {
@@ -630,6 +637,7 @@ export function buildMonthlySnapshot(input: {
   const reimbursements = calculateReimbursements(input.allocations);
   const paidStatements = input.statements.filter(statement => statement.payments.length > 0);
   const openStatements = input.openStatements ?? [];
+  const outstandingOpenStatements = openStatements.filter(statement => !isStatementSettled(statement));
   const cardCashSummary = buildMonthlyCardCashSummary({
     statements: paidStatements.map(statement => ({
       expectedAmount: statement.expected_statement_amount,
@@ -690,7 +698,7 @@ export function buildMonthlySnapshot(input: {
     return { name, amount, share: personalConsumption > 0 ? Math.round((amount / personalConsumption) * 1000) / 10 : 0 };
   }).sort((left, right) => right.amount - left.amount);
   const futureCommitments = input.futureCommitmentMonths ?? [];
-  const openStatementPersonalShare = roundMoney(openStatements.reduce((sum, statement) => {
+  const openStatementPersonalShare = roundMoney(outstandingOpenStatements.reduce((sum, statement) => {
     const forecast = calculateOpenStatementForecast({
       currentAmount: statement.current_open_amount || statement.expected_statement_amount,
       personalShare: statement.personal_share_amount || null,

@@ -79,7 +79,7 @@ export async function generateMonthlyReportPdf(input: { snapshot: MonthlyReportS
     y = row(page, "Sua parte / terceiros", `${money.format(statement.personal_share_amount ?? 0)} / ${money.format(statement.third_party_share_amount ?? 0)}`, y);
     y = row(page, "Status da conciliação", statement.payment_confirmation_status ?? "legado", y);
     y = paragraph(page, statement.payment_confirmation_source === "manual_confirmation" ? "Valor confirmado manualmente." : "Valor da fatura confirmado pelo pagamento identificado na conta corrente.", 44, y - 1, 507, 7.8, colors.muted, 10) - 4;
-    if (statement.statement_file_path) y = paragraph(page, "Fatura anexada para detalhamento.", 44, y, 507, 7.5, colors.muted, 10) - 3;
+    if (statement.statement_file_path || statement.pdf_document_id) y = paragraph(page, "Fatura anexada para detalhamento.", 44, y, 507, 7.5, colors.muted, 10) - 3;
   }
   ensureCardSpace(70); y = section(page, "Próxima fatura", y);
   if (!openStatements.length) y = paragraph(page, "Nenhuma fatura aberta foi localizada para o próximo mês.", 44, y, 507, 8.5, colors.muted, 12) - 4;

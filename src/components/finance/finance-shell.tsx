@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { type ReactNode } from "react";
 import { AtlasAppBackground } from "@/components/atlas/app-background";
@@ -11,6 +10,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { FinanceTabs } from "./finance-tabs";
 import { FinanceNotifications } from "./finance-notifications";
 import { FinanceWorkspaceProvider } from "./finance-workspace-context";
+import { NavigationLink } from "@/components/navigation/navigation-feedback";
 import type { ProviderHealth } from "./provider-health-alert";
 import type { AtlasModule, Profile, Workspace } from "@/types/atlas";
 
@@ -43,9 +43,9 @@ export function FinanceShell({
       <AtlasAppBackground />
       <div className="finance-scroll">
         <header className="finance-topbar">
-          <Link href="/dashboard" prefetch={false} className="finance-wordmark" aria-label="Atlas">
+          <NavigationLink href="/dashboard" prefetch={false} className="finance-wordmark" aria-label="Atlas">
             <AtlasLogo size={42} priority />
-          </Link>
+          </NavigationLink>
           <ModuleSwitcher modules={modules} currentSlug="financeiro" />
           <div className="finance-profile">
             <FinanceNotifications connections={providerHealth} />

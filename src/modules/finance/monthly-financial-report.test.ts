@@ -11,6 +11,7 @@ import {
   getMonthlyCardTransactions,
   getMonthlyPeriod,
   isStatementForMonthlyConsumption,
+  isStatementSettled,
   mergeDependentCostsIntoRecurringGroups,
   nextMonthlyReportVersion,
   resolveMonthlyPurchaseResponsibility,
@@ -321,4 +322,23 @@ test("23. ausência de PDF ou fatura paga no mês não bloqueia o fechamento", (
   const validation = validateMonthlyClosing({ period, status: "review", statements: [], purchases: [], expectedStatementCount: 1, now: new Date("2026-08-04T12:00:00Z") });
   assert.equal(validation.canClose, true);
   assert.equal(validation.blockers.length, 0);
+});
+
+test("24. fatura oficial paga antecipadamente permanece visível sem comprometer agosto outra vez", () => {
+  const augustStatement = statement({
+    due_date: "2026-08-10",
+    official_total_amount: 11517.22,
+    expected_statement_amount: 11517.22,
+    current_open_amount: 11517.22,
+    confirmed_payment_amount: 11517.22,
+    payment_confirmation_status: "paid",
+  });
+  const snapshot = buildMonthlySnapshot({
+    period, transactions: [], purchases: [], statements: [], openStatements: [augustStatement],
+    allocations: [], accounts: [], status: "review",
+    futureCommitmentMonths: [{ month: "2026-08", amount: 0 }],
+  });
+  assert.equal(isStatementSettled(augustStatement), true);
+  assert.equal(snapshot.openStatements?.[0]?.id, augustStatement.id);
+  assert.equal(snapshot.projection?.[0]?.card, 0);
 });

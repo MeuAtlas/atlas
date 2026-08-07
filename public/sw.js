@@ -1,5 +1,5 @@
 /* Atlas PWA worker: caches only public, non-sensitive assets. */
-const ATLAS_SW_VERSION = "atlas-pwa-v1";
+const ATLAS_SW_VERSION = "atlas-pwa-v2";
 const STATIC_CACHE = `${ATLAS_SW_VERSION}-static`;
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [
@@ -41,8 +41,7 @@ self.addEventListener("message", (event) => {
 
 function isSafeStaticAsset(url) {
   if (url.origin !== self.location.origin) return false;
-  return url.pathname.startsWith("/_next/static/") ||
-    url.pathname.startsWith("/icons/") ||
+  return url.pathname.startsWith("/icons/") ||
     url.pathname.startsWith("/assets/atlas/") ||
     url.pathname.startsWith("/login/") ||
     ["/favicon.ico", "/file.svg", "/globe.svg", "/next.svg", "/vercel.svg", "/window.svg"]

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { MoonIcon, SunIcon } from "./icons";
 
 type Theme = "light" | "dark";
@@ -22,6 +23,23 @@ function applyTheme(theme: Theme) {
   } catch {
     // Safari pode restringir o armazenamento; a troca visual deve continuar.
   }
+}
+
+export function ThemeInitializer() {
+  useEffect(() => {
+    try {
+      const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+      const theme = storedTheme === "dark" || storedTheme === "light"
+        ? storedTheme
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      applyTheme(theme);
+    } catch {
+      // O tema padrão do CSS continua disponível quando o armazenamento falha.
+    }
+  }, []);
+  return null;
 }
 
 export function ThemeToggle() {

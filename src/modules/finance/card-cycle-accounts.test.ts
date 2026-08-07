@@ -45,7 +45,7 @@ test("mantém contas Mastercard e Visa independentes na mesma conexão", () => {
   assert.equal(result.resolutionSource, "primary_card");
 });
 
-test("projeção aberta reúne todos os cartões ativos, mesmo em conexões diferentes", () => {
+test("projeção aberta mantém Visa e Mastercard em faturas independentes", () => {
   const result = resolveOpenProjectionCardAccountIds("visa", [
     {
       id: "visa",
@@ -75,14 +75,10 @@ test("projeção aberta reúne todos os cartões ativos, mesmo em conexões dife
     },
   ]);
 
-  assert.deepEqual(result.cardIds, ["visa", "mastercard", "other-connection"]);
-  assert.deepEqual(result.accountIds, [
-    "provider-visa",
-    "provider-master",
-    "provider-other",
-  ]);
-  assert.deepEqual(result.instrumentIds, ["master-5718"]);
-  assert.equal(result.resolutionSource, "open_projection_active_cards");
+  assert.deepEqual(result.cardIds, ["visa"]);
+  assert.deepEqual(result.accountIds, ["provider-visa"]);
+  assert.deepEqual(result.instrumentIds, []);
+  assert.equal(result.resolutionSource, "primary_card");
 });
 
 test("competência usa vencimento e recua para fechamento/referência", () => {

@@ -94,9 +94,18 @@ export function cardPurchaseBelongsToCycle(
   purchase: CardPurchaseCycleEvidence,
   cycle: CardCycleIdentity,
 ) {
-  if (purchase.invoiceId && purchase.invoiceId !== cycle.id) return false;
+  // The live cycle is reconstructed from dates while the provider finishes
+  // assigning transactions to its next Bill. A stale local invoice link must
+  // not hide a purchase that belongs to this still-open cycle. Confirmed
+  // cycles continue to treat the explicit invoice relation as authoritative.
+  if (
+    cycle.trustProviderAssignment &&
+    purchase.invoiceId &&
+    purchase.invoiceId !== cycle.id
+  ) return false;
   if (cycle.trustProviderAssignment && purchase.invoiceId) return true;
   if (
+    cycle.trustProviderAssignment &&
     purchase.providerBillId &&
     cycle.providerBillId &&
     purchase.providerBillId !== cycle.providerBillId

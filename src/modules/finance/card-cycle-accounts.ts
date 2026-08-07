@@ -69,28 +69,22 @@ export function resolveCardCycleAccountIds(
 }
 
 /**
- * The open invoice screen is a consolidated projection of every non-archived
- * credit card synchronized for the user. Visa and Mastercard can arrive
- * through different Pluggy connections, and a provider status can lag behind
- * an already-created open bill, so neither condition must limit this view.
- * Historical and closed statements keep using resolveCardCycleAccountIds so
- * their PDF details remain card-specific.
+ * An open invoice belongs to one credit account. Visa and Mastercard may be
+ * synchronized by the same connection, but they have independent bills. Its
+ * physical, additional and virtual cards are represented as instruments of
+ * this primary account.
  */
 export function resolveOpenProjectionCardAccountIds(
   primaryCardId: string,
   cards: CardCycleAccountCandidate[],
 ): CardCycleAccountResolution {
   const primary = cards.find(card => card.id === primaryCardId);
-  const resolved = cards.filter(card =>
-    card.status !== "archived" && !card.user_archived_at);
-  const withPrimary = resolved.some(card => card.id === primaryCardId)
-    ? resolved
-    : [primary ?? { id: primaryCardId }, ...resolved];
+  const resolved = [primary ?? { id: primaryCardId }];
   return buildCardCycleAccountResolution(
     primaryCardId,
     cards,
-    withPrimary,
-    "open_projection_active_cards",
+    resolved,
+    "primary_card",
   );
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { AtlasModule } from "@/types/atlas";
+import { NavigationLink } from "@/components/navigation/navigation-feedback";
 
 function moduleHref(module: AtlasModule) {
   if (module.route) return module.route;
@@ -59,7 +59,7 @@ export function ModuleSwitcher({
           {modules.map((module) => {
             const active = module.slug === currentSlug;
             return (
-              <Link
+              <NavigationLink
                 key={module.id}
                 href={moduleHref(module)}
                 prefetch={false}
@@ -70,7 +70,7 @@ export function ModuleSwitcher({
               >
                 <span>{module.name}</span>
                 {active ? <small>Atual</small> : null}
-              </Link>
+              </NavigationLink>
             );
           })}
         </div>

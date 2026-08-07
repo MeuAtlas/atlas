@@ -163,7 +163,7 @@ function SummaryCards({
         {(summary.mode === "card" && breakdown
           ? [
             {
-              label: "Projeção Pluggy",
+              label: "Projeção da fatura",
               value: breakdown.detailedTotal ?? null,
               tone: "neutral" as const,
               signed: false,
@@ -178,6 +178,12 @@ function SummaryCards({
               label: "Compras parceladas",
               value: breakdown.postedInstallmentsTotal ?? null,
               tone: "negative" as const,
+              signed: false,
+            },
+            {
+              label: "Parcelas previstas",
+              value: breakdown.projectedUnpostedInstallmentsTotal ?? null,
+              tone: "neutral" as const,
               signed: false,
             },
             {
@@ -240,7 +246,7 @@ function SummaryCards({
             <>
               {breakdown ? (
                 <>
-                  <span>Movimentações: somente Pluggy</span>
+                  <span>Compras lançadas e parcelas previstas nesta fatura</span>
                   <span>Atualiza após cada sincronização</span>
                 </>
               ) : null}
@@ -252,7 +258,9 @@ function SummaryCards({
             </>
           )}
           <span>
-            Fonte: {resolvedInvoice?.sourceLabel ??
+            Fonte: {breakdown
+              ? "Compras sincronizadas e parcelas projetadas"
+              : resolvedInvoice?.sourceLabel ??
               (cycle.source === "pdf"
                 ? "PDF confirmado"
                 : cycle.source === "pluggy_bill"

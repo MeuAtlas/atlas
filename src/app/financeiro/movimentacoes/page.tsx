@@ -89,12 +89,7 @@ export default async function MovementsPage({
     if (!["open", "partial"].includes(cycle.status)) return cycle;
     return {
       ...cycle,
-      cardIds: [...new Set([
-        ...resolveOpenProjectionCardAccountIds(cycle.cardId, data.cards).cardIds,
-        ...availableCardCycles
-          .filter(other => ["open", "partial"].includes(other.status))
-          .flatMap(other => other.cardIds),
-      ])],
+      cardIds: resolveOpenProjectionCardAccountIds(cycle.cardId, data.cards).cardIds,
     };
   });
   const selectedCycle = filters.type === "card"

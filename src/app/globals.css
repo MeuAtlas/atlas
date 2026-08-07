@@ -7,10 +7,8 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--atlas-bg) 22%, transparent);
-  backdrop-filter: blur(5px) saturate(.82);
-  -webkit-backdrop-filter: blur(5px) saturate(.82);
-  cursor: wait;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--atlas-bg) 8%, transparent);
   animation: atlas-navigation-fade .16s ease-out both;
 }
 
@@ -19,7 +17,7 @@
   justify-items: center;
   gap: 10px;
   color: var(--atlas-text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -68,9 +66,30 @@
 @keyframes atlas-navigation-fade { from { opacity: 0; } }
 @keyframes atlas-navigation-spin { to { transform: rotate(360deg); } }
 
+.atlas-link-pending {
+  display: inline-block;
+  width: .55em;
+  height: .55em;
+  margin-left: .42em;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+  transform: translateY(.04em);
+  visibility: hidden;
+}
+
+.atlas-link-pending.is-pending {
+  visibility: visible;
+  animation: atlas-link-pending-enter .12s ease-out both, atlas-navigation-spin .7s linear infinite;
+}
+
+@keyframes atlas-link-pending-enter { from { opacity: 0; } to { opacity: .82; } }
+
 @media (prefers-reduced-motion: reduce) {
   .atlas-navigation-overlay,
-  .atlas-navigation-orbit i { animation: none; }
+  .atlas-navigation-orbit i,
+  .atlas-link-pending.is-pending { animation: none; }
 }
 
 :root {
@@ -2402,10 +2421,10 @@ input {
 
 /* Finance typography migration and accessibility guardrail.
    Legacy selectors above remain layout-only; these role rules own readable type. */
-.finance-content :is(p, dd) { font-size: 14px; line-height: var(--atlas-line-body); }
-.finance-content :is(small, label, dt, time) { font-size: 13px; line-height: 1.45; }
-.finance-content :is(input, select, textarea) { font-size: 14px; line-height: 1.4; }
-.finance-content :is(button, a) { font-size: 14px; line-height: 1.3; }
+.finance-content :is(p, dd) { font-size: 15px; line-height: var(--atlas-line-body); }
+.finance-content :is(small, label, dt, time) { font-size: 14px; line-height: 1.45; }
+.finance-content :is(input, select, textarea) { font-size: 16px; line-height: 1.4; }
+.finance-content :is(button, a) { font-size: 15px; line-height: 1.3; }
 .finance-content :is(.status, .flow-direction, .flow-status, .movement-badges i, .fov-freshness) { font-size: 12px; line-height: 1.25; }
 .finance-content .recharts-text,
 .finance-content svg text { font-size: 12px; fill: var(--atlas-chart-axis); }
@@ -2849,3 +2868,15 @@ input {
 .monthly-technical-details{padding:0}.monthly-technical-details>summary{padding:15px 18px;color:var(--atlas-blue);font-size:12px;font-weight:700;cursor:pointer}.monthly-technical-details>div{display:grid;gap:12px;border-top:1px solid var(--atlas-border);padding:14px}.monthly-technical-details .finance-panel{border-radius:12px;box-shadow:none}.monthly-conclusion{display:flex;align-items:center;justify-content:flex-end;gap:10px;border:1px solid var(--atlas-border);border-radius:15px;background:var(--atlas-card);padding:17px 20px}.monthly-conclusion>div{display:grid;gap:4px;margin-right:auto}.monthly-conclusion h2{margin:0;font-size:17px}.monthly-conclusion p{margin:0;color:var(--atlas-muted);font-size:11px}.monthly-conclusion.blocked{border-color:color-mix(in srgb,var(--atlas-warning) 32%,var(--atlas-border))}.monthly-conclusion button:disabled{cursor:not-allowed;opacity:.45}.monthly-close-trigger{min-height:42px}.monthly-close-modal form{display:grid}.monthly-close-summary dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 15px}.monthly-close-summary dl>div{display:grid;gap:5px;border-radius:10px;background:var(--atlas-surface);padding:11px}.monthly-close-summary dt{color:var(--atlas-muted);font-size:9px}.monthly-close-summary dd{margin:0;font-size:14px;font-weight:700}.monthly-close-summary p{margin:0;color:var(--atlas-muted);font-size:11px;line-height:1.55}.monthly-review-empty{display:grid;place-items:center;min-height:90px;border:1px dashed var(--atlas-border);border-radius:11px;padding:16px;color:var(--atlas-muted);font-size:11px}
 @media(max-width:900px){.monthly-review-header{grid-template-columns:1fr}.monthly-review-header-actions{justify-content:flex-start}.monthly-blocking-card{grid-template-columns:1fr}.monthly-card-review-grid{grid-template-columns:1fr}.monthly-cash-highlights,.monthly-commitment-grid,.monthly-future-summary{grid-template-columns:1fr 1fr}.monthly-cash-highlights article:nth-child(odd),.monthly-future-summary span:nth-child(odd){border-left:0}.monthly-cash-highlights article:nth-child(n+3),.monthly-future-summary span:nth-child(n+3){border-top:1px solid var(--atlas-border)}.monthly-future-months{grid-template-columns:1fr}.monthly-responsibility-form{grid-template-columns:1fr 1fr}.monthly-responsibility-form>strong,.monthly-responsibility-form>button{grid-column:1/-1}}
 @media(max-width:620px){.monthly-review-page{gap:16px}.monthly-review-header{gap:16px;padding-bottom:16px}.monthly-review-title-line{align-items:flex-start;flex-direction:column;gap:8px}.monthly-review-title-line h1{font-size:30px}.monthly-review-header-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.monthly-preview-menu>summary,.monthly-review-header-actions>.finance-button{justify-content:center;width:100%}.monthly-review-notice{align-items:flex-start;flex-direction:column;gap:5px}.monthly-review-section{border-radius:14px;padding:16px}.monthly-review-section>header{margin-bottom:12px}.monthly-review-section>header h2{font-size:21px}.monthly-review-summary-grid{grid-template-columns:1fr 1fr}.monthly-review-summary-grid article,.monthly-review-summary-grid article:nth-child(3n+1){border-top:1px solid var(--atlas-border);border-left:1px solid var(--atlas-border)}.monthly-review-summary-grid article:nth-child(-n+2){border-top:0}.monthly-review-summary-grid article:nth-child(odd){border-left:0}.monthly-blocking-card{padding:13px}.monthly-blocking-facts{grid-template-columns:1fr}.monthly-blocking-actions{align-items:stretch;flex-direction:column}.monthly-blocking-actions form,.monthly-blocking-actions button,.monthly-alternative-actions{width:100%}.monthly-income-summary{grid-template-columns:1fr}.monthly-income-summary>span,.monthly-comparison-empty{grid-column:auto;min-height:74px;border-top:1px solid var(--atlas-border);border-left:0}.monthly-income-summary>*:first-child{border-top:0}.monthly-consumption-totals,.monthly-installment-totals{grid-template-columns:1fr}.monthly-commitment-grid{grid-template-columns:1fr 1fr}.monthly-available-inline{grid-template-columns:1fr}.monthly-available-inline strong{grid-column:1;grid-row:auto}.monthly-balance-line{align-items:flex-start;flex-wrap:wrap}.monthly-balance-line>a{width:100%;margin-left:0}.monthly-review-cash-flow .overview-balance-chart{height:245px}.monthly-paid-card-list dl,.monthly-next-statement-list dl{grid-template-columns:1fr}.monthly-card-secondary{align-items:flex-start;flex-direction:column}.monthly-responsibility-form{grid-template-columns:1fr}.monthly-responsibility-form>*{grid-column:auto!important}.monthly-conclusion{align-items:stretch;flex-direction:column}.monthly-conclusion>div{margin:0 0 5px}.monthly-conclusion .finance-button{width:100%;text-align:center}.monthly-close-summary dl{grid-template-columns:1fr}.monthly-close-modal-backdrop{align-items:end;padding:0}.monthly-close-modal{width:100%;border-radius:18px 18px 0 0}.monthly-review-warnings article{grid-template-columns:1fr}.monthly-review-warnings small{grid-column:1;grid-row:auto}.monthly-technical-details{padding:0}.monthly-technical-details>div{padding:10px}.monthly-technical-details .monthly-transactions{overflow:hidden}.monthly-technical-details .monthly-transaction-list>div{grid-template-columns:minmax(0,1fr) auto}}
+
+/* Mobile legibility baseline for the non-finance areas, which do not inherit
+   the finance typography guardrail above. */
+@media (max-width: 800px) {
+  .atlas-private-scroll :is(p, dd) { font-size: 16px !important; line-height: var(--atlas-line-body) !important; }
+  .atlas-private-scroll :is(small, label, dt, time) { font-size: 15px !important; line-height: 1.5 !important; }
+  .atlas-private-scroll :is(input, select, textarea) { min-height: 44px; font-size: 16px !important; }
+  .atlas-private-scroll :is(button, a) { min-height: 44px; font-size: 16px !important; line-height: 1.25; }
+  .atlas-private-scroll :is(.eyebrow, .status, .atlas-badge-text) { min-height: auto; font-size: 13px !important; }
+  .finance-tabs { gap: 8px; padding-block: 4px 14px; scroll-padding-inline: 18px; }
+  .finance-tabs :is(a, span) { min-height: 44px; padding-inline: 15px; font-size: 16px; }
+}

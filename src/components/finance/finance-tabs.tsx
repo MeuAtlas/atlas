@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@/components/navigation/navigation-feedback";
 
 export type FinanceTabItem = {
   label: string;
@@ -42,13 +42,13 @@ export function FinanceTabs({
           );
         }
         return (
-          <Link
+          <NavigationLink
             href={href}
             key={item.label}
             prefetch={false}
           >
             {item.label}
-          </Link>
+          </NavigationLink>
         );
       })}
     </nav>

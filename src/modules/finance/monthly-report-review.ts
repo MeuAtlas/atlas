@@ -254,7 +254,7 @@ export function buildMonthlyReportReviewViewModel(input: {
     { label: "Reembolsos", value: input.snapshot.totals.reimbursementsPending ? "Há valores a receber" : "Conferidos", tone: input.snapshot.totals.reimbursementsPending ? "neutral" : "success" },
     { label: "Movimentações bancárias", value: "Atualizadas", tone: "success" },
     { label: "Categorias", value: consumptionNeedsClassification ? `${uncategorizedEntries.length} pendentes · não bloqueia` : "Revisadas", tone: consumptionNeedsClassification ? "neutral" : "success" },
-    { label: "PDF da fatura", value: [...input.statements, ...input.reconciliationStatements].some(statement => statement.statement_file_path) ? "Anexado" : "Não anexado · opcional", tone: "neutral" },
+    { label: "PDF da fatura", value: [...input.statements, ...input.reconciliationStatements].some(statement => statement.statement_file_path || statement.pdf_document_id) ? "Anexado" : "Não anexado · opcional", tone: "neutral" },
     { label: "Snapshot", value: blockers.length ? "Aguardando pendências" : "Pronto", tone: blockers.length ? "warning" : "success" },
   ];
   return {

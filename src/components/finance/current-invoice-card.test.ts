@@ -17,6 +17,10 @@ const detail = readFileSync(
   join(root, "src/app/financeiro/cartoes/[id]/page.tsx"),
   "utf8",
 );
+const cardsPage = readFileSync(
+  join(root, "src/app/financeiro/cartoes/page.tsx"),
+  "utf8",
+);
 const overview = readFileSync(
   join(root, "src/components/finance/finance-overview.tsx"),
   "utf8",
@@ -88,5 +92,16 @@ test("seção aponta para faturas atuais e tem vazio compacto", () => {
   assert.doesNotMatch(
     overview,
     /Faturas vigentes[\s\S]*?overview-section-warning[\s\S]*?Próximos compromissos/,
+  );
+});
+
+test("todos os cartões ativos aparecem na visão atual", () => {
+  assert.match(
+    cardsPage,
+    /const invoices = buildCurrentCardInvoices\(\s*activeCards,/,
+  );
+  assert.doesNotMatch(
+    cardsPage,
+    /buildCurrentCardInvoices\([\s\S]{0,160}\)\.filter/,
   );
 });

@@ -66,7 +66,7 @@ test("service worker guarda somente assets públicos e usa fallback offline", ()
   assert.match(worker, /SKIP_WAITING/);
   assert.match(worker, /addEventListener\("push"/);
   assert.match(worker, /addEventListener\("notificationclick"/);
-  assert.match(worker, /startsWith\("\/_next\/static\/"\)/);
+  assert.doesNotMatch(worker, /startsWith\("\/_next\/static\/"\)/);
   assert.doesNotMatch(worker, /\\\.\(\?:css\|js/);
   assert.match(worker, /cache\.addAll\(PRECACHE\)/);
   assert.doesNotMatch(worker, /cache\.put\([^\n]*(?:api|financeiro|supabase|pluggy)/i);

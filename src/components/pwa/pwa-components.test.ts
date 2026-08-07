@@ -14,6 +14,8 @@ test("registro do worker é progressivo e não bloqueia desenvolvimento", () => 
   assert.match(context, /updateViaCache: "none"/);
   assert.match(context, /registration\.update\(\)/);
   assert.match(layout, /<PwaRuntime>/);
+  assert.match(layout, /<body[\s\S]*<Script[\s\S]*strategy="beforeInteractive"/);
+  assert.doesNotMatch(layout, /<head>[\s\S]*<Script/);
 });
 
 test("instalação Android e desktop depende de gesto e trata recusa", () => {

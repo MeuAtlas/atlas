@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { PrivateShell } from "@/components/atlas/private-shell";
 import { PwaDeviceSettings } from "@/components/pwa/pwa-device-settings";
+import { NavigationLink } from "@/components/navigation/navigation-feedback";
 import { getAuthContext, isCurrentUserSuperAdmin } from "@/lib/auth/session";
+import { throwSupabaseError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,23 @@ export default async function DashboardPage() {
   if (!user || !profile) redirect("/login");
   if (!profile.onboarding_completed) redirect("/onboarding");
   if (profile.status === "suspended") redirect("/login?error=account_suspended");
-  const [isAdmin, { data: modules }, { data: grants }] = await Promise.all([
+  const [isAdmin, modulesResult, grantsResult] = await Promise.all([
     isCurrentUserSuperAdmin(supabase),
     supabase.from("modules").select("id,slug,name,description,route,category,is_globally_active").eq("is_globally_active", true).order("name"),
-    supabase.from("user_modules").select("module_id,enabled").eq("user_id", user.id),
+    supabase.from("user_modules").select("module_id").eq("user_id", user.id).eq("enabled", true),
   ]);
-  const enabled = new Set(grants?.filter((grant) => grant.enabled).map((grant) => grant.module_id));
+  if (modulesResult.error || grantsResult.error) {
+    throwSupabaseError(
+      modulesResult.error ?? grantsResult.error,
+      "carregar módulos disponíveis no dashboard",
+      "Não foi possível carregar os módulos disponíveis.",
+    );
+  }
+  const enabled = new Set(grantsResult.data.map((grant) => grant.module_id));
+  const availableModules = modulesResult.data.flatMap((module) => {
+    const route = module.route?.trim();
+    return enabled.has(module.id) && route ? [{ ...module, route }] : [];
+  });
   const name = profile.preferred_name || profile.full_name?.split(/\s+/)[0] || "você";
   return (
     <PrivateShell isSuperAdmin={isAdmin}>
@@ -28,13 +40,17 @@ export default async function DashboardPage() {
             <LogoutButton />
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {modules?.map((m) => {
-              const active = enabled.has(m.id);
-              const content = <><span className="text-2xl">✦</span><h2 className="mt-4 font-semibold">{m.name}</h2><p className="mt-2 min-h-10 text-sm text-[var(--atlas-muted)]">{m.description}</p><span className={`status mt-5 inline-flex ${active && m.route ? "success" : ""}`}>{active ? (m.route ? "Abrir módulo" : "Em breve") : "Não habilitado"}</span></>;
-              return active && m.route
-                ? <Link href={m.route} prefetch={false} key={m.id} className="finance-panel transition hover:-translate-y-1 hover:border-[var(--atlas-blue)]">{content}</Link>
-                : <article key={m.id} className="finance-panel opacity-70">{content}</article>;
-            })}
+            {availableModules.map((module) => (
+              <NavigationLink href={module.route} prefetch={false} key={module.id} className="finance-panel transition hover:-translate-y-1 hover:border-[var(--atlas-blue)]">
+                <span className="text-2xl">✦</span>
+                <h2 className="mt-4 font-semibold">{module.name}</h2>
+                <p className="mt-2 min-h-10 text-sm text-[var(--atlas-muted)]">{module.description}</p>
+                <span className="status success mt-5 inline-flex">Abrir módulo</span>
+              </NavigationLink>
+            ))}
+            {availableModules.length === 0 ? (
+              <p className="text-sm text-[var(--atlas-muted)]">Nenhum módulo está disponível no momento.</p>
+            ) : null}
           </div>
         </div>
         <PwaDeviceSettings />

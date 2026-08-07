@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { generateMonthlyReportPdf } from "@/modules/finance/monthly-financial-report-pdf";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getMonthlyPeriod,
   hashMonthlySnapshot,
@@ -196,7 +197,7 @@ async function generateAndStorePdf(input: {
     const generated = await generateMonthlyReportPdf({ snapshot: input.snapshot, version: input.version, workspaceName: input.workspaceName });
     const month = String(input.month).padStart(2, "0");
     const path = `${input.workspaceId}/${input.year}/${month}/relatorio-financeiro-${input.year}-${month}-v${input.version}.pdf`;
-    const upload = await input.supabase.storage.from("financial-reports").upload(path, generated.bytes, { contentType: "application/pdf", upsert: true });
+    const upload = await createAdminClient().storage.from("financial-reports").upload(path, generated.bytes, { contentType: "application/pdf", upsert: true });
     if (upload.error) throw upload.error;
     const finalized = await input.supabase.rpc("finalize_monthly_report_pdf", { p_report_id: input.reportId, p_path: path, p_hash: generated.hash });
     if (finalized.error) throw finalized.error;

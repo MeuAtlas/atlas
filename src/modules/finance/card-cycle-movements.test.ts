@@ -238,9 +238,17 @@ test("seletores de ciclo mantêm PDF como base fechada e o removem da aberta", (
     description: "OUTRA COMPRA",
     merchantNormalized: "OUTRA COMPRA",
   });
+  const manual = movement({
+    id: "manual",
+    source: "manual",
+    sourceRecordId: "manual-1",
+    providerTransactionId: null,
+    description: "COMPRA MANUAL",
+    merchantNormalized: "COMPRA MANUAL",
+  });
   assert.deepEqual(
-    getOpenCardCycleMovements([pdf, pluggy]).map(item => item.source),
-    ["pluggy"],
+    getOpenCardCycleMovements([pdf, pluggy, manual]).map(item => item.source).sort(),
+    ["manual", "pluggy"],
   );
   assert.deepEqual(
     getClosedCardCycleMovements([pdf, pluggy])
@@ -295,7 +303,7 @@ test("closed cycle keeps two-day processing grace without leaking into open cycl
   }, openCycle), false);
 });
 
-test("explicit invoice evidence has priority over dates for every cycle", () => {
+test("ciclos confirmados respeitam o vínculo explícito da fatura", () => {
   const cycle = {
     id: "august",
     providerBillId: "bill-august",
@@ -315,5 +323,36 @@ test("explicit invoice evidence has priority over dates for every cycle", () => 
   assert.equal(cardPurchaseBelongsToCycle({
     providerBillId: "bill-august",
     purchaseDate: "2026-07-02",
+  }, cycle), true);
+});
+
+test("ciclo aberto inclui compra com vínculo antigo quando a data pertence ao ciclo", () => {
+  const cycle = {
+    id: "september",
+    referenceMonth: "2026-09-01",
+    cycleStartDate: "2026-08-04",
+    cycleEndDate: "2026-09-03",
+    trustProviderAssignment: false,
+  };
+  assert.equal(cardPurchaseBelongsToCycle({
+    invoiceId: "august",
+    purchaseDate: "2026-08-05",
+    competenceDate: "2026-08-05",
+  }, cycle), true);
+});
+
+test("ciclo aberto prioriza o lançamento atual mesmo com Bill da Pluggy defasado", () => {
+  const cycle = {
+    id: "september",
+    providerBillId: "bill-september",
+    referenceMonth: "2026-09-01",
+    cycleStartDate: "2026-08-04",
+    cycleEndDate: "2026-09-03",
+    trustProviderAssignment: false,
+  };
+  assert.equal(cardPurchaseBelongsToCycle({
+    providerBillId: "bill-august",
+    purchaseDate: "2026-07-15",
+    postingDate: "2026-08-20",
   }, cycle), true);
 });
