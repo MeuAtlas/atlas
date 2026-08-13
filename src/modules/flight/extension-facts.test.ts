@@ -1,0 +1,9 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { deriveExtensionFacts } from "./extension-facts";
+const base={plannedDutyId:"p",executedDutyId:"e",plannedDutyMinutes:700,executedDutyMinutes:720,plannedFlightTimeMinutes:500,executedFlightTimeMinutes:540,plannedOperatingLegCount:3,executedOperatingLegCount:3,normalDutyLimitMinutes:720,normalFlightTimeLimitMinutes:540,matched:true};
+test("derives extension facts only from known normal limits and matched duties",()=>{assert.deepEqual(deriveExtensionFacts(base).extensionRequired,"FALSE");assert.equal(deriveExtensionFacts({...base,executedDutyMinutes:750}).dutyExtensionMinutes,30);assert.equal(deriveExtensionFacts({...base,executedFlightTimeMinutes:560}).flightTimeExtensionMinutes,20);assert.equal(deriveExtensionFacts({...base,normalDutyLimitMinutes:null}).extensionRequired,"UNKNOWN");assert.equal(deriveExtensionFacts({...base,executedOperatingLegCount:4}).additionalOperatingLegs,1);assert.equal(deriveExtensionFacts({...base,executedOperatingLegCount:2}).additionalOperatingLegs,0);assert.equal(deriveExtensionFacts({...base,matched:false}).additionalOperatingLegs,"UNKNOWN");assert.equal(deriveExtensionFacts(base).unexpectedOperationalCircumstance,"UNKNOWN");assert.equal(deriveExtensionFacts(base).commanderExtensionDecision,"UNKNOWN");});
+
+test("does not treat an additional deadhead as an additional operating leg or as an extension",()=>{const result=deriveExtensionFacts({...base,plannedOperatingLegCount:2,executedOperatingLegCount:2});assert.equal(result.additionalOperatingLegs,0);assert.equal(result.extensionRequired,"FALSE");});
+
+test("preserves documentary extension facts without inferring them from a schedule",()=>{const result=deriveExtensionFacts({...base,unexpectedOperationalCircumstance:true,commanderExtensionDecision:false});assert.equal(result.unexpectedOperationalCircumstance,"TRUE");assert.equal(result.commanderExtensionDecision,"FALSE");});

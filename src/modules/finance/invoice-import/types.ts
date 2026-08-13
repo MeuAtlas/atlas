@@ -14,6 +14,8 @@ export interface PdfTextItem {
   height: number;
   hasEOL?: boolean;
   visualIndex: number;
+  rawX?: number;
+  rawY?: number;
 }
 
 export interface PdfVisualLine {

@@ -1,0 +1,4406 @@
+{
+  "generatedAt": "2026-08-13T18:48:41.919Z",
+  "import": {
+    "id": "b06084f8-b024-4912-b6de-bd534b8a7195",
+    "original_filename": "1786625181309.00044027-pglolncwebs01.18992.idp.pdf",
+    "document_period_start": "2026-08-01",
+    "document_period_end": "2026-08-31"
+  },
+  "days": [
+    {
+      "date": "2026-08-01",
+      "entries": [
+        {
+          "id": "345be41e-51af-55b6-bd54-1527533b8a76",
+          "subject_id": "daily:2026-08-01:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-01",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-01T03:00:00+00:00",
+          "end_at": "2026-08-01T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "74229bb8-a367-509b-b1ac-b69d69769685",
+          "subject_id": "daily:2026-08-01:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-01",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-01T08:00:00+00:00",
+          "end_at": "2026-08-01T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "0c4f0d2a-575d-5fdd-92d0-79118063d328",
+          "subject_id": "daily:2026-08-01:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-01",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-01T14:00:00+00:00",
+          "end_at": "2026-08-01T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "e7ca8c03-45ee-596e-84f6-6d78e3cee8b1",
+          "subject_id": "daily:2026-08-01:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-01",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-01T22:00:00+00:00",
+          "end_at": "2026-08-01T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-02",
+      "entries": [
+        {
+          "id": "4744120e-dac5-58f7-b98f-8c4573e6c426",
+          "subject_id": "daily:2026-08-02:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-02",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-02T03:00:00+00:00",
+          "end_at": "2026-08-02T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "dced5ba2-4cd1-521b-8c38-810a1c38c673",
+          "subject_id": "daily:2026-08-02:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-02",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-02T08:00:00+00:00",
+          "end_at": "2026-08-02T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "bafaaf82-cc06-503d-8715-b1d686f2de7b",
+          "subject_id": "daily:2026-08-02:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-02",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRAINING_OVERLAP",
+          "start_at": "2026-08-02T14:00:00+00:00",
+          "end_at": "2026-08-02T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "C-EMG-ON BSB 1000 1300",
+            "hotelIntervalId": null,
+            "timelineActivityId": "351c84ef-5ec7-493f-a071-3b9b66b1539f",
+            "timelineActivityKind": "COURSE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "aeace569-18dc-5675-b1c7-6c4cfbb4c333",
+          "subject_id": "daily:2026-08-02:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-02",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-02T22:00:00+00:00",
+          "end_at": "2026-08-02T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "1fa2022b-2561-5f60-8c27-53ff848c47b9",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-03",
+      "entries": [
+        {
+          "id": "f3473d0d-e1dd-59a0-a222-c1a67bc51f5f",
+          "subject_id": "daily:2026-08-03:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-03",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-03T03:00:00+00:00",
+          "end_at": "2026-08-03T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "1fa2022b-2561-5f60-8c27-53ff848c47b9",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "e79060cb-6c7c-5baf-a18f-04114f341e37",
+          "subject_id": "daily:2026-08-03:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-03",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_HOTEL_BREAKFAST",
+          "start_at": "2026-08-03T08:00:00+00:00",
+          "end_at": "2026-08-03T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "TRUE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "FALSE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": "a88837fd-7e86-5a3a-a1e7-a6212485a01d",
+            "timelineActivityId": "1fa2022b-2561-5f60-8c27-53ff848c47b9",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "TRUE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "410c1c2a-9893-565d-b6ba-b1067f019060",
+          "subject_id": "daily:2026-08-03:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-03",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-03T14:00:00+00:00",
+          "end_at": "2026-08-03T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "1fa2022b-2561-5f60-8c27-53ff848c47b9",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "35266020-4cd9-5106-aa78-a9c4162c4d07",
+          "subject_id": "daily:2026-08-03:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-03",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_DEADHEAD_OVERLAP",
+          "start_at": "2026-08-03T22:00:00+00:00",
+          "end_at": "2026-08-03T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "DH/G3 1416 CGH 1833 2015 BSB [FT",
+            "hotelIntervalId": null,
+            "timelineActivityId": "bea8aba8-f748-4c19-a10b-d92baf02c05a",
+            "timelineActivityKind": "DEADHEAD",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-04",
+      "entries": [
+        {
+          "id": "f1d1d9fc-ad13-5245-b20e-d0d5ca38ab28",
+          "subject_id": "daily:2026-08-04:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-04",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-04T03:00:00+00:00",
+          "end_at": "2026-08-04T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "bac85a89-abbf-536f-a1f8-6dd341aa8ce2",
+          "subject_id": "daily:2026-08-04:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-04",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-04T08:00:00+00:00",
+          "end_at": "2026-08-04T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "ca9f31c3-70a6-597b-8cbd-6a45c0846ac0",
+          "subject_id": "daily:2026-08-04:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-04",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-04T14:00:00+00:00",
+          "end_at": "2026-08-04T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "e010dc92-61ea-5cc8-b2f2-9971c551444d",
+          "subject_id": "daily:2026-08-04:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-04",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-04T22:00:00+00:00",
+          "end_at": "2026-08-04T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-05",
+      "entries": [
+        {
+          "id": "d58676eb-6538-531f-a86e-84d24e2e8fc7",
+          "subject_id": "daily:2026-08-05:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-05",
+          "location": "MAO",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-05T04:00:00+00:00",
+          "end_at": "2026-08-05T05:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "Wed05 G3 9641 /04 MAO !0042 0525 GRU B73C",
+            "hotelIntervalId": null,
+            "timelineActivityId": "7c33f34b-c23b-4109-a3cd-0282187c4d93",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "a25118a0-77cf-5f5b-99ba-cd2b68b4fb62",
+          "subject_id": "daily:2026-08-05:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-05",
+          "location": "GRU",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-05T08:00:00+00:00",
+          "end_at": "2026-08-05T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "LAST_LEG_TO_CHECK_OUT",
+            "hotelIntervalId": null,
+            "timelineActivityId": "3174cffe-ab7e-42c6-80c6-8ffa4221590d:after",
+            "timelineActivityKind": "DUTY_CONTINUITY",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "c5c02c71-7f2d-5381-82aa-2c3377b3a01f",
+          "subject_id": "daily:2026-08-05:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-05",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-05T14:00:00+00:00",
+          "end_at": "2026-08-05T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "b7e9116a-46c0-5e79-a19c-9d28189d615d",
+          "subject_id": "daily:2026-08-05:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-05",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-05T22:00:00+00:00",
+          "end_at": "2026-08-05T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-06",
+      "entries": [
+        {
+          "id": "27dc0280-31b8-5698-9e68-58136a665eb7",
+          "subject_id": "daily:2026-08-06:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-06",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-06T03:00:00+00:00",
+          "end_at": "2026-08-06T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "e2da785f-ca53-569d-b5fb-f713dee09412",
+          "subject_id": "daily:2026-08-06:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-06",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-06T08:00:00+00:00",
+          "end_at": "2026-08-06T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "a4fa387e-e8c3-5cfd-b671-3ba698a17d8d",
+          "subject_id": "daily:2026-08-06:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-06",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-06T14:00:00+00:00",
+          "end_at": "2026-08-06T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 1614 CGH 1148 1503 REC B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "b8565d90-6eca-4927-a25f-3ec1a2dc7cfd",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "cb13515a-1a58-52c6-889f-22b40e4f9b46",
+          "subject_id": "daily:2026-08-06:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-06",
+          "location": "REC",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-06T22:00:00+00:00",
+          "end_at": "2026-08-06T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 1617 REC 1602 1936 CGH B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "1a421618-844c-45d1-82e1-ad9fae2fcc9f",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-07",
+      "entries": [
+        {
+          "id": "d744622d-154d-54f0-bc35-2ea85b436fd7",
+          "subject_id": "daily:2026-08-07:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-07",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-07T03:00:00+00:00",
+          "end_at": "2026-08-07T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "690fae59-a114-54c9-86a2-c4452be74e39",
+          "subject_id": "daily:2026-08-07:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-07",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-07T08:00:00+00:00",
+          "end_at": "2026-08-07T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "5d419ad2-864d-56dc-a511-719bdd5c9527",
+          "subject_id": "daily:2026-08-07:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-07",
+          "location": "CGH",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_DEADHEAD_OVERLAP",
+          "start_at": "2026-08-07T14:00:00+00:00",
+          "end_at": "2026-08-07T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "DH/G3 1406 CGH 0930 1106 BSB",
+            "hotelIntervalId": null,
+            "timelineActivityId": "9b6130d8-9d58-49d3-88b0-657111b7532a",
+            "timelineActivityKind": "DEADHEAD",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "689875ed-3c06-5589-ad0c-8deea922f4c6",
+          "subject_id": "daily:2026-08-07:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-07",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-07T22:00:00+00:00",
+          "end_at": "2026-08-07T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-08",
+      "entries": [
+        {
+          "id": "46a6c790-a4ad-5317-8ba7-a4dbbc2fecaf",
+          "subject_id": "daily:2026-08-08:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-08",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-08T03:00:00+00:00",
+          "end_at": "2026-08-08T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "ac94cf46-17a3-52d3-874c-0842913b07d5",
+          "subject_id": "daily:2026-08-08:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-08",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-08T08:00:00+00:00",
+          "end_at": "2026-08-08T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "b87f91d4-1fa6-5993-9a58-c96db802961b",
+          "subject_id": "daily:2026-08-08:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-08",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-08T14:00:00+00:00",
+          "end_at": "2026-08-08T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "a821b0c3-6f5a-5292-843b-9265982931fa",
+          "subject_id": "daily:2026-08-08:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-08",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-08T22:00:00+00:00",
+          "end_at": "2026-08-08T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-09",
+      "entries": [
+        {
+          "id": "e8999b84-2bb2-54bf-a99e-5e1b2300219f",
+          "subject_id": "daily:2026-08-09:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-09",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-09T03:00:00+00:00",
+          "end_at": "2026-08-09T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "36fe4acf-3ae2-55e1-ac87-50e2cac158b6",
+          "subject_id": "daily:2026-08-09:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-09",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-09T08:00:00+00:00",
+          "end_at": "2026-08-09T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "f2125018-892b-5bcb-b8eb-62e728ad2069",
+          "subject_id": "daily:2026-08-09:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-09",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-09T14:00:00+00:00",
+          "end_at": "2026-08-09T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "21a358f0-e0ca-5a24-9663-51ca6830f96c",
+          "subject_id": "daily:2026-08-09:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-09",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-09T22:00:00+00:00",
+          "end_at": "2026-08-09T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-10",
+      "entries": [
+        {
+          "id": "55c3318b-4036-5a28-b06f-f549fc4b6a4b",
+          "subject_id": "daily:2026-08-10:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-10",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-10T03:00:00+00:00",
+          "end_at": "2026-08-10T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "16ebba90-c9db-5b03-97a3-16e58365f2c4",
+          "subject_id": "daily:2026-08-10:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-10",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-10T08:00:00+00:00",
+          "end_at": "2026-08-10T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "f3e2486c-e7d0-5274-be65-9297004b8833",
+          "subject_id": "daily:2026-08-10:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-10",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-10T14:00:00+00:00",
+          "end_at": "2026-08-10T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "5ab943fb-95d3-505e-888f-7f1ef0e53b77",
+          "subject_id": "daily:2026-08-10:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-10",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-10T22:00:00+00:00",
+          "end_at": "2026-08-10T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-11",
+      "entries": [
+        {
+          "id": "8313110e-b25e-57ee-9a2e-a168b13d5b7a",
+          "subject_id": "daily:2026-08-11:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-11",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-11T03:00:00+00:00",
+          "end_at": "2026-08-11T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "dcf80649-a66f-5f90-848d-d27d77a711b4",
+          "subject_id": "daily:2026-08-11:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-11",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-11T08:00:00+00:00",
+          "end_at": "2026-08-11T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "cd7930eb-721e-54d3-bf93-192988fe2a8d",
+          "subject_id": "daily:2026-08-11:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-11",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_STANDBY_OVERLAP",
+          "start_at": "2026-08-11T14:00:00+00:00",
+          "end_at": "2026-08-11T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "Tue11 SOBREAVIS BSB 0900 1810",
+            "hotelIntervalId": null,
+            "timelineActivityId": "02d2f15b-8d83-4907-b52a-54b7e847b43a",
+            "timelineActivityKind": "STANDBY",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "52554972-895a-535b-a8bd-3ee3dad34036",
+          "subject_id": "daily:2026-08-11:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-11",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-11T22:00:00+00:00",
+          "end_at": "2026-08-11T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "CHECK_IN_TO_FIRST_LEG",
+            "hotelIntervalId": null,
+            "timelineActivityId": "3efeed0a-59ce-4ba4-ae76-0bf725c8dc62:before",
+            "timelineActivityKind": "DUTY_CONTINUITY",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-12",
+      "entries": [
+        {
+          "id": "336d40b1-75ab-5196-838c-00ef72d7b74e",
+          "subject_id": "daily:2026-08-12:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-12",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-12T03:00:00+00:00",
+          "end_at": "2026-08-12T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "6f8c74df-0440-5d3e-82f9-df83a0f288db",
+          "subject_id": "daily:2026-08-12:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-12",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-12T08:00:00+00:00",
+          "end_at": "2026-08-12T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "ed6ed6c0-44ca-5776-b47a-fac7d8e51dd4",
+          "subject_id": "daily:2026-08-12:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-12",
+          "location": "BEL",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-12T14:00:00+00:00",
+          "end_at": "2026-08-12T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 2006 BEL 1251 1343 MCP B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "71367b9c-3478-4e66-a5ff-5ee6ca80cde2",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "d16e1ed4-615c-5d27-95a1-b83e1ca21c03",
+          "subject_id": "daily:2026-08-12:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-12",
+          "location": "BEL",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-12T22:00:00+00:00",
+          "end_at": "2026-08-12T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 2007 BEL 1649 2013 GIG B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "15af054d-2b33-402e-99eb-8d3e92ad3d2e",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-13",
+      "entries": [
+        {
+          "id": "bcde0825-d33d-59db-9b2a-6fe7cf24301a",
+          "subject_id": "daily:2026-08-13:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-13",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-13T03:00:00+00:00",
+          "end_at": "2026-08-13T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "3e37930a-afb3-5d5c-90c4-85fec87db99e",
+          "subject_id": "daily:2026-08-13:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-13",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-13T08:00:00+00:00",
+          "end_at": "2026-08-13T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "c617dd41-74ad-55e9-9236-f7b3788ca39f",
+          "subject_id": "daily:2026-08-13:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-13",
+          "location": "SDU",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_DEADHEAD_OVERLAP",
+          "start_at": "2026-08-13T14:00:00+00:00",
+          "end_at": "2026-08-13T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "DH/G3 1801 SDU 0955 1140 BSB",
+            "hotelIntervalId": null,
+            "timelineActivityId": "81dbecc7-1cbc-4393-a2d5-fdf271c68dc8",
+            "timelineActivityKind": "DEADHEAD",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "3be2df94-b4d3-5ba1-b6ea-8e1505b10706",
+          "subject_id": "daily:2026-08-13:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-13",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-13T22:00:00+00:00",
+          "end_at": "2026-08-13T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-14",
+      "entries": [
+        {
+          "id": "77fe03cb-65a7-5444-803a-bb40ab6fa9ce",
+          "subject_id": "daily:2026-08-14:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-14",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-14T03:00:00+00:00",
+          "end_at": "2026-08-14T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "adb3a7ba-0d6f-597f-a3d0-3e28e42b1aca",
+          "subject_id": "daily:2026-08-14:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-14",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-14T08:00:00+00:00",
+          "end_at": "2026-08-14T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "f13ef392-89e8-50af-aeb4-705ae59ec0cf",
+          "subject_id": "daily:2026-08-14:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-14",
+          "location": "SSA",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-14T14:00:00+00:00",
+          "end_at": "2026-08-14T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 1717 SSA 1145 1340 BSB B738",
+            "hotelIntervalId": null,
+            "timelineActivityId": "8ed2b6c0-2e5a-41df-a0b7-9abc77d469fd",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "1450342a-817a-5b5f-84ed-040f04f1301b",
+          "subject_id": "daily:2026-08-14:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-14",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-14T22:00:00+00:00",
+          "end_at": "2026-08-14T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-15",
+      "entries": [
+        {
+          "id": "7ddbd029-fc9f-59c3-a620-1f5acc9a215f",
+          "subject_id": "daily:2026-08-15:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-15",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-15T03:00:00+00:00",
+          "end_at": "2026-08-15T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "04905f5f-60cb-5ada-95f5-a0e2f0f8be96",
+          "subject_id": "daily:2026-08-15:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-15",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-15T08:00:00+00:00",
+          "end_at": "2026-08-15T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "2de94111-d0a4-565b-9063-73874cffb478",
+          "subject_id": "daily:2026-08-15:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-15",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-15T14:00:00+00:00",
+          "end_at": "2026-08-15T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "4cbbf22f-a63b-529e-9f62-5d8942911832",
+          "subject_id": "daily:2026-08-15:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-15",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-15T22:00:00+00:00",
+          "end_at": "2026-08-15T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-16",
+      "entries": [
+        {
+          "id": "64d0efc3-3d0c-5a61-9e92-42722ded0a40",
+          "subject_id": "daily:2026-08-16:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-16",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-16T03:00:00+00:00",
+          "end_at": "2026-08-16T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "4702bdf7-fdeb-5e9a-8f0f-1883334629e0",
+          "subject_id": "daily:2026-08-16:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-16",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-16T08:00:00+00:00",
+          "end_at": "2026-08-16T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "582c0f84-dbd0-512a-b5ac-7d43c3494f84",
+          "subject_id": "daily:2026-08-16:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-16",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-16T14:00:00+00:00",
+          "end_at": "2026-08-16T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "68cfccbb-5ecf-518d-b73f-93fc30178932",
+          "subject_id": "daily:2026-08-16:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-16",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-16T22:00:00+00:00",
+          "end_at": "2026-08-16T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-17",
+      "entries": [
+        {
+          "id": "88da8ea1-9784-5161-b336-a33eea3dbf6c",
+          "subject_id": "daily:2026-08-17:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-17",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-17T03:00:00+00:00",
+          "end_at": "2026-08-17T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "58b64d22-0f79-5c71-be4a-c847fca48583",
+          "subject_id": "daily:2026-08-17:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-17",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-17T08:00:00+00:00",
+          "end_at": "2026-08-17T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "ec8d9d97-ec2a-5658-9366-cc5c1b1cc335",
+          "subject_id": "daily:2026-08-17:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-17",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-17T14:00:00+00:00",
+          "end_at": "2026-08-17T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "5e304cb9-14a0-5d45-adbe-8cb1d45dbb64",
+          "subject_id": "daily:2026-08-17:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-17",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-17T22:00:00+00:00",
+          "end_at": "2026-08-17T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-18",
+      "entries": [
+        {
+          "id": "ac088723-3762-5981-98f7-26d3bbfeb744",
+          "subject_id": "daily:2026-08-18:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-18",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-18T03:00:00+00:00",
+          "end_at": "2026-08-18T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "7a25d1ba-2e87-521f-9cc7-a1e15ed39835",
+          "subject_id": "daily:2026-08-18:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-18",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-18T08:00:00+00:00",
+          "end_at": "2026-08-18T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "20569eea-9873-56f0-ba63-f8e8b17d3357",
+          "subject_id": "daily:2026-08-18:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-18",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-18T14:00:00+00:00",
+          "end_at": "2026-08-18T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "76ddff69-409a-5dff-b218-07e516bbf113",
+          "subject_id": "daily:2026-08-18:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-18",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-18T22:00:00+00:00",
+          "end_at": "2026-08-18T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-19",
+      "entries": [
+        {
+          "id": "5509a255-88cf-55bf-acba-ce231aeae114",
+          "subject_id": "daily:2026-08-19:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-19",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-19T03:00:00+00:00",
+          "end_at": "2026-08-19T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "5bfd47da-e2e3-51fb-8137-bc62fc86c920",
+          "subject_id": "daily:2026-08-19:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-19",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-19T08:00:00+00:00",
+          "end_at": "2026-08-19T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "CHECK_IN_TO_FIRST_LEG",
+            "hotelIntervalId": null,
+            "timelineActivityId": "82cf21c6-e8b4-409c-9ea7-a6fd621aa00f:before",
+            "timelineActivityKind": "DUTY_CONTINUITY",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "37fe10ea-3cb7-5f5b-8ee6-d6da9068f732",
+          "subject_id": "daily:2026-08-19:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-19",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-19T14:00:00+00:00",
+          "end_at": "2026-08-19T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 1758 BSB 0835 !1000 RBR B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "17d44f04-a3c3-47a8-8f89-a5b5f1ff14a8",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "2d11ff07-d5f4-5223-96bf-8e9679d7cc08",
+          "subject_id": "daily:2026-08-19:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-19",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-20T00:00:00+00:00",
+          "end_at": "2026-08-20T01:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "e66af56d-c331-5761-b199-498d726b669b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-20",
+      "entries": [
+        {
+          "id": "7bc60ecb-3c8d-5d15-93d0-ba546f321e99",
+          "subject_id": "daily:2026-08-20:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-20",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-20T05:00:00+00:00",
+          "end_at": "2026-08-20T06:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "e66af56d-c331-5761-b199-498d726b669b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "e9ccb8e1-5eed-5f40-8fa4-671231015b18",
+          "subject_id": "daily:2026-08-20:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-20",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-20T10:00:00+00:00",
+          "end_at": "2026-08-20T13:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": "2f28cc7f-32ce-5f93-b606-b793c1fa99cc",
+            "timelineActivityId": "e66af56d-c331-5761-b199-498d726b669b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "26a38b65-20dd-5689-b388-05eea02bbdd5",
+          "subject_id": "daily:2026-08-20:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-20",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-20T16:00:00+00:00",
+          "end_at": "2026-08-20T18:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "e66af56d-c331-5761-b199-498d726b669b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "cef5668f-fdbf-5778-8ea9-ebd17e92ac26",
+          "subject_id": "daily:2026-08-20:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-20",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-21T00:00:00+00:00",
+          "end_at": "2026-08-21T01:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "e66af56d-c331-5761-b199-498d726b669b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-21",
+      "entries": [
+        {
+          "id": "4f45e27d-6d32-5d4b-9217-6c908f641650",
+          "subject_id": "daily:2026-08-21:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-21",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-21T05:00:00+00:00",
+          "end_at": "2026-08-21T06:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "e66af56d-c331-5761-b199-498d726b669b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "5e50efe8-f242-5c7f-832f-27c4399ba6e3",
+          "subject_id": "daily:2026-08-21:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-21",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-21T10:00:00+00:00",
+          "end_at": "2026-08-21T13:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "G3 1761 RBR !0150 0710 BSB B7ME",
+            "hotelIntervalId": null,
+            "timelineActivityId": "7db650c4-d373-42ed-bb3f-b27e0cc8d86f",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "d0108276-56d0-5627-894c-5d66f7a1d7c6",
+          "subject_id": "daily:2026-08-21:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-21",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-21T14:00:00+00:00",
+          "end_at": "2026-08-21T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "3b49110d-ce60-5122-92a0-14fb2c3c49b3",
+          "subject_id": "daily:2026-08-21:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-21",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-21T22:00:00+00:00",
+          "end_at": "2026-08-21T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-22",
+      "entries": [
+        {
+          "id": "d82f325c-e537-5eb6-b1ea-772f94bd744c",
+          "subject_id": "daily:2026-08-22:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-22",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-22T03:00:00+00:00",
+          "end_at": "2026-08-22T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "fef18d90-c4cf-5c1d-a301-de7b7a059705",
+          "subject_id": "daily:2026-08-22:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-22",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-22T08:00:00+00:00",
+          "end_at": "2026-08-22T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "b42d6632-c345-5552-9e51-0ccc1e5c5c26",
+          "subject_id": "daily:2026-08-22:LUNCH",
+          "entitlement_type": "INTERNATIONAL_LUNCH",
+          "entitlement_date": "2026-08-22",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 2500,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-22T15:00:00+00:00",
+          "end_at": "2026-08-22T17:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 7748 BSB 1000 !1650 MIA B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "6860024d-71f9-4e2c-aaf7-a28e3016ea3c",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        },
+        {
+          "id": "c467364e-f017-5137-bb76-f921d8c9416c",
+          "subject_id": "daily:2026-08-22:DINNER",
+          "entitlement_type": "INTERNATIONAL_DINNER",
+          "entitlement_date": "2026-08-22",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 2500,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-22T23:00:00+00:00",
+          "end_at": "2026-08-23T00:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "7f049862-591a-5c26-8447-edad897f0a23",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-23",
+      "entries": [
+        {
+          "id": "34d18cea-30d2-54c9-8bb5-8749cfb34d3f",
+          "subject_id": "daily:2026-08-23:SUPPER",
+          "entitlement_type": "INTERNATIONAL_SUPPER",
+          "entitlement_date": "2026-08-23",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 2500,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-23T04:00:00+00:00",
+          "end_at": "2026-08-23T05:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "7f049862-591a-5c26-8447-edad897f0a23",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        },
+        {
+          "id": "31ec5857-994b-51c8-9ae3-a52b7f72af10",
+          "subject_id": "daily:2026-08-23:BREAKFAST",
+          "entitlement_type": "INTERNATIONAL_BREAKFAST",
+          "entitlement_date": "2026-08-23",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 625,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_HOTEL_BREAKFAST",
+          "start_at": "2026-08-23T09:00:00+00:00",
+          "end_at": "2026-08-23T12:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "TRUE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "FALSE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": "f7ac185c-bc7d-54f8-8f5c-7d1c6f552fcb",
+            "timelineActivityId": "7f049862-591a-5c26-8447-edad897f0a23",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "TRUE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        },
+        {
+          "id": "4a2458da-633e-5929-9ee9-86eff8c8805e",
+          "subject_id": "daily:2026-08-23:LUNCH",
+          "entitlement_type": "INTERNATIONAL_LUNCH",
+          "entitlement_date": "2026-08-23",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 2500,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-23T15:00:00+00:00",
+          "end_at": "2026-08-23T17:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "7f049862-591a-5c26-8447-edad897f0a23",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        },
+        {
+          "id": "14d0d1bb-3ca6-5ded-b9b6-84d844ee2570",
+          "subject_id": "daily:2026-08-23:DINNER",
+          "entitlement_type": "INTERNATIONAL_DINNER",
+          "entitlement_date": "2026-08-23",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 2500,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-23T23:00:00+00:00",
+          "end_at": "2026-08-24T00:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "7f049862-591a-5c26-8447-edad897f0a23",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-24",
+      "entries": [
+        {
+          "id": "92e95d43-827f-5f08-b131-cf82d196d6e3",
+          "subject_id": "daily:2026-08-24:SUPPER",
+          "entitlement_type": "INTERNATIONAL_SUPPER",
+          "entitlement_date": "2026-08-24",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 2500,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-24T04:00:00+00:00",
+          "end_at": "2026-08-24T05:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 7749 MIA !2235 0715 BSB B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "8ce0a5c4-466b-4cfb-8d1b-24fe3c276f9a",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        },
+        {
+          "id": "e89fc1cc-df0a-5fe1-9fa4-97e4d3e4c604",
+          "subject_id": "daily:2026-08-24:BREAKFAST",
+          "entitlement_type": "INTERNATIONAL_BREAKFAST",
+          "entitlement_date": "2026-08-24",
+          "location": "MIA",
+          "country": "US",
+          "domesticity": "INTERNATIONAL",
+          "currency": "USD",
+          "amount_minor_units": 625,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-24T09:00:00+00:00",
+          "end_at": "2026-08-24T12:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 7749 MIA !2235 0715 BSB B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "8ce0a5c4-466b-4cfb-8d1b-24fe3c276f9a",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": "NORTH_AMERICA"
+          }
+        },
+        {
+          "id": "c60e0d06-3dff-5878-9607-d4a982f38539",
+          "subject_id": "daily:2026-08-24:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-24",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-24T14:00:00+00:00",
+          "end_at": "2026-08-24T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "d7b9307b-8296-5e65-9fe0-dc4d2368a969",
+          "subject_id": "daily:2026-08-24:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-24",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-24T22:00:00+00:00",
+          "end_at": "2026-08-24T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-25",
+      "entries": [
+        {
+          "id": "b9e70837-faba-58a7-b845-4a8bd0a4b8c3",
+          "subject_id": "daily:2026-08-25:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-25",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-25T03:00:00+00:00",
+          "end_at": "2026-08-25T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "8d907e32-3446-5e7b-ac0d-d4bf8b388080",
+          "subject_id": "daily:2026-08-25:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-25",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-25T08:00:00+00:00",
+          "end_at": "2026-08-25T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "57635610-1a37-57f8-a658-2a34530fe22f",
+          "subject_id": "daily:2026-08-25:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-25",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-25T14:00:00+00:00",
+          "end_at": "2026-08-25T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "a2040b1a-8e73-58c2-a00c-9d89f6ee3bee",
+          "subject_id": "daily:2026-08-25:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-25",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-25T22:00:00+00:00",
+          "end_at": "2026-08-25T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-26",
+      "entries": [
+        {
+          "id": "130f7933-51b8-503f-ad32-9148d864758c",
+          "subject_id": "daily:2026-08-26:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-26",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-26T03:00:00+00:00",
+          "end_at": "2026-08-26T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "b6fa2933-7eaa-536c-b8ba-f20bdd7e886c",
+          "subject_id": "daily:2026-08-26:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-26",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-26T08:00:00+00:00",
+          "end_at": "2026-08-26T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "65cd5d93-616f-56b0-b529-e8a929298a9b",
+          "subject_id": "daily:2026-08-26:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-26",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-26T14:00:00+00:00",
+          "end_at": "2026-08-26T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "68bcbfb0-172c-5e3b-9fbc-0f2bbe778256",
+          "subject_id": "daily:2026-08-26:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-26",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-26T22:00:00+00:00",
+          "end_at": "2026-08-26T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-27",
+      "entries": [
+        {
+          "id": "9c78dbc1-d315-54a0-9275-a8f2e97c409f",
+          "subject_id": "daily:2026-08-27:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-27",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-27T03:00:00+00:00",
+          "end_at": "2026-08-27T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "3410d825-eded-5dc4-a2e6-257901051667",
+          "subject_id": "daily:2026-08-27:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-27",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-27T08:00:00+00:00",
+          "end_at": "2026-08-27T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "0cd91693-76ae-51cb-b2d6-5b9cc191a11e",
+          "subject_id": "daily:2026-08-27:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-27",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-27T14:00:00+00:00",
+          "end_at": "2026-08-27T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "c156e25d-fc52-57bf-8e4e-b773a303ffe3",
+          "subject_id": "daily:2026-08-27:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-27",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-27T22:00:00+00:00",
+          "end_at": "2026-08-27T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-28",
+      "entries": [
+        {
+          "id": "f4dbdf88-8ad7-57c2-a831-ad941bf9ae79",
+          "subject_id": "daily:2026-08-28:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-28",
+          "location": "MAO",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-28T04:00:00+00:00",
+          "end_at": "2026-08-28T05:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "Fri28 G3 1784 /27 MAO!2355-1 !0050 RBR B7M8",
+            "hotelIntervalId": null,
+            "timelineActivityId": "1608f2f9-ae29-41b5-9e9e-aa719ccdc935",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "d71efdfd-5029-5b6f-8427-9725778ee1dd",
+          "subject_id": "daily:2026-08-28:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-28",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-28T10:00:00+00:00",
+          "end_at": "2026-08-28T13:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": "4db2e8cc-a689-50ca-a5ea-8553a1722fa3",
+            "timelineActivityId": "50427005-c985-5e16-b088-7f309d95e852",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "02ec7d43-cc76-5612-ae07-3a4b08d8f36d",
+          "subject_id": "daily:2026-08-28:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-28",
+          "location": "RBR",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-28T16:00:00+00:00",
+          "end_at": "2026-08-28T18:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "TRUE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "50427005-c985-5e16-b088-7f309d95e852",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "2de91745-6e63-5bfa-9f4c-bdfa718adeec",
+          "subject_id": "daily:2026-08-28:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-28",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-28T22:00:00+00:00",
+          "end_at": "2026-08-28T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "BETWEEN_LEGS",
+            "hotelIntervalId": null,
+            "timelineActivityId": "13f9f8d0-fa42-41d4-bf58-22440255ffa4:ground:1",
+            "timelineActivityKind": "DUTY_CONTINUITY",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-29",
+      "entries": [
+        {
+          "id": "8b79ce99-2f15-5138-9579-6111c577d000",
+          "subject_id": "daily:2026-08-29:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-29",
+          "location": "POA",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-29T03:00:00+00:00",
+          "end_at": "2026-08-29T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "d72f9ce5-3dd0-501f-aabd-206073c0089b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "a17128d9-dac2-5b99-86b4-8f94409b0130",
+          "subject_id": "daily:2026-08-29:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-29",
+          "location": "POA",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_HOTEL_BREAKFAST",
+          "start_at": "2026-08-29T08:00:00+00:00",
+          "end_at": "2026-08-29T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "TRUE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "FALSE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": "0b91c3cf-8f1e-54c3-afd5-9bd08f81833c",
+            "timelineActivityId": "d72f9ce5-3dd0-501f-aabd-206073c0089b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "TRUE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "f7ec6888-4dcd-57d7-91ea-ea6133c9d5c5",
+          "subject_id": "daily:2026-08-29:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-29",
+          "location": "POA",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-29T14:00:00+00:00",
+          "end_at": "2026-08-29T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "d72f9ce5-3dd0-501f-aabd-206073c0089b",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "ca0c43a9-ad4b-54ca-bda0-f2734a9a144b",
+          "subject_id": "daily:2026-08-29:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-29",
+          "location": "GIG",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-29T22:00:00+00:00",
+          "end_at": "2026-08-29T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 1848 GIG 1920 2030 VIX B738",
+            "hotelIntervalId": null,
+            "timelineActivityId": "a7f12571-ca78-4100-9701-6a3a6cd09061",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-30",
+      "entries": [
+        {
+          "id": "99e9e583-46f2-54ac-9859-94d6ae0fe7a0",
+          "subject_id": "daily:2026-08-30:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-30",
+          "location": "VIX",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_TRIP_CONTINUITY_AWAY_FROM_BASE",
+          "start_at": "2026-08-30T03:00:00+00:00",
+          "end_at": "2026-08-30T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": null,
+            "timelineActivityId": "15cf8645-38ef-5fa2-b36b-71d258f69783",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "7b2b6eca-9707-5a78-8739-ec40a4f80591",
+          "subject_id": "daily:2026-08-30:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-30",
+          "location": "VIX",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_HOTEL_BREAKFAST",
+          "start_at": "2026-08-30T08:00:00+00:00",
+          "end_at": "2026-08-30T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "TRUE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "FALSE",
+            "rawReference": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelIntervalId": "e8004475-ff5b-55f3-8b05-88470943bac0",
+            "timelineActivityId": "15cf8645-38ef-5fa2-b36b-71d258f69783",
+            "timelineActivityKind": "TRIP_CONTINUITY_AWAY_FROM_BASE",
+            "hotelBreakfastIncluded": "TRUE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "8c4a0a06-b629-52ce-b60d-dda6435ec041",
+          "subject_id": "daily:2026-08-30:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-30",
+          "location": "VIX",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_SERVICE_OVERLAP",
+          "start_at": "2026-08-30T14:00:00+00:00",
+          "end_at": "2026-08-30T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "G3 2149 VIX 1205 1340 SSA B73T",
+            "hotelIntervalId": null,
+            "timelineActivityId": "8e8f306a-04ce-4365-ac35-a78ccc634bfc",
+            "timelineActivityKind": "OPERATING",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "ede7835a-b059-5c9f-be66-5273e0189a7b",
+          "subject_id": "daily:2026-08-30:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-30",
+          "location": "SSA",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "ELIGIBLE",
+          "reason": "ELIGIBLE_DEADHEAD_OVERLAP",
+          "start_at": "2026-08-30T22:00:00+00:00",
+          "end_at": "2026-08-30T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": "DH/G3 1719 SSA 1730 1930 BSB",
+            "hotelIntervalId": null,
+            "timelineActivityId": "1b1b772e-c2c1-42ef-92ae-5d52c6ff7029",
+            "timelineActivityKind": "DEADHEAD",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-08-31",
+      "entries": [
+        {
+          "id": "70e80345-de91-5449-a1c3-572abf9d46c7",
+          "subject_id": "daily:2026-08-31:SUPPER",
+          "entitlement_type": "DOMESTIC_SUPPER",
+          "entitlement_date": "2026-08-31",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-31T03:00:00+00:00",
+          "end_at": "2026-08-31T04:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "01:00",
+              "key": "SUPPER",
+              "start": "00:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "4fa36554-52c3-5117-aab1-211f7bccef11",
+          "subject_id": "daily:2026-08-31:BREAKFAST",
+          "entitlement_type": "DOMESTIC_BREAKFAST",
+          "entitlement_date": "2026-08-31",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 2749,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-31T08:00:00+00:00",
+          "end_at": "2026-08-31T11:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "08:00",
+              "key": "BREAKFAST",
+              "start": "05:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "a94a06f4-8388-51d4-ab0a-7ddddca8958b",
+          "subject_id": "daily:2026-08-31:LUNCH",
+          "entitlement_type": "DOMESTIC_LUNCH",
+          "entitlement_date": "2026-08-31",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-31T14:00:00+00:00",
+          "end_at": "2026-08-31T16:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "13:00",
+              "key": "LUNCH",
+              "start": "11:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        },
+        {
+          "id": "1a1f5188-5fe3-56e7-897e-9c0357ebb124",
+          "subject_id": "daily:2026-08-31:DINNER",
+          "entitlement_type": "DOMESTIC_DINNER",
+          "entitlement_date": "2026-08-31",
+          "location": "BSB",
+          "country": "BR",
+          "domesticity": "DOMESTIC",
+          "currency": "BRL",
+          "amount_minor_units": 10995,
+          "eligibility_status": "NOT_ELIGIBLE",
+          "reason": "NOT_ELIGIBLE_NO_SERVICE_IN_WINDOW",
+          "start_at": "2026-08-31T22:00:00+00:00",
+          "end_at": "2026-08-31T23:00:00+00:00",
+          "provenance": {
+            "version": "flight-financial-entitlements/2.1.0",
+            "algorithm": "deriveDailyDiemTimeline",
+            "hotelUsed": "FALSE",
+            "mealWindow": {
+              "end": "20:00",
+              "key": "DINNER",
+              "start": "19:00"
+            },
+            "hotelWaived": "UNKNOWN",
+            "rawReference": null,
+            "hotelIntervalId": null,
+            "timelineActivityId": null,
+            "timelineActivityKind": "OFF",
+            "hotelBreakfastIncluded": "FALSE",
+            "earlyCompletionProtection": "REVIEW_REQUIRED_IF_EXECUTION_ENDED_EARLY",
+            "internationalDiemRateGroup": null
+          }
+        }
+      ]
+    }
+  ],
+  "summaries": [
+    {
+      "half": "FIRST_HALF",
+      "paymentDate": "2026-08-25",
+      "unknownCount": 0,
+      "currencies": [
+        {
+          "currency": "BRL",
+          "dailyKnownMinorUnits": 167674,
+          "cycleKnownMinorUnits": 167674
+        },
+        {
+          "currency": "USD",
+          "dailyKnownMinorUnits": 0,
+          "cycleKnownMinorUnits": 0
+        },
+        {
+          "currency": "EUR",
+          "dailyKnownMinorUnits": 0,
+          "cycleKnownMinorUnits": 0
+        },
+        {
+          "currency": "GBP",
+          "dailyKnownMinorUnits": 0,
+          "cycleKnownMinorUnits": 0
+        }
+      ]
+    },
+    {
+      "half": "SECOND_HALF",
+      "paymentDate": "2026-09-10",
+      "unknownCount": 0,
+      "currencies": [
+        {
+          "currency": "BRL",
+          "dailyKnownMinorUnits": 175921,
+          "cycleKnownMinorUnits": 175921
+        },
+        {
+          "currency": "USD",
+          "dailyKnownMinorUnits": 15625,
+          "cycleKnownMinorUnits": 15625
+        },
+        {
+          "currency": "EUR",
+          "dailyKnownMinorUnits": 0,
+          "cycleKnownMinorUnits": 0
+        },
+        {
+          "currency": "GBP",
+          "dailyKnownMinorUnits": 0,
+          "cycleKnownMinorUnits": 0
+        }
+      ]
+    }
+  ],
+  "cycles": [
+    {
+      "payment_date": "2026-08-25",
+      "half_month": "FIRST_HALF",
+      "currency": "BRL",
+      "known_minor_units": 167674,
+      "entitlement_count": 16,
+      "status": "ESTIMATED"
+    },
+    {
+      "payment_date": "2026-09-10",
+      "half_month": "SECOND_HALF",
+      "currency": "BRL",
+      "known_minor_units": 175921,
+      "entitlement_count": 19,
+      "status": "ESTIMATED"
+    },
+    {
+      "payment_date": "2026-09-10",
+      "half_month": "SECOND_HALF",
+      "currency": "USD",
+      "known_minor_units": 15625,
+      "entitlement_count": 7,
+      "status": "ESTIMATED"
+    }
+  ],
+  "reconciliation": [
+    {
+      "half": "FIRST_HALF",
+      "currency": "BRL",
+      "dailyKnownMinorUnits": 167674,
+      "cycleKnownMinorUnits": 167674,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "FIRST_HALF",
+      "currency": "USD",
+      "dailyKnownMinorUnits": 0,
+      "cycleKnownMinorUnits": 0,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "FIRST_HALF",
+      "currency": "EUR",
+      "dailyKnownMinorUnits": 0,
+      "cycleKnownMinorUnits": 0,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "FIRST_HALF",
+      "currency": "GBP",
+      "dailyKnownMinorUnits": 0,
+      "cycleKnownMinorUnits": 0,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "SECOND_HALF",
+      "currency": "BRL",
+      "dailyKnownMinorUnits": 175921,
+      "cycleKnownMinorUnits": 175921,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "SECOND_HALF",
+      "currency": "USD",
+      "dailyKnownMinorUnits": 15625,
+      "cycleKnownMinorUnits": 15625,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "SECOND_HALF",
+      "currency": "EUR",
+      "dailyKnownMinorUnits": 0,
+      "cycleKnownMinorUnits": 0,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    },
+    {
+      "half": "SECOND_HALF",
+      "currency": "GBP",
+      "dailyKnownMinorUnits": 0,
+      "cycleKnownMinorUnits": 0,
+      "deltaMinorUnits": 0,
+      "status": "RECONCILED"
+    }
+  ]
+}

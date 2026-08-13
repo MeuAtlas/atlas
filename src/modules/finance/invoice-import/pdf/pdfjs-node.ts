@@ -122,24 +122,20 @@ async function loadDocument(pdfjs: PdfJsModule, bytes: Uint8Array) {
   }
 }
 
-function mapTextItems(
-  rawItems: unknown[],
-  pageNumber: number,
-): PdfTextItem[] {
+function mapTextItems(rawItems: unknown[], pageNumber: number, viewport: { transform: number[] }, pdfjs: PdfJsModule): PdfTextItem[] {
   try {
     return rawItems
       .filter(isPdfJsTextItem)
-      .map((item, index) => ({
-        pageNumber,
-        index,
-        text: normalizeInvoiceText(item.str),
-        x: Number(item.transform[4]),
-        y: Number(item.transform[5]),
-        width: Number(item.width),
-        height: Number(item.height || Math.abs(item.transform[3])),
-        hasEOL: Boolean(item.hasEOL),
-        visualIndex: index,
-      }))
+      .map((item, index) => {
+        const transformed = pdfjs.Util.transform(viewport.transform, item.transform);
+        return {
+          pageNumber, index, text: normalizeInvoiceText(item.str),
+          x: Number(transformed[4]), y: Number(transformed[5]),
+          width: Number(item.width), height: Number(item.height || Math.abs(item.transform[3])),
+          rawX: Number(item.transform[4]), rawY: Number(item.transform[5]),
+          hasEOL: Boolean(item.hasEOL), visualIndex: index,
+        };
+      })
       .filter(item => item.text);
   } catch (error) {
     throw new PdfExtractionError(
@@ -260,8 +256,8 @@ export async function extractPdfWithPdfJs(
       );
     }
 
-    const viewport = page.getViewport({ scale: 1 });
-    const items = mapTextItems(content.items, pageNumber);
+    const viewport = page.getViewport({ scale: 1, rotation: page.rotate });
+    const items = mapTextItems(content.items, pageNumber, viewport, pdfjs);
     const extracted = extractPageText({
       pageNumber,
       width: viewport.width,

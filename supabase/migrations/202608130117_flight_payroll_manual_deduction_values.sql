@@ -1,0 +1,4 @@
+create table public.flight_payroll_manual_deduction_values(id uuid primary key default gen_random_uuid(),deduction_id uuid not null references public.flight_payroll_personal_deductions(id) on delete cascade,user_id uuid not null references auth.users(id) on delete cascade,competence date not null,amount_minor_units bigint not null check(amount_minor_units>=0),created_at timestamptz not null default now(),updated_at timestamptz not null default now(),unique(deduction_id,competence));
+alter table public.flight_payroll_manual_deduction_values enable row level security;
+create policy manual_deduction_values_owner on public.flight_payroll_manual_deduction_values for all to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+grant select,insert,update,delete on public.flight_payroll_manual_deduction_values to authenticated,service_role;

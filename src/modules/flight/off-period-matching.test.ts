@@ -1,0 +1,8 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { matchOffPeriods, type OffPeriodForMatching } from "./off-period-matching";
+
+const period = (id: string, startDate: string, endDate: string, startAt: string | null = "2026-08-01T12:00:00.000Z", endAt: string | null = "2026-08-02T12:00:00.000Z"): OffPeriodForMatching => ({ id, startDate, endDate, startAt, endAt, sourceEventIds: [id] });
+test("matches the same factual off block and calculates deltas", () => { const [match] = matchOffPeriods([period("p", "2026-08-01", "2026-08-02")], [period("e", "2026-08-01", "2026-08-02", "2026-08-01T14:30:00.000Z", "2026-08-02T13:00:00.000Z")]); assert.equal(match.matchingStatus, "MATCHED"); assert.equal(match.deltaStartMinutes, 150); assert.equal(match.deltaEndMinutes, 60); });
+test("preserves ambiguous and unmatched blocks without deltas", () => { assert.equal(matchOffPeriods([period("p1", "2026-08-01", "2026-08-03"), period("p2", "2026-08-02", "2026-08-04")], [period("e", "2026-08-02", "2026-08-02")])[0].matchingStatus, "AMBIGUOUS"); assert.equal(matchOffPeriods([period("p", "2026-08-01", "2026-08-01")], [period("e", "2026-08-10", "2026-08-10")])[0].matchingStatus, "UNMATCHED"); });
+test("does not invent monthly-boundary timestamps or mutate planned input", () => { const planned = [period("p", "2026-08-01", "2026-08-01", null, "2026-08-02T12:00:00.000Z")]; const before = structuredClone(planned); const [match] = matchOffPeriods(planned, [period("e", "2026-08-01", "2026-08-01", null, "2026-08-02T12:00:00.000Z")]); assert.equal(match.matchingStatus, "MATCHED"); assert.equal(match.deltaStartMinutes, null); assert.deepEqual(planned, before); });

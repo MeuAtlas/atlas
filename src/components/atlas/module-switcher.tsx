@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { AtlasModule } from "@/types/atlas";
 import { NavigationLink } from "@/components/navigation/navigation-feedback";
 
@@ -12,16 +13,16 @@ function moduleHref(module: AtlasModule) {
 
 export function ModuleSwitcher({
   modules,
-  currentSlug,
 }: {
   modules: AtlasModule[];
-  currentSlug: string;
 }) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const current =
-    modules.find((module) => module.slug === currentSlug) ??
-    modules.find((module) => module.slug === "financeiro");
+  const current = modules.find((module) => {
+    const href = moduleHref(module);
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }) ?? modules.find((module) => module.slug === "financeiro");
 
   useEffect(() => {
     if (!open) return;
@@ -57,7 +58,7 @@ export function ModuleSwitcher({
       {open ? (
         <div id="atlas-module-menu" role="menu">
           {modules.map((module) => {
-            const active = module.slug === currentSlug;
+            const active = module.slug === current?.slug;
             return (
               <NavigationLink
                 key={module.id}

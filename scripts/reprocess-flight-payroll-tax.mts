@@ -1,0 +1,1 @@
+import { buildFlightPayrollTaxEstimate } from "../src/modules/flight/financial/financial-payroll-deductions-service"; for(const id of process.argv.slice(2))console.log(JSON.stringify(await buildFlightPayrollTaxEstimate(id)));

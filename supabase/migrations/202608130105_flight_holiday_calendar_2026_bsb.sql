@@ -1,0 +1,14 @@
+-- 3C.3B: base contratual confirmada e calendário DF/BSB 2026 a partir de fonte oficial distrital.
+update public.flight_compensation_profiles
+set contractual_base='BSB', source_type='USER_CONFIRMED_PROFILE_FACT', source_reference='Base contratual BSB confirmada pelo usuário para a vigência temporal existente.', updated_at=now()
+where effective_from <= date '2026-08-01' and (effective_to is null or effective_to >= date '2026-08-01') and role='COPILOT';
+
+update public.flight_holiday_calendar_years set status='VERIFIED',source_reference='Decreto DF 48.117/2025: calendário oficial de 2026, com pontos facultativos explicitamente excluídos.' where year=2026 and country='BR' and base_code='BSB';
+update public.flight_holiday_calendar_years set status='PARTIALLY_VERIFIED',source_reference='Nacional e BSB/DF verificados; RIO, POA, SAO, GRU e FOR aguardam fontes locais oficiais completas.' where year=2026 and country='BR' and base_code is null;
+
+insert into public.flight_holidays(holiday_date,name,scope,country,state,city,base_code,year,legal_source_type,legal_source_number,legal_source_issuer,legal_source_reference,source_url,verified,verification_status,lifecycle,notes) values
+ ('2026-04-03','Paixão de Cristo','BASE_STATE','BR','DF','Brasília','BSB',2026,'DF_LAW','Lei 72/1989, art. 1º','Distrito Federal','Decreto DF 48.117/2025, item VI, confirma o feriado local em 03/04/2026.','https://www.sinj.df.gov.br/sinj/Norma/dd13897d3d894936940fbd58e2161541/Decreto_48117_30_12_2025.html',true,'VERIFIED','REVIEWED','Não é ponto facultativo.'),
+ ('2026-04-21','Aniversário de Brasília','BASE_STATE','BR','DF','Brasília','BSB',2026,'DF_LAW','Lei 72/1989, art. 1º','Distrito Federal','Decreto DF 48.117/2025, item VIII. Coincide com Tiradentes nacional; mantém uma única incidência financeira.','https://www.sinj.df.gov.br/sinj/Norma/dd13897d3d894936940fbd58e2161541/Decreto_48117_30_12_2025.html',true,'VERIFIED','REVIEWED','Não é ponto facultativo.'),
+ ('2026-06-04','Corpus Christi','BASE_STATE','BR','DF','Brasília','BSB',2026,'DF_LAW','Lei 72/1989, parágrafo único do art. 1º','Distrito Federal','Decreto DF 48.117/2025, item X.','https://www.sinj.df.gov.br/sinj/Norma/dd13897d3d894936940fbd58e2161541/Decreto_48117_30_12_2025.html',true,'VERIFIED','REVIEWED','Não é ponto facultativo.'),
+ ('2026-11-30','Dia do Evangélico','BASE_STATE','BR','DF','Brasília','BSB',2026,'DF_LAW','Lei 963/1995, art. 1º','Distrito Federal','Lei 963/1995; confirmado no Decreto DF 48.117/2025, item XVIII.','https://www.sinj.df.gov.br/sinj/Norma/48922/Lei_963_1995.html',true,'VERIFIED','REVIEWED','Não é ponto facultativo.')
+on conflict (holiday_date,scope,base_code,name) do update set legal_source_reference=excluded.legal_source_reference,source_url=excluded.source_url,verified=true,verification_status='VERIFIED',lifecycle='REVIEWED',notes=excluded.notes;

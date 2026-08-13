@@ -1,0 +1,15 @@
+export type DutyProgramming = { id: string; operatingLegCount: number | null; totalLegCount: number | null; dutyMinutes: number | null; flightTimeMinutes: number | null; presentationAt: string | null };
+export type ReprogrammingExternalFact = { factKey: "REPROGRAMMING_AT" | "FITNESS_DECLARATION" | "UNEXPECTED_OPERATIONAL_CIRCUMSTANCE" | "COMMANDER_EXTENSION_DECISION"; dutyId: string | null; value: unknown };
+
+function knownBoolean(value: unknown): "TRUE" | "FALSE" | "UNKNOWN" { return value === true || value === "TRUE" ? "TRUE" : value === false || value === "FALSE" ? "FALSE" : "UNKNOWN"; }
+function externalFor(facts: ReprogrammingExternalFact[], key: ReprogrammingExternalFact["factKey"], dutyId: string) { return facts.find((fact) => fact.factKey === key && (fact.dutyId === dutyId || fact.dutyId === null))?.value; }
+
+export function deriveReprogrammingFact(planned: DutyProgramming | null, executed: DutyProgramming | null, matched: boolean, externalFacts: ReprogrammingExternalFact[]) {
+  if (!matched || !planned || !executed) return { reprogrammingDetected: "UNKNOWN", reprogrammingAfterDutyStart: "UNKNOWN", plannedDutyId: planned?.id ?? null, executedDutyId: executed?.id ?? null, plannedOperatingLegCount: planned?.operatingLegCount ?? null, executedOperatingLegCount: executed?.operatingLegCount ?? null, plannedTotalLegCount: planned?.totalLegCount ?? null, executedTotalLegCount: executed?.totalLegCount ?? null, plannedDutyMinutes: planned?.dutyMinutes ?? null, executedDutyMinutes: executed?.dutyMinutes ?? null, plannedFlightTimeMinutes: planned?.flightTimeMinutes ?? null, executedFlightTimeMinutes: executed?.flightTimeMinutes ?? null, fitnessDeclaration: "UNKNOWN" };
+  const comparable = [planned.operatingLegCount, executed.operatingLegCount, planned.totalLegCount, executed.totalLegCount];
+  const structuralKnown = comparable.every((value) => typeof value === "number");
+  const detected = structuralKnown ? planned.operatingLegCount !== executed.operatingLegCount || planned.totalLegCount !== executed.totalLegCount : "UNKNOWN";
+  const reprogrammingAt = externalFor(externalFacts, "REPROGRAMMING_AT", executed.id);
+  const after = typeof reprogrammingAt === "string" && executed.presentationAt ? Date.parse(reprogrammingAt) > Date.parse(executed.presentationAt) ? "TRUE" : "FALSE" : "UNKNOWN";
+  return { reprogrammingDetected: detected === true ? "TRUE" : detected === false ? "FALSE" : "UNKNOWN", reprogrammingAfterDutyStart: after, plannedDutyId: planned.id, executedDutyId: executed.id, plannedOperatingLegCount: planned.operatingLegCount, executedOperatingLegCount: executed.operatingLegCount, plannedTotalLegCount: planned.totalLegCount, executedTotalLegCount: executed.totalLegCount, plannedDutyMinutes: planned.dutyMinutes, executedDutyMinutes: executed.dutyMinutes, plannedFlightTimeMinutes: planned.flightTimeMinutes, executedFlightTimeMinutes: executed.flightTimeMinutes, fitnessDeclaration: knownBoolean(externalFor(externalFacts, "FITNESS_DECLARATION", executed.id)) };
+}

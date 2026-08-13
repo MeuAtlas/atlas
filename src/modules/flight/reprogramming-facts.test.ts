@@ -1,0 +1,6 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { deriveReprogrammingFact } from "./reprogramming-facts";
+const planned={id:"p",operatingLegCount:2,totalLegCount:2,dutyMinutes:500,flightTimeMinutes:200,presentationAt:"2026-08-01T10:00:00Z"};
+const executed={...planned,id:"e",presentationAt:"2026-08-01T10:00:00Z"};
+test("derives deterministic reprogramming facts without inferring timing or fitness",()=>{assert.equal(deriveReprogrammingFact(planned,executed,true,[]).reprogrammingDetected,"FALSE");assert.equal(deriveReprogrammingFact(planned,{...executed,operatingLegCount:3,totalLegCount:3},true,[]).reprogrammingDetected,"TRUE");assert.equal(deriveReprogrammingFact(planned,executed,true,[{factKey:"REPROGRAMMING_AT",dutyId:"e",value:"2026-08-01T11:00:00Z"}]).reprogrammingAfterDutyStart,"TRUE");assert.equal(deriveReprogrammingFact(planned,executed,true,[{factKey:"REPROGRAMMING_AT",dutyId:"e",value:"2026-08-01T09:00:00Z"}]).reprogrammingAfterDutyStart,"FALSE");assert.equal(deriveReprogrammingFact(planned,executed,true,[{factKey:"FITNESS_DECLARATION",dutyId:"e",value:true}]).fitnessDeclaration,"TRUE");assert.equal(deriveReprogrammingFact(planned,executed,false,[]).reprogrammingDetected,"UNKNOWN");});
