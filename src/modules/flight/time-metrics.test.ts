@@ -25,3 +25,26 @@ test("associa FT, DT e RT separados espacialmente ao C/O correspondente", () => 
   const result = parseSpatialDutyMetrics(document, [{ sequence: 1, startDate: "2026-08-05", endDate: "2026-08-05", checkInAirport: "BSB", checkOutAirport: "RBR", checkInTimeLocal: "07:45", checkOutTimeLocal: "14:20", checkInOutsideHomebaseTimezone: false, checkOutOutsideHomebaseTimezone: true, status: "COMPLETE", confidence: "HIGH", rawMetadata: {} }]);
   assert.deepEqual(result.get(1), { officialFlightTimeMinutes: 355, officialFlightTimeRaw: "05:55", officialDutyTimeMinutes: 515, officialDutyTimeRaw: "08:35", officialRestMinutes: 720, officialRestRaw: "12:00" });
 });
+
+test("calcula as quatro pernas MCO do Snapshot de julho sem perder FT internacional", () => {
+  const leg = (sequence: number, date: string, arrivalDate: string, origin: string, destination: string, departure: string, arrival: string): ParsedLeg => ({ scheduleDate: date, sequence, dutySequence: sequence, dutyLinkStatus: "LINKED", legType: "OPERATING", carrierCode: "G3", flightNumber: String(7600 + sequence), origin, destination, departureDate: date, arrivalDate, departureTimeLocal: departure, arrivalTimeLocal: arrival, departureOutsideHomebaseTimezone: origin === "MCO", arrivalOutsideHomebaseTimezone: destination === "MCO", aircraftCode: "B7M8", rawDeparture: departure.replace(":", ""), rawArrival: arrival.replace(":", ""), rawText: "", rawMetadata: {}, confidence: "HIGH" });
+  const legs = [
+    leg(1, "2026-07-09", "2026-07-09", "BSB", "MCO", "09:15", "16:27"),
+    leg(2, "2026-07-11", "2026-07-11", "MCO", "BSB", "15:00", "23:57"),
+    leg(3, "2026-07-26", "2026-07-26", "BSB", "MCO", "11:52", "18:55"),
+    leg(4, "2026-07-27", "2026-07-28", "MCO", "BSB", "18:41", "03:34"),
+  ];
+  const result = calculateStructure(legs, []);
+  assert.deepEqual(result.calculatedLegs.map(item => item.durationMinutes), [492, 477, 483, 473]);
+  assert.equal(result.calculatedLegs.reduce((sum, item) => sum + (item.durationMinutes ?? 0), 0), 1925);
+  assert.ok(result.calculatedLegs.every(item => item.timezoneMissing === null));
+});
+
+test("calcula as duas pernas NAT da Planejada de julho", () => {
+  const base = { scheduleDate: "2026-07-12", dutySequence: 1, dutyLinkStatus: "LINKED" as const, legType: "OPERATING" as const, carrierCode: "G3", aircraftCode: "B738", rawMetadata: {}, confidence: "HIGH" as const };
+  const legs: ParsedLeg[] = [
+    { ...base, sequence: 1, flightNumber: "1710", origin: "BSB", destination: "NAT", departureDate: "2026-07-12", arrivalDate: "2026-07-12", departureTimeLocal: "08:35", arrivalTimeLocal: "11:15", departureOutsideHomebaseTimezone: false, arrivalOutsideHomebaseTimezone: false, rawDeparture: "0835", rawArrival: "1115", rawText: "" },
+    { ...base, scheduleDate: "2026-07-13", sequence: 2, flightNumber: "1665", origin: "NAT", destination: "BSB", departureDate: "2026-07-13", arrivalDate: "2026-07-13", departureTimeLocal: "04:40", arrivalTimeLocal: "07:30", departureOutsideHomebaseTimezone: false, arrivalOutsideHomebaseTimezone: false, rawDeparture: "0440", rawArrival: "0730", rawText: "" },
+  ];
+  assert.deepEqual(calculateStructure(legs, []).calculatedLegs.map(item => item.durationMinutes), [160, 170]);
+});

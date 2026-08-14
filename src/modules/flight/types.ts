@@ -20,4 +20,10 @@ export type FlightScheduleImport = {
   official_month_flight_time_minutes?: number | null;
   official_month_duty_time_minutes?: number | null;
   official_off_days?: number | null;
+  reconciliation_status?: "VALID" | "INCOMPLETE" | "UNKNOWN";
+  documented_flight_time_minutes?: number | null;
+  processed_flight_time_minutes?: number | null;
+  flight_time_difference_minutes?: number | null;
+  missing_flight_time_minutes?: number | null;
+  reconciliation_threshold_minutes?: number;
 };

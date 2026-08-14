@@ -1,88 +1,42 @@
 import Link from "next/link";
 import type { FlightScheduleImport } from "@/modules/flight/types";
 import { FlightMonthCalendar, type CalendarDay, type CalendarDuty, type CalendarLeg, type CalendarOvernight } from "./flight-month-calendar";
+import { ReprocessScheduleButton, UpdateScheduleDialog } from "./schedule-import-dialog";
+import { ScheduleMonthNavigator } from "./schedule-month-navigator";
+import { PayrollViewSwitcher, type PayrollScenario } from "./payroll-view-switcher";
 
 type ActivityData = { counts: Record<string, number>; days: CalendarDay[] };
 type RuleSummary = { pass: number; fail: number; unknown: number; notApplicable: number };
-type PayrollLine = { key: string; amount: number; reference: number | null; metadata: unknown };
-type Payroll = { estimateId: string; gross: number; lines: PayrollLine[]; inss: number | null; irrf: number | null; personalDeductions: Array<{ name: string; amount: number }>; personalDeductionTotal: number | null; net: number | null; base: "EXECUTED" };
-type Props = { label: string; planned: FlightScheduleImport | null; current: FlightScheduleImport | null; activity: ActivityData | undefined; legs: CalendarLeg[]; duties: CalendarDuty[]; overnights: CalendarOvernight[]; audit: RuleSummary; payroll: Payroll | null; cycles: Array<{ paymentDate: string; currency: string | null; amount: number; status: string }>; diems: Array<{ date: string; label: string; currency: string | null; amount: number | null }> };
+type PayrollComparison = { planned: { gross: number | null; net: number | null }; executed: { gross: number | null; net: number | null }; selectedScenario: "PLANNED" | "EXECUTED" | "TIE" | "UNAVAILABLE" };
+type Props = { label: string; year: number; month: number; planned: FlightScheduleImport | null; current: FlightScheduleImport | null; processingIssues: FlightScheduleImport[]; activity: ActivityData | undefined; legs: CalendarLeg[]; duties: CalendarDuty[]; overnights: CalendarOvernight[]; audit: RuleSummary; payrollScenarios: { planned: PayrollScenario | null; executed: PayrollScenario | null; defaultScenario: "PLANNED" | "EXECUTED" }; payrollComparison: PayrollComparison; cycles: Array<{ paymentDate: string; currency: string | null; amount: number; status: string }>; diems: Array<{ date: string; label: string; currency: string | null; amount: number | null }> };
 
 const money = (value: number | null, currency = "BRL") => value === null ? "Pendente" : new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(value / 100);
 const duration = (minutes: number | null | undefined) => minutes === null || minutes === undefined ? "—" : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
-const payrollLabels: Record<string, string> = { SALARY: "Salário", ORGANIC_COMPENSATION: "Compensação orgânica", FIXED_HAZARD_SALARY: "Adic. periculosidade", FIXED_HAZARD_ORGANIC: "Adic. per. s/ comp. org.", SENIORITY: "Gratificação senioridade", PAYROLL_NORMAL: "Horas de voo", PAYROLL_NIGHT_NORMAL: "Noturna normal", PAYROLL_SUNDAY_HOLIDAY_DAY: "Dom/fer diurno", PAYROLL_SUNDAY_HOLIDAY_NIGHT: "Dom/fer noturno", DSR_AERONAUTAS: "DSR aeronautas", VARIABLE_HAZARD: "Adic. periculosidade aeronautas", FAM_REIMBURSEMENT: "Reembolso FAM" };
-const payrollDescriptions: Record<string, string> = { SALARY: "30 dias", ORGANIC_COMPENSATION: "20% do salário", FIXED_HAZARD_SALARY: "30% do salário", FIXED_HAZARD_ORGANIC: "30% da comp. org.", SENIORITY: "7% × piso", FAM_REIMBURSEMENT: "Reembolso previsto" };
-const fixedKeys = ["SALARY", "ORGANIC_COMPENSATION", "FIXED_HAZARD_SALARY", "FIXED_HAZARD_ORGANIC", "SENIORITY"];
-const variableKeys = ["PAYROLL_NORMAL", "PAYROLL_NIGHT_NORMAL", "PAYROLL_SUNDAY_HOLIDAY_DAY", "PAYROLL_SUNDAY_HOLIDAY_NIGHT", "DSR_AERONAUTAS", "VARIABLE_HAZARD", "FAM_REIMBURSEMENT"];
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <section className={`rounded-2xl border border-[var(--atlas-border)] bg-[var(--atlas-surface)] p-4 shadow-sm sm:p-5 ${className}`}>{children}</section>;
 }
 
-function ScheduleComparison({ planned, current, payroll }: { planned: FlightScheduleImport | null; current: FlightScheduleImport | null; payroll: Payroll | null }) {
-  const block = (title: string, item: FlightScheduleImport | null, selected: boolean) => <section className="min-w-0 px-4 py-1 first:pl-0 last:pr-0"><div className="flex items-center justify-between gap-2"><h2 className="text-sm font-semibold text-[var(--atlas-blue)]">{title}</h2>{selected ? <span className="rounded-full border border-[var(--atlas-blue)]/45 px-2 py-0.5 text-sm text-[var(--atlas-blue)]">Base da folha</span> : null}</div><div className="mt-2 grid grid-cols-3 divide-x divide-[var(--atlas-border)]"><Metric label="FT" value={duration(item?.official_month_flight_time_minutes)} /><Metric label="DT" value={duration(item?.official_month_duty_time_minutes)} /><Metric label="Folgas" value={item?.official_off_days ?? "—"} /></div></section>;
-  return <Card><div className="grid gap-3 md:grid-cols-2 md:divide-x md:divide-[var(--atlas-border)]">{block("Escala planejada", planned, payroll?.base !== "EXECUTED")}{block("Escala executada", current, payroll?.base === "EXECUTED")}</div></Card>;
+function ScheduleComparison({ planned, current, comparison, year, month }: { planned: FlightScheduleImport | null; current: FlightScheduleImport | null; comparison: PayrollComparison; year: number; month: number }) {
+  const metric = (label: string, value: string | number, monetary = false) => <div className={`min-w-0 px-3 first:pl-0 last:pr-0 ${monetary ? "col-span-3 sm:col-span-1" : "col-span-2 sm:col-span-1"}`}><p className="text-sm text-[var(--atlas-muted)]">{label}</p><p className={`mt-1 text-xl font-semibold tracking-tight tabular-nums ${monetary ? "whitespace-nowrap" : "truncate"}`}>{value}</p></div>;
+  const block = (title: string, item: FlightScheduleImport | null, selected: boolean, role: "PLANNED" | "EXECUTION_SNAPSHOT") => {
+    const scenario = role === "PLANNED" ? comparison.planned : comparison.executed;
+    return <section className="min-w-0 md:px-8 md:first:pl-0 md:last:pr-0"><div className="flex min-h-9 items-center justify-between gap-3"><div className="flex min-w-0 flex-wrap items-center gap-2"><h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h2>{selected ? <span className="rounded-full border border-[var(--atlas-blue)]/45 px-2.5 py-0.5 text-sm font-medium text-[var(--atlas-blue)]">Base da folha</span> : null}</div>{role === "EXECUTION_SNAPSHOT" ? <UpdateScheduleDialog year={year} month={month} hasPlanned={planned !== null} hasExecuted={current !== null} compact /> : null}</div><p className="mt-0.5 text-sm text-[var(--atlas-muted)]">{item ? role === "PLANNED" ? "Baseline do mês" : `Última atualização: ${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.uploaded_at)).replace(",", " às")}` : "Ainda não enviada"}</p><div className="mt-3.5 grid grid-cols-6 divide-x divide-[var(--atlas-border)]/70 sm:grid-cols-[.72fr_.82fr_.72fr_1.35fr_1.45fr]">{metric("FT", duration(item?.official_month_flight_time_minutes))}{metric("DT", duration(item?.official_month_duty_time_minutes))}{metric("Folgas", item?.official_off_days ?? "—")}{metric("Bruto", money(scenario.gross), true)}{metric("Líquido", money(scenario.net), true)}</div></section>;
+  };
+  return <Card className="p-0 shadow-none"><div className="grid gap-4 px-5 py-4 sm:px-8 md:grid-cols-2 md:divide-x md:divide-[var(--atlas-border)]/70">{block("Escala planejada", planned, comparison.selectedScenario === "PLANNED", "PLANNED")}{block("Escala executada", current, comparison.selectedScenario === "EXECUTED", "EXECUTION_SNAPSHOT")}</div></Card>;
 }
-
 function Metric({ label, value }: { label: string; value: string | number }) {
   return <div className="px-3 first:pl-0 last:pr-0"><p className="text-sm text-[var(--atlas-muted)]">{label}</p><p className="mt-1 text-xl font-medium tracking-tight sm:text-2xl">{value}</p></div>;
 }
 
-function payrollFormula(line: PayrollLine) {
-  if (line.reference !== null) {
-    const metadata = line.metadata;
-    const rate = metadata !== null && typeof metadata === "object" && "rateCents" in metadata && typeof metadata.rateCents === "number" ? metadata.rateCents : null;
-    return rate === null ? `${Number(line.reference).toFixed(2).replace(".", ",")}h de referência` : `${Number(line.reference).toFixed(2).replace(".", ",")}h × ${money(rate)}`;
-  }
-  return payrollDescriptions[line.key] ?? "Referência documental";
+function ProcessingWarnings({ issues }: { issues: FlightScheduleImport[] }) {
+  const hours = (value: number | null | undefined) => value === null || value === undefined ? "—" : `${Math.floor(value / 60)}h${String(value % 60).padStart(2, "0")}`;
+  if (!issues.length) return null;
+  return <div className="grid gap-2">{issues.map(issue => <div key={issue.id} role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-400/25 bg-amber-400/8 px-4 py-2.5 text-sm"><span><b>{issue.schedule_role === "PLANNED" ? "Escala planejada" : "Escala executada"}: processamento incompleto.</b> Processadas {hours(issue.processed_flight_time_minutes)} de {hours(issue.documented_flight_time_minutes)}. {typeof issue.flight_time_difference_minutes === "number" && issue.flight_time_difference_minutes > 0 ? <>Divergência de +{hours(issue.flight_time_difference_minutes)}.</> : <>Faltam {hours(issue.missing_flight_time_minutes)}.</>}</span><ReprocessScheduleButton importId={issue.id} label="Reprocessar escala" /></div>)}</div>;
 }
 
-function PayrollRows({ lines }: { lines: PayrollLine[] }) {
-  return <div className="mt-0.5">
-    {lines.map(line => <div key={line.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 py-0.5 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(10rem,1.15fr)_auto] sm:items-baseline">
-      <span className="min-w-0 truncate">{payrollLabels[line.key]}</span>
-      <span className="hidden min-w-0 truncate text-[var(--atlas-muted)] sm:block">{payrollFormula(line)}</span>
-      <span className="shrink-0 text-right font-medium tabular-nums">{money(line.amount)}</span>
-      <span className="col-span-2 truncate text-sm text-[var(--atlas-muted)] sm:hidden">{payrollFormula(line)}</span>
-    </div>)}
-  </div>;
-}
-
-function PayrollStatement({ label, payroll, fixedLines, variableLines }: { label: string; payroll: Payroll | null; fixedLines: PayrollLine[]; variableLines: PayrollLine[] }) {
-  const period = label.replace("agosto de", "AGO/").replace("setembro de", "SET/").replace("outubro de", "OUT/").replace("novembro de", "NOV/").replace("dezembro de", "DEZ/").replace("janeiro de", "JAN/").replace("fevereiro de", "FEV/").replace("março de", "MAR/").replace("abril de", "ABR/").replace("maio de", "MAI/").replace("junho de", "JUN/").replace("julho de", "JUL/").toUpperCase();
-  const totalDiscounts = (payroll?.inss ?? 0) + (payroll?.irrf ?? 0) + (payroll?.personalDeductionTotal ?? 0);
-  const hasLines = fixedLines.length + variableLines.length > 0;
-  return <Card className="overflow-hidden">
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--atlas-border)]/70 pb-2.5">
-      <div className="flex items-baseline gap-2"><h2 className="text-base font-semibold sm:text-lg">Demonstrativo previsto</h2><span className="text-sm text-[var(--atlas-muted)]">· {period}</span></div>
-      <span className="rounded-md border border-[var(--atlas-border)] px-2.5 py-1 text-sm text-[var(--atlas-muted)]">Base: Executada</span>
-    </header>
-    {hasLines ? <div className="pt-2.5">
-      <section>
-        <h3 className="text-sm font-semibold text-[var(--atlas-blue)]">Proventos</h3>
-        <h4 className="mt-1.5 text-sm font-medium text-[var(--atlas-muted)]">Fixo</h4>
-        <PayrollRows lines={fixedLines} />
-        <h4 className="mt-2 border-t border-[var(--atlas-border)]/70 pt-2 text-sm font-medium text-[var(--atlas-muted)]">Variável</h4>
-        <PayrollRows lines={variableLines} />
-        <div className="mt-2 flex justify-between border-t border-[var(--atlas-border)] pt-2 text-base font-semibold"><span className="text-[var(--atlas-blue)]">Total de proventos</span><span className="tabular-nums text-[var(--atlas-blue)]">{money(payroll?.gross ?? null)}</span></div>
-      </section>
-      <section className="mt-2.5 border-t border-[var(--atlas-border)] pt-2.5">
-        <h3 className="text-sm font-semibold text-red-400">Descontos</h3>
-        <div className="mt-1 text-sm">
-          <div className="flex justify-between py-0.5"><span>INSS</span><span className="font-medium tabular-nums">{money(payroll?.inss ?? null)}</span></div>
-          <div className="flex justify-between py-0.5"><span>IRRF</span><span className="font-medium tabular-nums">{money(payroll?.irrf ?? null)}</span></div>
-          {payroll?.personalDeductions.map(item => <div key={item.name} className="flex justify-between py-0.5"><span>{item.name}</span><span className="font-medium tabular-nums">{money(item.amount)}</span></div>)}
-          {!payroll?.personalDeductions.length ? <div className="flex justify-between py-0.5"><span>Descontos pessoais</span><span className="font-medium tabular-nums">{money(payroll?.personalDeductionTotal ?? null)}</span></div> : null}
-        </div>
-        <div className="mt-2 flex justify-between border-t border-[var(--atlas-border)] pt-2 text-base font-semibold text-red-400"><span>Total de descontos</span><span className="tabular-nums">−{money(totalDiscounts)}</span></div>
-      </section>
-      <div className="mt-2.5 flex items-center justify-between rounded-lg border border-[var(--atlas-blue)]/25 bg-[var(--atlas-blue)]/10 px-3 py-2 text-base font-semibold sm:text-lg"><span className="text-[var(--atlas-blue)]">Líquido previsto</span><span className="tabular-nums text-[var(--atlas-blue)]">{money(payroll?.net ?? null)}</span></div>
-      <p className="mt-1.5 text-sm text-[var(--atlas-muted)]">Previsão baseada no snapshot atual · sujeita a ajustes de fechamento.</p>
-    </div> : <p className="py-5 text-sm text-[var(--atlas-muted)]">Demonstrativo pendente.</p>}
-  </Card>;
-}
-
-function DiemStatement({ label, cycles, diems }: { label: string; cycles: Props["cycles"]; diems: Props["diems"] }) {
+function DiemStatement({ label, cycles, diems, unavailable = false }: { label: string; cycles: Props["cycles"]; diems: Props["diems"]; unavailable?: boolean }) {
+  if (unavailable) return <Card><h2 className="text-base font-semibold sm:text-lg">Demonstrativo de diárias</h2><p className="mt-3 text-sm text-[var(--atlas-muted)]">Dados temporariamente indisponíveis. A escala precisa ser reprocessada.</p></Card>;
   const period = label.replace("agosto de", "AGO/").replace("setembro de", "SET/").replace("outubro de", "OUT/").replace("novembro de", "NOV/").replace("dezembro de", "DEZ/").replace("janeiro de", "JAN/").replace("fevereiro de", "FEV/").replace("março de", "MAR/").replace("abril de", "ABR/").replace("maio de", "MAI/").replace("junho de", "JUN/").replace("julho de", "JUL/").toUpperCase();
   const byDate = new Map(diems.map(item => [item.date, diems.filter(candidate => candidate.date === item.date)]));
   const international = diems.filter(item => item.currency !== "BRL");
@@ -97,17 +51,19 @@ function DiemStatement({ label, cycles, diems }: { label: string; cycles: Props[
   return <Card><header className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold sm:text-lg">Demonstrativo de diárias <span className="text-[var(--atlas-muted)]">· {period}</span></h2></div><span className="text-sm font-semibold tabular-nums">{totalByCurrency.length ? totalByCurrency.map(item => money(item.amount, item.currency)).join(" + ") : "Pendente"}</span></header><div className="mt-3 grid divide-y divide-[var(--atlas-border)] rounded-lg border border-[var(--atlas-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">{cycles.map(cycle => <div key={`${cycle.paymentDate}-${cycle.currency}`} className="px-3 py-2"><span className="text-[var(--atlas-muted)]">{cycle.paymentDate} · </span><span>{cycle.currency === "BRL" ? "Pagamento" : "Internacional"}</span><span className="block font-medium tabular-nums">{money(cycle.amount, cycle.currency ?? "BRL")}</span></div>)}</div><div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-1 border-y border-[var(--atlas-border)]/70 py-2 text-sm">{totals.map(item => <span key={item.label} className="text-[var(--atlas-blue)]"><b>{abbreviations[item.label]}</b> <span className="text-[var(--atlas-text)]">{item.count}</span></span>)}</div><div className="mt-3 grid grid-cols-2 gap-6 border-b border-[var(--atlas-border)]/70 pb-3">{dayRows(days.slice(0, 16))}{dayRows(days.slice(16))}</div><p className="mt-3 text-center text-sm text-[var(--atlas-muted)]">CA = Café · A = Almoço · J = Jantar · CE = Ceia</p><p className="mt-1 text-center text-sm text-[var(--atlas-muted)]"><span className="text-[var(--atlas-blue)]">Azul = nacional</span> · <span className="text-amber-400">Amarelo = internacional</span></p></Card>;
 }
 
-export function FlightMonthOverview({ label, planned, current, activity, legs, duties, overnights, audit, payroll, cycles, diems }: Props) {
-  const displayLines = (payroll?.lines ?? []).filter(line => payrollLabels[line.key] !== undefined);
-  const fixedLines = fixedKeys.flatMap(key => displayLines.filter(line => line.key === key));
-  const variableLines = variableKeys.flatMap(key => displayLines.filter(line => line.key === key));
+export function FlightMonthOverview({ label, year, month, planned, current, processingIssues, activity, legs, duties, overnights, audit, payrollScenarios, payrollComparison, cycles, diems }: Props) {
   const executedLabel = current?.snapshot_number ? `Snapshot ${current.snapshot_number} atual` : "Execução pendente";
+  const executionIssue = processingIssues.find(issue => issue.schedule_role === "EXECUTION_SNAPSHOT") ?? null;
+  const derivedUnavailable = Boolean(executionIssue && (!current || current.id === executionIssue.id));
 
   return <div className="grid gap-3 sm:gap-4">
-    <header><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{label}</h1><p className="mt-1 text-sm text-[var(--atlas-muted)]">{executedLabel} · Base {current?.home_base ?? planned?.home_base ?? "Pendente"}</p></header>
-    <ScheduleComparison planned={planned} current={current} payroll={payroll} />
-    <div className="grid gap-3 xl:grid-cols-2"><PayrollStatement label={label} payroll={payroll} fixedLines={fixedLines} variableLines={variableLines} /><DiemStatement label={label} cycles={cycles} diems={diems} /></div>
+    <header><ScheduleMonthNavigator year={year} month={month} label={label} /><p className="mt-1 text-sm text-[var(--atlas-muted)]">{executedLabel} · Base {current?.home_base ?? planned?.home_base ?? "Pendente"}</p></header>
+    <ScheduleComparison planned={planned} current={current} comparison={payrollComparison} year={year} month={month} />
+    <ProcessingWarnings issues={processingIssues} />
+    <div className="grid gap-3 xl:grid-cols-2"><PayrollViewSwitcher label={label} year={year} month={month} planned={derivedUnavailable ? null : payrollScenarios.planned} executed={derivedUnavailable ? null : payrollScenarios.executed} defaultScenario={payrollScenarios.defaultScenario} /><DiemStatement label={label} cycles={cycles} diems={diems} unavailable={derivedUnavailable} /></div>
+    {derivedUnavailable ? <p className="text-sm text-amber-400">Agenda parcial — processamento incompleto.</p> : null}
     <FlightMonthCalendar days={activity?.days ?? []} legs={legs} duties={duties} overnights={overnights} />
+    {derivedUnavailable ? <p className="text-sm text-amber-400">Auditoria não conclusiva enquanto a base documental estiver incompleta.</p> : null}
     <Card><h2 className="text-base font-semibold sm:text-lg">Auditoria da escala</h2><div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3"><p className={`text-sm ${audit.fail ? "text-amber-400" : "text-emerald-400"}`}>{audit.fail ? `${audit.fail} violação(ões) confirmada(s)` : "Nenhuma violação confirmada"}</p><Metric label="Atendidas" value={audit.pass} /><Metric label="Não avaliáveis" value={audit.unknown} /><Metric label="Informativas" value={audit.notApplicable} /><Link href="/escala/regras" prefetch={false} className="text-sm font-medium text-[var(--atlas-blue)]">Ver detalhes →</Link></div></Card>
   </div>;
 }

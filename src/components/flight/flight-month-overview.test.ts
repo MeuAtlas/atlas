@@ -4,17 +4,45 @@ import test from "node:test";
 import { buildFlightAgenda } from "./flight-month-calendar";
 
 const overview = readFileSync("src/components/flight/flight-month-overview.tsx", "utf8");
+const payroll = readFileSync("src/components/flight/payroll-view-switcher.tsx", "utf8");
 const agenda = readFileSync("src/components/flight/flight-month-calendar.tsx", "utf8");
 const page = readFileSync("src/app/escala/page.tsx", "utf8");
 
 test("visão unificada da escala reúne os blocos executivos sem abas internas", () => {
-  for (const label of ["Escala planejada", "Escala executada", "Demonstrativo previsto", "Fixo", "Variável", "Total de proventos", "Descontos", "Total de descontos", "Líquido previsto", "Demonstrativo de diárias", "Auditoria da escala"]) assert.match(overview, new RegExp(label));
+  const unifiedView = `${overview}\n${payroll}`;
+  for (const label of ["Escala planejada", "Escala executada", "Holerite previsto", "Fixo", "Variável", "Total de proventos", "Descontos", "Total de descontos", "Líquido previsto", "Demonstrativo de diárias", "Auditoria da escala"]) assert.match(unifiedView, new RegExp(label));
   assert.doesNotMatch(overview, /aria-label="Navegação Flight"/);
   assert.match(overview, /Base da folha/);
   assert.match(page, /flight_payroll_final_estimates/);
+  assert.match(page, /flight_payroll_base_decisions/);
+  assert.doesNotMatch(overview, /Diferença Executada vs Planejada/);
+  assert.match(overview, /selectedScenario === "PLANNED"/);
   assert.doesNotMatch(overview, /function ExecutiveCard/);
   assert.doesNotMatch(overview, /DOMESTIC_BREAKFAST/);
   assert.doesNotMatch(overview, /SALARY FLOOR/);
+});
+
+test("holerite alterna localmente entre planejada e executada", () => {
+  assert.match(payroll, /^"use client"/);
+  assert.match(payroll, /useState<Scenario>/);
+  assert.match(payroll, /role="switch"/);
+  assert.match(payroll, /aria-checked=\{scenario === "EXECUTED"\}/);
+  assert.match(payroll, /setScenario/);
+  assert.match(payroll, /text-amber-400/);
+  assert.doesNotMatch(payroll, /aria-checked:bg/);
+  assert.doesNotMatch(payroll, /useRouter|router\.refresh|window\.location/);
+  assert.match(page, /\.in\("estimate_id", estimateIds\)/);
+  assert.match(page, /payrollScenarios=\{\{/);
+});
+
+test("alerta de processamento incompleto é condicional e oferece reprocessamento auditável", () => {
+  assert.match(overview, /if \(!issues\.length\) return null/);
+  assert.match(overview, /processamento incompleto/i);
+  assert.match(overview, /processed_flight_time_minutes/);
+  assert.match(overview, /documented_flight_time_minutes/);
+  assert.match(overview, /missing_flight_time_minutes/);
+  assert.match(overview, /ReprocessScheduleButton/);
+  assert.match(page, /latest\.status === "INCOMPLETE"/);
 });
 
 test("agenda usa lista compacta e preserva os tipos de operação", () => {

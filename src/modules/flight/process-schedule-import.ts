@@ -3,6 +3,7 @@ import { parseNetlineDocument, reconstructSpatialLines, NETLINE_PARSER_VERSION }
 import { parseFlightActivities, parseFlightLegends } from "./activity-parser";
 import { parseFlightStructure } from "./flight-structure-parser";
 import { calculateStructure, parseFooter, parseSpatialDocumentaryMetrics, parseSpatialDutyMetrics, parseTimeMetrics } from "./time-metrics";
+import { reconcileFlightTime, type FlightTimeReconciliation } from "./processing-reconciliation";
 
 type AwaitableResult = PromiseLike<{ error: { message: string } | null }>;
 export type FlightScheduleProcessingClient = {
@@ -15,15 +16,18 @@ export type FlightScheduleProcessingClient = {
 
 function warningJson(warnings: ReturnType<typeof parseNetlineDocument>["warnings"]) { return warnings.map(warning => ({ code: warning.code, severity: warning.severity, message: warning.message })); }
 
-export async function processFlightScheduleImport(supabase: FlightScheduleProcessingClient, importId: string) {
+export type FlightScheduleProcessingOutcome = { status: "processed" | "incomplete"; reconciliation: FlightTimeReconciliation };
+
+export async function processFlightScheduleImport(supabase: FlightScheduleProcessingClient, importId: string): Promise<FlightScheduleProcessingOutcome> {
   if (process.env.NEXT_RUNTIME) await import("server-only");
   const started = await supabase.rpc("begin_flight_schedule_processing", { p_import_id: importId });
   if (started.error) throw new Error(started.error.message);
+  let parserResultPersisted = false;
   try {
     const imported = await supabase.from("flight_schedule_imports").select("id,storage_bucket,storage_path,schedule_month_id").eq("id", importId).single();
     if (imported.error || !imported.data) throw new Error("Importação de escala não encontrada.");
     const downloaded = await supabase.storage.from(imported.data.storage_bucket).download(imported.data.storage_path);
-    if (downloaded.error || !downloaded.data) throw new Error("Não foi possível obter o PDF privado da escala.");
+    if (downloaded.error || !downloaded.data) throw new Error("Arquivo original indisponível. Envie novamente a escala para continuar.");
     const extracted = await extractPdfText(downloaded.data);
     const parsed = parseNetlineDocument(extracted);
     const status = parsed.documentType && !parsed.warnings.some(item => item.severity === "warning" || item.severity === "error") ? "PROCESSED" : "PROCESSED_WITH_WARNINGS";
@@ -38,6 +42,7 @@ export async function processFlightScheduleImport(supabase: FlightScheduleProces
       p_unknown: parsed.unknown.map(item => ({ page_number: item.pageNumber, raw_value: item.rawValue, raw_line: item.rawLine, parser_stage: item.parserStage, reason: item.reason })),
     });
     if (persisted.error) throw new Error(persisted.error.message);
+    parserResultPersisted = true;
     const legends = parseFlightLegends(extracted.pages.map(page => reconstructSpatialLines(page.items).map(line => line.text).join("\n")).join("\n"));
     const activities = parseFlightActivities(parsed.days, legends);
     const activitiesPersisted = await supabase.rpc("persist_flight_schedule_activities", {
@@ -73,13 +78,38 @@ export async function processFlightScheduleImport(supabase: FlightScheduleProces
       ...(footer.dutyTimeMinutes === null || footer.dutyTimeMinutes === calculatedDutyTime ? [] : [{ validation_type: "OFFICIAL_VS_CALCULATED_MONTH_DUTY_TIME", official_value: footer.dutyTimeMinutes, calculated_value: calculatedDutyTime, difference: calculatedDutyTime - footer.dutyTimeMinutes, message: "DT mensal oficial diverge do cálculo Atlas.", metadata: {} }]),
       ...(footer.offDays === null || footer.offDays === calculatedOffDays ? [] : [{ validation_type: "OFFICIAL_VS_CALCULATED_OFF_DAYS", official_value: footer.offDays, calculated_value: calculatedOffDays, difference: calculatedOffDays - footer.offDays, message: "Folgas oficiais divergem do cálculo Atlas.", metadata: {} }]),
     ];
+    const reconciliation = reconcileFlightTime(footer.flightTimeMinutes, calculatedFlightTime);
     const timeMetricsPersisted = await supabase.rpc("persist_flight_time_metrics", { p_import_id: importId, p_footer: { flight_time_minutes: footer.flightTimeMinutes, duty_time_minutes: footer.dutyTimeMinutes, off_days: footer.offDays, off_claim: footer.offClaim }, p_leg_metrics: legMetrics.map(metric => ({ sequence: metric.sequence, departure_at_utc: metric.departureAtUtc, arrival_at_utc: metric.arrivalAtUtc, duration_minutes: metric.durationMinutes })), p_duty_metrics: dutyMetrics, p_accumulators: parsedMetrics.accumulators.map(item => ({ schedule_date: item.scheduleDate, value_minutes: item.valueMinutes, raw_value: item.rawValue, raw_text: item.rawText })), p_documentary: spatialDocumentaryMetrics.map(metric => ({ schedule_date: metric.scheduleDate, reason: metric.reason, official_flight_time_minutes: metric.officialFlightTimeMinutes, official_flight_time_raw: metric.officialFlightTimeRaw, official_duty_time_minutes: metric.officialDutyTimeMinutes, official_duty_time_raw: metric.officialDutyTimeRaw, official_rest_minutes: metric.officialRestMinutes, official_rest_raw: metric.officialRestRaw })), p_validations: validations });
     if (timeMetricsPersisted.error) throw new Error(timeMetricsPersisted.error.message);
     const dutyAudit = dutyMetrics.map(metric => ({ sequence: metric.sequence, association_status: metric.official_flight_time_minutes !== null && metric.official_duty_time_minutes !== null && metric.official_rest_minutes !== null ? "ASSOCIATED" : "UNRESOLVED", confidence: metric.official_flight_time_minutes !== null && metric.official_duty_time_minutes !== null && metric.official_rest_minutes !== null ? "HIGH" : null }));
     const metricAuditPersisted = await supabase.rpc("persist_flight_metric_audit", { p_import_id: importId, p_duty_audit: dutyAudit, p_documentary_audit: spatialDocumentaryMetrics.map(metric => ({ schedule_date: metric.scheduleDate, association_status: "ASSOCIATED", confidence: "HIGH" })), p_unresolved: [], p_ambiguous: [] });
     if (metricAuditPersisted.error) throw new Error(metricAuditPersisted.error.message);
+    const complete = reconciliation.status === "VALID";
+    const reconciliationPersisted = await supabase.rpc("persist_flight_schedule_reconciliation", {
+      p_import_id: importId,
+      p_reconciliation_status: reconciliation.status,
+      p_documented_minutes: reconciliation.documentedMinutes,
+      p_processed_minutes: reconciliation.processedMinutes,
+      p_difference_minutes: reconciliation.differenceMinutes,
+      p_missing_minutes: reconciliation.missingMinutes,
+      p_threshold_minutes: reconciliation.thresholdMinutes,
+      p_processing_status: complete ? status : "INCOMPLETE",
+      p_error_code: complete ? null : "FLIGHT_TIME_RECONCILIATION_INCOMPLETE",
+      p_error_message: complete ? null : "O FT estruturado não reconcilia com o total documental.",
+    });
+    if (reconciliationPersisted.error) throw new Error(reconciliationPersisted.error.message);
+    return { status: complete ? "processed" : "incomplete", reconciliation };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha técnica na extração do PDF.";
+    if (parserResultPersisted) {
+      const failed = await supabase.rpc("persist_flight_schedule_reconciliation", {
+        p_import_id: importId, p_reconciliation_status: "UNKNOWN", p_documented_minutes: null,
+        p_processed_minutes: null, p_difference_minutes: null, p_missing_minutes: null,
+        p_threshold_minutes: 5, p_processing_status: "FAILED", p_error_code: "SCHEDULE_PROCESSING_FAILED", p_error_message: message,
+      });
+      if (failed.error) throw new Error(failed.error.message);
+      throw error;
+    }
     const failed = await supabase.rpc("persist_flight_schedule_parser_result", {
       p_import_id: importId, p_parser_version: NETLINE_PARSER_VERSION, p_status: "FAILED", p_document_type: null, p_document_confidence: 0,
       p_crew_id: null, p_crew_name: null, p_home_base: null, p_period_start: null, p_period_end: null, p_generated_at: null,
@@ -87,5 +117,6 @@ export async function processFlightScheduleImport(supabase: FlightScheduleProces
       p_error_code: "PAGE_EXTRACTION_FAILED", p_error_message: message, p_pages: [], p_days: [], p_unknown: [],
     });
     if (failed.error) throw new Error(failed.error.message);
+    throw error;
   }
 }

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { validateFactsForPersistence } from "./flight-facts-validation";
 import { buildCanonicalFlightFacts, FLIGHT_FACTS_VERSION, type FactInput, type FactRecord, validateFlightFacts } from "./flight-facts";
 import { matchOffPeriods, type OffPeriodForMatching } from "./off-period-matching";
 import { deriveOffSubstitutionFacts } from "./off-substitution-facts";
@@ -36,6 +37,8 @@ export async function buildFlightFacts(scheduleImportId: string, ownerUserId?: s
     events: (eventsResult.data ?? []).flatMap((event) => { const row = event as unknown as EventRow; const scheduleDate = days.get(row.schedule_day_id); return scheduleDate ? [{ ...row, schedule_date: scheduleDate }] : []; }),
   };
   const result = buildCanonicalFlightFacts(input);
+  const canonicalValidation = validateFlightFacts(result);
+  if (!canonicalValidation.valid) throw new Error(`Facts invÃ¡lidos: ${canonicalValidation.errors.join(" ")}`);
   if (source.schedule_role === "EXECUTION_SNAPSHOT" || source.schedule_role === "FINAL_EXECUTED") {
     const planned = await supabase.from("flight_schedule_imports").select("id").eq("schedule_month_id", source.schedule_month_id).eq("schedule_role", "PLANNED").maybeSingle();
     if (planned.data) {
@@ -92,7 +95,7 @@ export async function buildFlightFacts(scheduleImportId: string, ownerUserId?: s
       }
     }
   }
-  const validation = validateFlightFacts(result);
+  const validation = validateFactsForPersistence(result.facts);
   if (!validation.valid) throw new Error(`Facts inválidos: ${validation.errors.join(" ")}`);
   const removedFacts = await supabase.from("flight_fact_records").delete().eq("import_id", scheduleImportId);
   if (removedFacts.error) throw new Error(removedFacts.error.message);

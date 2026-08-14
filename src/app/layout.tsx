@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { ThemeInitializer } from "@/components/atlas/theme-toggle";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { PwaRuntime } from "@/components/pwa/pwa-runtime";
 
 import "./globals.css";
+
+const themeBootstrap = `(function(){try{var stored=localStorage.getItem('atlas-theme');var theme=stored==='dark'||stored==='light'?stored:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var root=document.documentElement;root.dataset.theme=theme;root.classList.toggle('dark',theme==='dark');root.style.colorScheme=theme;}catch(_){}})();`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -80,6 +83,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        <Script id="atlas-theme-bootstrap" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
         <ThemeInitializer />
         <PwaRuntime>
           <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
